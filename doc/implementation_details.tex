@@ -1,0 +1,401 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{slashed}
+\usepackage{dsfont}
+\usepackage{hyperref}
+\usepackage[pdftex]{graphicx}
+\usepackage{epstopdf}
+\usepackage{subfigure}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{braket}
+\usepackage{simplewick}
+\usepackage{color}
+\usepackage[utf8]{inputenc}
+
+\hypersetup{
+    pdftitle={The Time-Dependent Variational Principle for Matrix Product State, An Implementation},    % title
+    pdfauthor={Ashley Milsted},     % author
+    pdfkeywords={Matrix Product States} {Variational Principle} {Implementation}, % list of keywords
+}
+
+\tolerance=300
+\newcommand{\id}{\mbox{$1 \hspace{-1.0mm} {\bf l}$}}
+
+%opening
+\title{The Time-Dependent Variational Principle for Matrix Product States\\
+{\Large  An implementation}}
+\author{Ashley Milsted}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Efficient algorithms for the application of the time-dependent variational
+principle (TDVP) to matrix product states (MPS) exist. This document describes
+the differences between the algorithm for generic MPS 
+published by Haegeman et al. \cite{haegeman_time-dependent_2011} 
+and the one implemented in \emph{evoMPS}, 
+as well as novel parts of the \emph{evoMPS} algorithm that
+have not been published elsewhere.
+
+This document provides a little background to MPS and the TDVP, and then
+describes the key differences between the implementation of the TDVP algorithm
+for generic MPS in \emph{evoMPS} and that described in \cite{haegeman_time-dependent_2011}.
+\end{abstract}
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\section{Introduction}
+The matrix product state (MPS) representation of the state of a one-dimensional 
+quantum spin chain is known for its usefulness in efficiently simulating dynamics, 
+as well as in computing ground states (e.g. via imaginary time evolution), due
+to its ability to efficiently capture states that have a limited amount of
+entanglement \cite{vidal_efficient_2003}, \cite{verstraete_matrix_2008}.
+
+An efficient algorithm for the application of the time-dependent variational
+principle (TDVP) to MPS for the generic (not 
+translationally invariant) case was first described by Haegeman et al. 
+\cite{haegeman_time-dependent_2011}, who also set out and implemented an algorithm for the
+translationally invariant case (uniform MPS or uMPS). The former has now also been implemented, with some
+modifications with respect to the published version, in \emph{evoMPS}.
+
+\subsection{The Matrix Product State Representation}
+The MPS representation of a state $\ket{\Psi}$, for a one-dimensional spin chain 
+of finite length $N$ with open boundary conditions, can be written as
+\begin{equation}
+    \ket{\Psi[A]} = \sum_{s_1 \dots s_N=1}^{q_1 \dots q_N} A_{1}^{s_1} \dots A_{N}^{s_N} \ket{s_1, \dots , s_N}
+    \label{eq:MPS_Def}
+\end{equation}
+where each $A_n^{s_n}$ represents a $D_{n - 1} \times D_n$ matrix, which will 
+henceforth be abbreviated to $A^{s_n}$.
+$D_n$ is called the \emph{bond dimension} %TODO: Explain
+and $q_n$ is the dimension of the Hilbert space
+$\mathcal{H}_n = \mathbb{C}^{q_n}$ of a site on the chain. The left and right 
+boundary vectors have been absorbed into the first and last matrices respectively,
+so that $D_0 = D_N = 1$.
+The boundary vectors have been included
+in the end-site matrices $A^{s_1}$ and $A^{s_N}$, which are therefore row and column
+vectors respectively.
+
+For the calculation of expectation values, the norm of the state and other
+quantities, it is useful to define the left and right density matrices
+\begin{equation}
+	l_n = \sum_{s_n} {A^{s_n}}^\dagger l_{n-1} A^{s_n}
+	\label{eq:Dens_L}
+\end{equation}
+\begin{equation}
+	r_{n - 1} = \sum_{s_n} A^{s_n}  r_{n} {A^{s_n}}^\dagger
+	\label{eq:Dens_R}
+\end{equation}
+where $l_0 = r_N = 1$. As can be seen by writing out the norm of (\ref{eq:MPS_Def}),
+$l_N = r_0 = \braket{\Psi[A] | \Psi[A]}$.
+
+\subsection{Gauge Freedom}
+A state represented in the above MPS form is invariant under gauge transformations
+\begin{equation}
+    A^{s_n} \rightarrow g_{n - 1} A^{s_n} g_{n}^{-1}
+    \label{eq:MPS_GF}
+\end{equation}
+where the $g_n$ are $D_n \times D_n$ invertible matrices and $g_0 = g_N \in \mathbb{C}$, 
+as can easily be verified.
+
+\subsection{The Time Dependent Variational Principle for Matrix Product States}
+The TDVP works by projecting the exact time evolution of a state
+\begin{equation}
+    \mathrm{i} \frac{\mathrm{d}}{\mathrm{d}t} \ket{\Psi(t)} = \hat{H}(t) \ket{\Psi(t)} 
+\end{equation}
+(with units such that $\hbar = 1$)
+onto a variational manifold within the Hilbert space belonging to the system.
+The class of MPS with fixed bond dimensions $D_n$ defines such a variational 
+manifold $\mathcal{M}_{\mathrm{MPS}\{ D_n \}}$ where the $D_n$ are generally chosen to
+be less than would be required to exactly represent any state of the system. In this
+way, the computational complexity of the problem can be reduced by sacrificing the
+ability to represent states with higher levels of entanglement \cite{vidal_efficient_2003}. 
+
+Since the variational manifold is, for
+practical purposes, smaller than the Hilbert space, projecting $\hat{H}(t) \ket{\Psi(t)}$
+onto the manifold involves finding a tangent vector $\ket{\Phi}$ on 
+the manifold that best approximates the exact time
+evolution. 
+
+For MPS, a general tangent vector has the form
+\begin{equation}
+	\ket{\Phi[B;A]} = \sum^N_{n=1} \sum^{q_n}_{s_n=1} B^{s_n} \frac{\partial}{\partial A^{s_n}} \ket{\Psi[A]}
+	\label{eq:MPS_Gen_Tang}
+\end{equation}
+The tangent vector best approximating $\hat{H}(t) \ket{\Psi(t)}$ can then be written as
+$\ket{\Phi[B^*(t);A(t)]}$ where
+\begin{equation}
+    B^*(t) = \arg_B \mathrm{min} \| \ket{\Phi[B;A(t)]} - \hat{H}(t)\ket{\Psi[A(t)]} \|^2
+    \label{eq:TDVP_MPS_OptB}
+\end{equation}
+Here, $A$ and $B$ represent the set of all matrices $A^{s_n}$ and $B^{s_n}$. 
+
+At first sight, calculation of the optimal parameters ${B^{s_n}}^*$ involves evaluating
+$\braket{\Phi[\bar{B}] | \Phi[B]}$, which, as can be seen from (\ref{eq:MPS_Gen_Tang}),
+includes terms that mix the ${B^{s_n}}$ for different sites. Finding $B^*$ would
+therefore require an iterative algorithm that sweeps over the chain several times.
+
+Conveniently, the gauge freedom in the MPS representation (\ref{eq:MPS_GF}) can 
+be exploited to eliminate the site-mixing terms in 
+$\braket{\Phi[\bar{B}] | \Phi[B]}$ such that sweeping is no longer required. This
+is achieved by restricting the choice of $B^{s_n}$, using a parametrization, 
+to those that alter only the physical degrees of freedom (those that
+maintain the current gauge choice). This leads to the 
+efficient algorithm for the TDVP set out in \cite{haegeman_time-dependent_2011}.
+
+\section{Differences in the \emph{evoMPS} Implementation of the TDVP for MPS}
+
+\subsection{Parametrization of the Tangent Space}
+The gauge freedom inherent in the MPS representation can be exploited to
+greatly simplify the application of the TDVP. 
+The set of tangent vectors 
+$\mathbb{T}_\mathrm{MPS}[A]$ at a given point $A$ on the variational manifold
+$\mathcal{M}_\mathrm{MPS\{D_n\}}$ can be parametrized 
+in a way that eliminates all non-physical degrees of freedom and, simultaneously,
+eliminates all non-local (site-mixing) terms from $\braket{\Phi[\bar{B}] | \Phi[B]}$,
+which must be evaluated in a TDVP implementation.
+
+A parametrization of the tangent space $B^{s_n}[x_n]$ in terms of
+matrices $x_n$
+is chosen so that each $B^{s_n}$ satisfies a gauge-fixing condition. 
+In \cite{haegeman_time-dependent_2011}, the \emph{left} gauge-fixing condition
+\begin{equation}
+    \sum_{s_n=1}^{q_n} {A^{s_n}}^\dagger l_{n - 1} B^{s_n} = 0 \quad \forall n \in 1 \dots N
+\end{equation}
+is used, leading to a parametrization
+\begin{equation}
+    B^{s_n}(x_n) = l_{n - 1}^{-1/2} V_L^{s_n} x_n r_n^{-1/2}
+    \label{eq:B_par_L}
+\end{equation}
+where $[V_L^{s_n}]_{\alpha,\beta} = [V_{L,n}]_{(s_n, \alpha);\beta}$ is defined to 
+contain an orthonormal basis for the null space of the matrix $L_n$ 
+($L_n V_{L,n} = 0$ and $V_{L,n}^\dagger V_{L,n} = \id$)
+with
+\begin{equation}
+    [L_n]_{\alpha; (s_n, \beta)} = [{A^{s_n}}^\dagger l_{n-1}^{1/2}]_{\alpha, \beta}
+\end{equation}
+In \emph{evoMPS}, the \emph{right} gauge-fixing condition
+\begin{equation}
+    \sum_{s_n=1}^{q_n} {B^{s_n}} r_{n} {A^{s_n}}^\dagger = 0 \quad \forall n \in 1 \dots N
+\end{equation}
+is used instead, with the corresponding parametrization
+\begin{equation}
+    B^{s_n}(x_n) = l_{n - 1}^{-1/2} x_n V_R^{s_n} r_n^{-1/2}
+    \label{eq:B_par_R}
+\end{equation}
+Here, $[V_R^{s_n}]_{\alpha,\beta} = [V_{R,n}]_{\alpha;(s, \beta)}$ contains an
+orthonormal basis for the null space of $R_n$ ($V_{R,n} R_n = 0$ and 
+$V_{R,n} V_{R,n}^\dagger = \id$) defined as
+\begin{equation}
+    [R_n]_{(s_n, \alpha); \beta} = [r_{n}^{1/2} {A^{s_n}}^\dagger]_{\alpha, \beta}
+\end{equation}
+That the parametrizations satisfy the respective gauge-fixing conditions can 
+easily be confirmed.
+
+\subsection{Norm-Preserving Dynamics}
+The TDVP can be modified so that the projection onto the variational manifold
+explicitly preserves the norm of the the state. In \cite{haegeman_time-dependent_2011},
+this norm-preserving form of the TDVP was described, with (\ref{eq:TDVP_MPS_OptB}) becoming
+\begin{equation}
+    B^*(t) = \arg_B \mathrm{min} \| \ket{\Phi[B;A(t)]} - \left[\hat{H}(t) - H(t)\right]\ket{\Psi[A(t)]} \|^2
+    \label{eq:TDVP_MPS_OptB_NP}
+\end{equation}
+In \cite{haegeman_time-dependent_2011}, $\hat{H}(t) - H(t)$ is present in
+the final TDVP algorithm for generic MPS. However, this is not necessary when using
+a tangent space that excludes changes to the norm ($\braket{\Phi[B;A(t)]|\Psi[A]} = 0$),
+as is the case for the gauge-fixing parametrizations (\ref{eq:B_par_L}) and (\ref{eq:B_par_R}).
+In this case, (\ref{eq:TDVP_MPS_OptB_NP}) and (\ref{eq:TDVP_MPS_OptB}) are equivalent,
+as can easily be seen.
+
+In \emph{evoMPS}, this simplification is used in the implementation of the TDVP algorithm.
+
+\subsection{Inclusion of a Single-Site Hamiltonian Term}
+A single-site Hamiltonian term can be included in the nearest-neighbour term (making
+it non-uniform, if it was uniform before), 
+thus allowing an algorithm designed for a non-uniform nearest-neighbour
+Hamiltonian to be used in this case too. However, it is also straightforward to introduce single-site
+terms into the algorithm for the TDVP explicitly, which has been done in \emph{evoMPS}.
+See the next subsection for an example.
+
+\subsection{Implications for the Algorithm}
+Apart from the obvious differences in the parametrization of the tangent 
+vectors, the choice of left or right gauge fixing determines how terms like
+$\bra{\Phi[\bar{B}]}\hat{H}\ket{\Psi[A]}$ are calculated, since the left and
+right gauge fixing choices eliminate different terms in the resulting sum.
+
+The lack of a need to use the explicitly norm-preserving form of the TDVP 
+(\ref{eq:TDVP_MPS_OptB_NP}) means, compared to
+\cite{haegeman_time-dependent_2011}, merely changing $(\hat{H} - H)$ to $\hat{H}$
+or, for a nearest-neighbour Hamiltonian $\hat{H} = \sum_n \hat{h}_{n, n+1}$
+changing $(\hat{h}_{n, n + 1} - h_{n, n + 1})$ to $\hat{h}_{n, n + 1}$, where 
+$\hat{h}_{n, n + 1}$ is the nearest neighbour term for sites $n$ and $n + 1$.
+
+To illustrate the required changes to the algorithm published by Haegeman et al., 
+the matrices $C^{s_n,t_n}$ defined on page 14 of 
+\cite{haegeman_time-dependent_2011} become, in \emph{evoMPS},
+\begin{equation}
+	C^{s_n, t_{n + 1}} = \sum_{u_n, v_{n + 1}}^{q_n, q_{n+1}} \braket{s_n, t_{n + 1} | \hat{h}_{n, n + 1} | u_n, v_{n + 1}} A^{u_n} A^{v_{n+1}}
+\end{equation}
+and the matrices $K_n$ used to evaluate the Hamiltonian as required for the calculation of
+(\ref{eq:TDVP_MPS_OptB}) become
+\begin{align}
+	\nonumber K_n = & \theta(n < N) \left[ \sum_{s_n, t_{n + 1}}^{q_n, q_{n+1}} C^{s_n, t_{n + 1}} r_{n+1} {A^{t_{n + 1}}}^\dagger {A^{s_{n}}}^\dagger + \sum_{s_n}^{q_n} A^{s_n}K_{n+1}{A^{s_n}}^\dagger \right] \\
+	&  + \sum_{s_n, t_n}^{q_n, q_n} \braket{s_n | \hat{h}_n^{\mathrm{s.s.}} | t_n} A^{t_n} r_n {A^{s_n}}^\dagger
+\end{align}
+where $K_{N+1} = 0$ and the recursion now runs from right to left due to the decision to use right gauge-fixing. $\theta$ is the Heaviside step function. $\hat{h}^\mathrm{s.s.}_n$ is the single-site Hamiltonian term
+for site $n$. Since the $H$ term from (\ref{eq:TDVP_MPS_OptB_NP}) was eliminated, 
+$K_1 = \braket{\Psi[A] | \hat{H} | \Psi[A]}$ and gives us the energy expectation value (for a normalized state).
+
+The $F_n = x_n^*$ matrices in \cite{haegeman_time-dependent_2011} that represent the projection of the exact time evolution onto the MPS
+tangent space are, of course, also calculated differently in \emph{evoMPS} due to right gauge-fixing and
+due to the inclusion of an extra term for the single-site part of the Hamiltonian.
+
+\section{Additional Numerical Integration Methods}
+Some features have been added to the algorithm for \emph{evoMPS} that are not described,
+at least for the non-uniform case, in \cite{haegeman_time-dependent_2011}. For example,
+Haegeman et al. describe a time-symmetrical implicit method for numerically integrating
+the TDVP flow equations for the translationally invariant case (uniform MPS). A modified
+version has been implemented for the non-uniform case in \emph{evoMPS}.
+Additionally, the explicit fourth-order Runge-Kutta method has been implemented.
+
+\subsection{Implicit Midpoint Method}
+In \cite{haegeman_time-dependent_2011}, a numerical integration scheme is described
+for the uniform MPS case which
+is time-symmetric, and has a lower order error than the simple forward Euler method.
+It is intended to produce better results when simulating real time evolution, where
+errors accumulate over time.
+
+It is an implicit midpoint method, where a midpoint $\ket{\Psi[A(t + dt/2)]}$ between 
+$\ket{\Psi[A(t)]}$ and $\ket{\Psi[A(t + dt)]}$
+is first determined via the backward Euler method by iteratively solving an implicit
+equation. From the midpoint,
+a further forward Euler step of $dt/2$ is taken to produce the point $\ket{\Psi[A(t + dt)]}$.
+
+This method is complicated by the gauge freedom (\ref{eq:MPS_GF}) because a finite step
+will, despite using a gauge-fixing parametrization of the tangent space, generally alter
+$A$ along the gauge degrees of freedom by a small amount. For this reason, iteratively solving
+the implicit equation to find the midpoint requires a
+gauge transformation to ensure that only physical degrees of freedom are compared.
+
+For \emph{evoMPS}, the midpoint method for uMPS has been adapted to generic MPS, 
+where the implicit equation
+for the midpoint $\tilde{A}^{s_n} := A^{s_n}(t + dt/2)$ becomes
+\begin{equation}
+    g_{n-1}^{-1} A^{s_n} g_n = \tilde{A}^{s_n} - \mathrm{i} \frac{dt}{2} B^{s_n}(\tilde{x}_n)
+    \label{eq:Midpoint_Impl}
+\end{equation}
+where $A^{s_n} = A^{s_n}(t)$ and $g_{n-1}$ is computed by solving
+\begin{equation}
+	\sum_{s_n} A^{s_n} g_n \tilde{r}_n \tilde{A}^{s_n} = g_{n-1} \tilde{r}_{n-1}
+    \label{eq:Midpoint_GT}	
+\end{equation}
+Starting from an initial forward Euler estimate 
+\begin{equation}
+	\tilde{A}^{s_n}_0 = A^{s_n} + \mathrm{i} \frac{dt}{2} B^{s_n}(x_{n})
+	\label{eq:Midpoint_Init_Step}
+\end{equation}
+where the subscript $0$ indicates the current iteration,
+the equation can be solved iteratively for $A^{s_n}(t + dt/2)$ by setting
+\begin{equation}
+	\tilde{A}^{s_n}_1 = \tilde{A}^{s_n}_0 + d\tilde{A}^{s_n}_0
+	\label{eq:Midpoint_ItrNext}
+\end{equation}
+where
+\begin{equation}
+	d\tilde{A}^{s_n}_0 = g_{n-1}^{-1} A^{s_n} g_n - \tilde{A}^{s_n}_0 + \mathrm{i} \frac{dt}{2} B^{s_n}(\tilde{x}_{n, 0})
+	\label{eq:Midpoint_dA}
+\end{equation}
+To quantify convergence, the size of the correction $d\tilde{A}^{s_n}$ for site $n$ can be used
+\begin{equation}
+	\zeta_n = \| d\tilde{A}^{s_n}\frac{\partial}{\partial A^{s_n}} \ket{\Psi[\tilde{A}]} \|= \mathrm{tr} \left[ \tilde{l}_{n-1} \sum_{s_n} d\tilde{A}^{s_n} \tilde{r}_n {d\tilde{A}^{s_n}}^\dagger \right]^{1/2}
+	\label{eq:Midpoint_Err}
+\end{equation}
+and an overall error measure can be defined as
+\begin{equation}
+	\zeta = \sum_n \zeta_n
+	\label{eq:Midpoint_Err_All}
+\end{equation}
+To solve (\ref{eq:Midpoint_Impl}) for the whole state:
+\begin{enumerate} 
+	\item Evaluate (\ref{eq:Midpoint_Init_Step}) for all $s_n$ to get the initial estimate for $\tilde{A}$.
+	\item Set $n \leftarrow N$ and $g_n \leftarrow 1$. \label{enum:Midpoint_StartChain}
+	\item Solve (\ref{eq:Midpoint_GT}) to find $g_{n - 1}$. \label{enum:Midpoint_g}
+	\item Set $i \leftarrow 0$ and evaluate (\ref{eq:Midpoint_dA}) to get $d\tilde{A^{s_n}_i}$.
+	\item Use the result and (\ref{eq:Midpoint_ItrNext}) to get an improved estimate $\tilde{A}^{s_n}_{i + 1}$.
+	\item Set $i \leftarrow i + 1$ so that $\tilde{A}^{s_n}_i \leftarrow \tilde{A}^{s_n}_{i + 1}$.
+	\item Repeat the previous three steps until the error $\zeta_n$ (\ref{eq:Midpoint_Err}) is small enough.
+	\item Set $n \leftarrow n - 1$ (and $g_n \leftarrow g_{n-1}$) and go to step \ref{enum:Midpoint_g}.
+	\item Having individually optimized the $A^{s_n}$ for each $n$, go to step 
+		  \ref{enum:Midpoint_StartChain} and repeat until the overall error (\ref{eq:Midpoint_Err_All}) 
+		  is small enough.
+\end{enumerate}
+Note that the current estimate for the midpoint $\tilde{A}$ is always updated as soon as a new $\tilde{A}^{s_n}$
+is generated and is used for the generation of the next $B$.
+
+Having carried out the above, we have the midpoint $\ket{\Psi[A(t + dt/2)]}$ and can take a further 
+forward step $dt/2$ to reach $\ket{\Psi[A(t + dt)]}$.
+
+This algorithm is a simple extension of the algorithm for uniform MPS in \cite{haegeman_time-dependent_2011},
+where the key difference is the need, in general, to sweep over the chain more than once to obtain
+a good solution. This is due to the dependence of $B^{s_n}$, for a given $n$, on the entire state, which
+is clear because the exact time evolution $\hat{H} \ket{\Psi}$ also depends of the entire state.
+
+The current \emph{evoMPS} implementation of this algorithm appears to have problems reaching the desired
+accuracy. The exact reason is currently unknown to the author.
+
+\subsection{Runge-Kutta Method}
+The well known explicit fourth order Runge-Kutta method for numerical integration 
+\cite{press_section_????} has
+also been implemented in \emph{evoMPS}. Due to its explicit nature, there is no need to solve an equation
+when using this method and therefore no requirement to handle variation along the
+gauge degrees of freedom.
+
+For cases tested by the author, this integration method seems to perform better
+for real time evolution than the midpoint method described in the previous subsection,
+achieving a better accuracy with fewer operations for the same step size. 
+
+\section{Appendix}
+
+\subsection{Obtaining a Canonical Form}
+A (right) canonical form for generic MPS with open boundary conditions is described in 
+\cite{perez-garcia_matrix_2006}, which also includes details as to how the canonical
+form can be obtained from a general MPS using a gauge transformation (\ref{eq:MPS_GF}). 
+
+The canonical form used in \emph{evoMPS} is largely the same and can be written as
+\begin{equation}
+	\sum_{s_n} A^{s_n} {A^{s_n}}^\dagger = \id \quad \forall n \iff r_n = \id \quad \forall n
+\end{equation}
+which leads to the entanglement spectrum for a cut between sites $n$ and $n+1$ 
+being contained in the left density matrices $l_n$ (\ref{eq:Dens_L}). In \emph{evoMPS}, 
+these matrices are not diagonalized.
+
+To obtain this form, essentially the same method is used as in \cite{perez-garcia_matrix_2006}, 
+except that a Cholesky decomposition of
+$M = \sum_{s_n} A^{s_n} {A^{s_n}}^\dagger$
+is performed in place of the singular value decomposition, where $M$ is taken to be positive
+definite. %TODO: Need ref. for Cholesky/SVD?
+
+
+\subsection{Restoration of the Norm}
+Since, for a finite time step, the norm of the state may drift, it must
+be restored to 1 from time to time. This can be done by simply multiplying the vectors $A^{s_1}$ 
+or $A^{s_N}$ by $(\braket{\Psi | \Psi})^{-1/2}$, since $\braket{\Psi | \Psi} = l_N = r_0$ with
+$r_n$ and $l_n$ defined in (\ref{eq:Dens_L}) and (\ref{eq:Dens_R}).
+
+In principle, one could modify any of the matrices $A^{s_n}$ (for fixed $n$ and $\forall s_n = 1 \dots q_n$). It is, however,
+more efficient to modify one of the end matrices because fewer steps are then required to calculate
+the new norm using (\ref{eq:Dens_L}) or (\ref{eq:Dens_R}). This is required since, in general, a single attempt to restore the norm in the above
+way will not succeed due to numerical inaccuracy. To solve this problem, the above operation
+is carried out repeatedly until the state is normalized to the desired precision.
+
+\bibliographystyle{plain_url}
+\bibliography{mps.bib}
+
+\end{document}
