@@ -287,21 +287,29 @@ Simple plots of the results.
 if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
     tau = T.imag[0:imsteps]
     
-    fig1 = plt.figure("K[1] vs. tau")
-    fig2 = plt.figure("Mx vs. tau")
+    fig1 = plt.figure(1)
+    fig2 = plt.figure(2) 
     K1_tau = fig1.add_subplot(111)
+    K1_tau.set_xlabel('tau')
+    K1_tau.set_ylabel('H')
     M_tau = fig2.add_subplot(111)
+    M_tau.set_xlabel('tau')
+    M_tau.set_ylabel('M_x')    
     
     K1_tau.plot(tau, K1.real[0:imsteps])
     M_tau.plot(tau, Mx.real[0:imsteps])
 
 #Now plot the real time evolution of K1 and Mx
 t = T.real[imsteps + 1:]
-fig3 = plt.figure("K[1] vs. t")
-fig4 = plt.figure("Mx vs. t")
+fig3 = plt.figure(3)
+fig4 = plt.figure(4)
 
 K1_t = fig3.add_subplot(111)
+K1_t.set_xlabel('t')
+K1_t.set_ylabel('H')
 M_t = fig4.add_subplot(111)
+M_t.set_xlabel('t')
+M_t.set_ylabel('M_x')
 
 K1_t.plot(t, K1.real[imsteps + 1:])
 M_t.plot(t, Mx.real[imsteps + 1:])
