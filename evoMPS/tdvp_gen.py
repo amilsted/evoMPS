@@ -166,6 +166,9 @@ class evoMPS_TDVP_Generic:
         C[n] depends on A[n] and A[n + 1].
         
         """
+        if self.h_nn is None:
+            return 0
+        
         if n_low < 1:
             n_low = 1
         if n_high < 1:
@@ -209,16 +212,17 @@ class evoMPS_TDVP_Generic:
             self.K[n].fill(0)
             tmp = empty_like(self.K[n])
             if n < self.N:
-                for s in xrange(self.q[n]):
+                for s in xrange(self.q[n]): 
                     for t in xrange(self.q[n+1]):
                         self.K[n] += matmul(tmp, self.C[n][s, t], self.r[n + 1], H(self.A[n+1][t]), H(self.A[n][s]))
                     self.K[n] += matmul(tmp, self.A[n][s], self.K[n + 1], H(self.A[n][s]))
-                    
-            for s in xrange(self.q[n]):
-                for t in xrange(self.q[n]):
-                    h_ext_st = self.h_ext(n, s, t)
-                    if h_ext_st != 0:
-                        self.K[n] += h_ext_st * matmul(tmp, self.A[n][t], self.r[n], H(self.A[n][s]))
+            
+            if not self.h_ext is None:
+                for s in xrange(self.q[n]):
+                    for t in xrange(self.q[n]):
+                        h_ext_st = self.h_ext(n, s, t)
+                        if h_ext_st != 0:
+                            self.K[n] += h_ext_st * matmul(tmp, self.A[n][t], self.r[n], H(self.A[n][s]))
     
     def BuildVsh(self, n, sqrt_r):
         """Generates H(V[n][s]) for a given n, used for generating B[n][s]
