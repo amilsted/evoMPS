@@ -227,3 +227,48 @@ def invpo(A, out=None, lower=False):
         raise ValueError('illegal value in %d-th argument of internal potri'
                                                                     % -info)    
     return inv_A
+    
+def bicgstab_iso(Aop, x, b):
+    r_prv = b - Aop(x)
+    
+    r0 = r_prv.Copy()
+    
+    rho_prv = 1
+    alpha = 1
+    omega_prv = 1
+    
+    v_prv = zeros((1, 1))
+    p_prv = zeros((1, 1))
+    
+    for i in xrange(100):
+        rho = np.trace(dot(r0, r_prv))
+        
+        beta = (rho / rho_prv) * (alpha / omega_prv)
+        
+        p = r_prv + beta * (p_prv - omega_prv * v_prv)
+        
+        v = Aop(p)
+        
+        alpha = rho / np.trace(dot(r0, v))
+        
+        s = r_prv - alpha * v
+        
+        t = Aop(s)
+            
+        omega = np.trace(dot(t, s)) / np.trace(dot(t, t))
+        
+        x += alpha * p + omega * s
+        
+        #Test x
+        if allclose(Aop(x), b):
+            break
+        
+        r_prv = s - omega * t
+        
+        rho_prv = rho.Copy()
+        omega_prv = omega.Copy()
+        
+        v_prv = v.Copy()
+        p_prv = p.Copy()
+    
+    return x
