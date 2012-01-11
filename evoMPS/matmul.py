@@ -5,10 +5,8 @@ Created on Fri Nov  4 13:05:59 2011
 @author: Ashley Milsted
 """
 
-import numpy as np
 import scipy as sp
 import scipy.linalg as la
-from scipy import *
 
 gemm = None
 using_fblas = False
@@ -35,18 +33,18 @@ def _matmul_dot(out, args): #depending on the arguments, dot() may expect a matr
     if len(args) < 3:
         res = args[0]
     else:
-        res = dot(args[0], args[1])    
+        res = sp.dot(args[0], args[1])    
         
         for x in args[2:-1]:
-            res = dot(res, x)
+            res = sp.dot(res, x)
         
     if out is None:
-        return dot(res, args[-1])
+        return sp.dot(res, args[-1])
     elif out.size == 1: #dot() seems to dislike this
-        out[...] = dot(res, args[-1])
+        out[...] = sp.dot(res, args[-1])
         return out
     else:
-        return dot(res, args[-1], out=out)
+        return sp.dot(res, args[-1], out=out)
 
 
 def matmul(out, *args):
@@ -78,11 +76,11 @@ def matmul(out, *args):
         raise
     return _matmul_dot(out, args)
     
-def matmul_init(dtype=float64, order='C'):
+def matmul_init(dtype=sp.float64, order='C'):
     global gemm
     global using_fblas
     
-    m = empty((1,1), dtype=dtype, order=order)
+    m = sp.empty((1,1), dtype=dtype, order=order)
     gemm, = la.blas.get_blas_funcs(['gemm'], m) #gets correct gemm (i.e. S, C, D, Z)
     using_fblas = gemm.module_name == 'fblas'
 
@@ -135,11 +133,11 @@ def sqrtmh(A, out=None):
     ev = sp.sqrt(ev) #we don't require positive (semi) definiteness, so we need the scipy sqrt here
     
     #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(V)
-    B = empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
+    B = sp.empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
     for i in xrange(V.shape[0]):
         B[:,i] = V[i,:] * ev
 
-    conjugate(B, B) #in-place conjugate
+    sp.conjugate(B, B) #in-place conjugate
 
     return matmul(out, V, B)
     
@@ -200,7 +198,7 @@ def invtr(A, overwrite=False, lower=False):
     inv_A, info = trtri(A, lower=lower, overwrite_c=overwrite)
     
     if info > 0:
-        raise LinAlgError("%d-th diagonal element of the matrix is zero" % info)
+        raise sp.LinAlgError("%d-th diagonal element of the matrix is zero" % info)
     if info < 0:
         raise ValueError('illegal value in %d-th argument of internal potri'
                                                                     % -info)       
@@ -214,7 +212,7 @@ def invpo(A, out=None, lower=False):
     """
     t = la.cholesky(A, lower=lower)
     
-    print allclose(dot(H(t), t), A)
+    print sp.allclose(sp.dot(H(t), t), A)
     #a, lower = la.cho_factor(A, lower=lower) #no.. we need a clean answer, it seems
     
     potri, = la.lapack.get_lapack_funcs(('potri',), (A,))
@@ -222,14 +220,45 @@ def invpo(A, out=None, lower=False):
     inv_A, info = potri(t, lower=lower, overwrite_c=1, rowmajor=1) #rowmajor (C-order) is the default...
     
     if info > 0:
-        raise LinAlgError("%d-th diagonal element of the Cholesky factor is zero" % info)
+        raise sp.LinAlgError("%d-th diagonal element of the Cholesky factor is zero" % info)
     if info < 0:
         raise ValueError('illegal value in %d-th argument of internal potri'
                                                                     % -info)    
     return inv_A
     
 def bicgstab_iso(A, x, b, MVop, VVop):
-    r_prv = b - Aop(A, x)
+    """Implements the Bi-CGSTAB method for isomorphic operations.
+    
+    The Bi-CGSTAB method is used to solve linear equations Ax = b.
+    
+    Should the vectors x, b be isomorphic to some other objects, say
+    matrices x' and b', with corresponding opeator A'
+    (for example, via the Choi-Jamiolkowski isomorphism), the method
+    can similarly be carried out in the alternative form.
+    
+    With this function, the operations corresponding to matrix-vector
+    and vector-vector multiplication are supplied by the caller to enable
+    using the method in an isomorphic way.
+    
+    Parameters
+    ----------
+    A : ndarray
+        The A matrix, or equivalent.        
+    x : ndarray
+        An initial value for the unknown vector, or equivalent.
+    b : ndarray
+        The b vector, or equivalent.
+    MVop : function(ndarray, ndarray)
+        The matrix-vector multiplication operation.
+    VVop : function(ndarray, ndarray)
+        The vector-vector multiplication operation.
+
+    Returns
+    -------
+    x : ndarray
+        The final value for the unknown vector x.
+    """
+    r_prv = b - MVop(A, x)
     
     r0 = r_prv.Copy()
     
@@ -237,30 +266,30 @@ def bicgstab_iso(A, x, b, MVop, VVop):
     alpha = 1
     omega_prv = 1
     
-    v_prv = zeros((1, 1))
-    p_prv = zeros((1, 1))
+    v_prv = sp.zeros((1, 1))
+    p_prv = sp.zeros((1, 1))
     
     for i in xrange(100):
-        rho = np.trace(dot(r0, r_prv))
+        rho = sp.trace(sp.dot(r0, r_prv))
         
         beta = (rho / rho_prv) * (alpha / omega_prv)
         
         p = r_prv + beta * (p_prv - omega_prv * v_prv)
         
-        v = Aop(A, p)
+        v = MVop(A, p)
         
         alpha = rho / VVop(r0, v)
         
         s = r_prv - alpha * v
         
-        t = Aop(A, s)
+        t = MVop(A, s)
             
         omega = VVop(t, s) / VVop(t, t)
         
         x += alpha * p + omega * s
         
         #Test x
-        if allclose(Aop(A, x), b):
+        if sp.allclose(MVop(A, x), b):
             break
         
         r_prv = s - omega * t
