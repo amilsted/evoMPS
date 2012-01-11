@@ -13,6 +13,7 @@ TODO:
     - Build more into TakeStep or add a new method that does Restore_ON_R etc. itself.
     - Add an algorithm for expanding the bond dimension.
     - Adaptive step size.
+    - Find a way to randomize the starting state.
 
 """
 import scipy as sp
