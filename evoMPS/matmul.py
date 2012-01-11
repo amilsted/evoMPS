@@ -228,8 +228,8 @@ def invpo(A, out=None, lower=False):
                                                                     % -info)    
     return inv_A
     
-def bicgstab_iso(Aop, x, b):
-    r_prv = b - Aop(x)
+def bicgstab_iso(A, x, b, MVop, VVop):
+    r_prv = b - Aop(A, x)
     
     r0 = r_prv.Copy()
     
@@ -247,20 +247,20 @@ def bicgstab_iso(Aop, x, b):
         
         p = r_prv + beta * (p_prv - omega_prv * v_prv)
         
-        v = Aop(p)
+        v = Aop(A, p)
         
-        alpha = rho / np.trace(dot(r0, v))
+        alpha = rho / VVop(r0, v)
         
         s = r_prv - alpha * v
         
-        t = Aop(s)
+        t = Aop(A, s)
             
-        omega = np.trace(dot(t, s)) / np.trace(dot(t, t))
+        omega = VVop(t, s) / VVop(t, t)
         
         x += alpha * p + omega * s
         
         #Test x
-        if allclose(Aop(x), b):
+        if allclose(Aop(A, x), b):
             break
         
         r_prv = s - omega * t
