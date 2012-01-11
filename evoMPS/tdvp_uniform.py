@@ -43,6 +43,9 @@ class evoMPS_TDVP_Uniform:
         for s in xrange(q):
             self.A[s] = sp.eye(D)
             
+        #self.A.real = sp.rand(q, D, D) - 0.5
+        #self.A.imag = sp.rand(q, D, D) - 0.5
+            
     def EpsR(self, x, op=None, out=None):
         """Implements the right epsilon map
         
@@ -93,25 +96,26 @@ class evoMPS_TDVP_Uniform:
         return out
     
     def Calc_rl(self, renorm=True):
-        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
-        
-        for s in xrange(self.q):
-            E += sp.kron(self.A[s], self.A[s].conj())
-            
-        ev, eVL, eVR = la.eig(E, left=True, right=True)
-        
-        i = sp.argmax(ev)
-        
-        self.l = eVL[i].reshape((self.D, self.D))
-        self.r = eVR[i].reshape((self.D, self.D))
-        
-        #Test!
-        print "Sledgehammer:"
-        print sp.allclose(self.EpsL(self.l), self.l * ev[i])
-        print sp.allclose(self.EpsR(self.r), self.r * ev[i])
-        
-        #Method using eps maps... Depends on max. ev = 1
-        
+#        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
+#        
+#        for s in xrange(self.q):
+#            E += sp.kron(self.A[s], self.A[s].conj())
+#            
+#        ev, eVL, eVR = la.eig(E, left=True, right=True)
+#        
+#        i = sp.argmax(ev)
+#        
+#        self.l = eVL[i].reshape((self.D, self.D))
+#        self.r = eVR[i].reshape((self.D, self.D))
+#        
+#        #Test!
+#        print "Sledgehammer:"
+#        print ev[i]
+#        print sp.allclose(self.EpsL(self.l), self.l * ev[i])
+#        print sp.allclose(self.EpsR(self.r), self.r * ev[i])
+#        
+#        #Method using eps maps... Depends on max. ev = 1
+#        print "Flipside:"
         ev = 1
         
         self.l.fill(0)
@@ -121,15 +125,20 @@ class evoMPS_TDVP_Uniform:
         
         for i in xrange(100):
             l_new = self.EpsL(self.l, out=l_new)
+            #print l_new
             ev = la.norm(l_new)
+            #print ev
             l_new = l_new * (1 / ev)
+            #print l_new - self.l
             if sp.allclose(l_new, self.l):
                 break
-            self.l = l_new
+            self.l = l_new.copy()
+            
+        print ev
+        print i
             
         if renorm:
             self.A *= 1 / sp.sqrt(ev)
-            ev = 1 #FIXME
         
         self.r.fill(0)
         self.r.real = sp.eye(self.D)
@@ -138,13 +147,13 @@ class evoMPS_TDVP_Uniform:
         
         for i in xrange(100):
             r_new = self.EpsR(self.r, out=r_new)
-            r_new = r_new * (1 / la.norm(r_new))
+            ev = la.norm(r_new)
+            r_new = r_new * (1 / ev)
             if sp.allclose(r_new, self.r):
                 break
-            self.r = r_new
+            self.r = r_new.copy()
             
-        #Test!
-        print "Flipside:"
+        #Test!        
         print sp.allclose(self.EpsL(self.l), self.l * ev)
         print sp.allclose(self.EpsR(self.r), self.r * ev)
             
@@ -191,7 +200,9 @@ class evoMPS_TDVP_Uniform:
             m.matmul(AAst, self.A[s], self.A[t])
             for (u, v) in sp.ndindex(self.q, self.q):
                 Hr += self.h_nn(u, v, s, t) * m.matmul(None, AAst, self.r, m.H(self.A[v]), m.H(self.A[u]))
-                
+        
+        self.h = sp.trace(sp.dot(self.l, Hr))
+        
         QHr = Hr - self.r * sp.trace(m.matmul(None, self.l, Hr))
         
         Amod = (self.l, self.r, self.A)
@@ -224,10 +235,10 @@ class evoMPS_TDVP_Uniform:
         if out is None:
             out = sp.zeros(((self.q - 1) * self.D, self.D), dtype=self.typ, order=self.odr)
             
-        for (s, t) in sp.nditer(self.q, self.q):
+        for (s, t) in sp.ndindex(self.q, self.q):
             out += m.matmul(None, l_sqrt, self.C[s, t], self.r, m.H(self.A[t]), r_sqrt_i, Vsh[s])
             
-        for (s, t) in sp.nditer(self.q, self.q):
+        for (s, t) in sp.ndindex(self.q, self.q):
             out += m.matmul(None, l_sqrt_i, m.H(self.A[t]), self.l, self.C[t, s], r_sqrt, Vsh[s])
             
         for s in xrange(self.q):
@@ -258,3 +269,14 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
+            
+    def Expect_SS(self, op):
+        Or = self.EpsR(self.r, op=op)
+        
+        return sp.trace(sp.dot(self.l, Or))        
+            
+    def SaveState(self, file):
+        sp.save(file, self.A)
+        
+    def LoadState(self, file):
+        self.A = sp.load(file)            
