@@ -1016,16 +1016,4 @@ class evoMPS_TDVP_Generic:
         
     def LoadState(self, file):
         self.A = load(file)
-        
-class evoMPS_TDVP_Uniform:
-    odr = 'C'
-    typ = complex128
-    
-    def __init__(self, D, q):
-        self.D = D
-        self.q = q
-        
-        self.A = zeros((q, D, D), dtype=self.typ, order=self.odr)
-        
-        for s in xrange(self.q):
-            self.A[s] = eye(D)
+
