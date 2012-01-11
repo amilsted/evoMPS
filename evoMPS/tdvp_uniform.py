@@ -35,10 +35,10 @@ class evoMPS_TDVP_Uniform:
         
         self.C = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
-        self.K = sp.ones_like(A[0])
+        self.K = sp.ones_like(self.A[0])
         
-        self.l = sp.empty_like(A[0])
-        self.r = sp.empty_like(A[0])
+        self.l = sp.empty_like(self.A[0])
+        self.r = sp.empty_like(self.A[0])
         
         for s in xrange(q):
             self.A[s] = sp.eye(D)
@@ -93,7 +93,7 @@ class evoMPS_TDVP_Uniform:
         return out
     
     def Calc_rl(self, renorm=True):
-        E = sp.zeros((D**2, D**2), dtype=self.typ, order='C')
+        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
         
         for s in xrange(self.q):
             E += sp.kron(self.A[s], self.A[s].conj())
@@ -152,7 +152,7 @@ class evoMPS_TDVP_Uniform:
     def Restore_CF(self):
         M = sp.zeros_like(self.r)
         for s in xrange(self.q):
-            M += m.matmul(None, self.A[s], H(self.A[s]))     
+            M += m.matmul(None, self.A[s], m.H(self.A[s]))     
         
         try:
             tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
@@ -187,7 +187,7 @@ class evoMPS_TDVP_Uniform:
         
         AAst = sp.empty_like(self.A[0])
         
-        for (s, t) in ndindex(self.q, self.q):
+        for (s, t) in sp.ndindex(self.q, self.q):
             m.matmul(AAst, self.A[s], self.A[t])
             for (u, v) in sp.ndindex(self.q, self.q):
                 Hr += self.h_nn(u, v, s, t) * m.matmul(None, AAst, self.r, m.H(self.A[v]), m.H(self.A[u]))
