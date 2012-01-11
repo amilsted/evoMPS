@@ -260,7 +260,7 @@ def bicgstab_iso(A, x, b, MVop, VVop):
     """
     r_prv = b - MVop(A, x)
     
-    r0 = r_prv.Copy()
+    r0 = r_prv.copy()
     
     rho_prv = 1
     alpha = 1
@@ -294,10 +294,10 @@ def bicgstab_iso(A, x, b, MVop, VVop):
         
         r_prv = s - omega * t
         
-        rho_prv = rho.Copy()
-        omega_prv = omega.Copy()
+        rho_prv = rho.copy()
+        omega_prv = omega.copy()
         
-        v_prv = v.Copy()
-        p_prv = p.Copy()
+        v_prv = v.copy()
+        p_prv = p.copy()
     
     return x
