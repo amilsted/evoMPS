@@ -172,9 +172,9 @@ def sqrtmpo(A, out=None):
     return 0
     
 def invtr(A, overwrite=False, lower=False):
-    """Return the inverse of a triangular matrix
+    """Compute the inverse of a triangular matrix
 
-    Uses the corresponding LAPACK routing.
+    Uses the corresponding LAPACK routine.
 
     Parameters
     ----------
