@@ -37,14 +37,17 @@ class evoMPS_TDVP_Uniform:
         
         self.K = sp.ones_like(self.A[0])
         
-        self.l = sp.empty_like(self.A[0])
-        self.r = sp.empty_like(self.A[0])
+        self.l = sp.zeros_like(self.A[0])
+        self.r = sp.zeros_like(self.A[0])
         
-        for s in xrange(q):
-            self.A[s] = sp.eye(D)
+        self.l.real = sp.eye(self.D)
+        self.r.real = sp.eye(self.D)
+        
+        #for s in xrange(q):
+        #    self.A[s] = sp.eye(D)
             
-        #self.A.real = sp.rand(q, D, D) - 0.5
-        #self.A.imag = sp.rand(q, D, D) - 0.5
+        self.A.real = sp.rand(q, D, D) - 0.5
+        self.A.imag = sp.rand(q, D, D) - 0.5
             
     def EpsR(self, x, op=None, out=None):
         """Implements the right epsilon map
@@ -85,13 +88,13 @@ class evoMPS_TDVP_Uniform:
         
     def EpsL(self, x, out=None):
         if out is None:
-            out = sp.zeros_like(self.r)
+            out = sp.zeros_like(self.l)
         else:
             out.fill(0.)
             
         tmp = sp.empty_like(out)
         for s in xrange(self.q):
-            out += m.matmul(tmp, self.A[s], x, m.H(self.A[s]))
+            out += m.matmul(tmp, m.H(self.A[s]), x, self.A[s])
             
         return out
     
@@ -115,11 +118,11 @@ class evoMPS_TDVP_Uniform:
 #        print sp.allclose(self.EpsR(self.r), self.r * ev[i])
 #        
 #        #Method using eps maps... Depends on max. ev = 1
-#        print "Flipside:"
+        print "Isomorphic power iteration:"
         ev = 1
         
-        self.l.fill(0)
-        self.l.real = sp.eye(self.D)
+        self.l.fill(1)
+        #self.l.real = sp.eye(self.D)
         
         l_new = sp.empty_like(self.l)
         
@@ -134,14 +137,14 @@ class evoMPS_TDVP_Uniform:
                 break
             self.l = l_new.copy()
             
-        print ev
-        print i
+        print "Found left ev: " + str(ev)
+        print "Iterations: " + str(i)
             
         if renorm:
             self.A *= 1 / sp.sqrt(ev)
         
-        self.r.fill(0)
-        self.r.real = sp.eye(self.D)
+        self.r.fill(1)
+        #self.r.real = sp.eye(self.D)
         
         r_new = sp.empty_like(self.r)
         
@@ -152,54 +155,60 @@ class evoMPS_TDVP_Uniform:
             if sp.allclose(r_new, self.r):
                 break
             self.r = r_new.copy()
-            
-        #Test!        
-        print sp.allclose(self.EpsL(self.l), self.l * ev)
-        print sp.allclose(self.EpsR(self.r), self.r * ev)
-            
+        
+        print "Right ev: " + str(ev)
+        print "Iterations: " + str(i)
+         
+        #Test!
+        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l * ev))
+        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r * ev))
     
     def Restore_CF(self):
+        print "Restore CF..."
+        
         M = sp.zeros_like(self.r)
         for s in xrange(self.q):
-            M += m.matmul(None, self.A[s], m.H(self.A[s]))     
+            M += m.matmul(None, self.A[s], m.H(self.A[s]))
         
-        try:
-            tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
-            G = m.H(m.invtr(tu, overwrite=True), out=tu) #G is now lower-triangular
-            G_i = m.invtr(G, overwrite=True, lower=True)
-        except sp.linalg.LinAlgError:
-            print "Restore_ON_R_n: Falling back to eigh()!"
-            e,Gh = la.eigh(M)
-            G = m.H(m.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
-            G_i = la.inv(G)        
-            
+        print "Initial difference: " + str(la.norm(M - sp.eye(M.shape[0])))
         
-        for s in xrange(self.q):                
-            m.matmul(self.A[s], G, self.A[s], G_i)
-            #It's ok to use the same matrix as out and as an operand here
-            #since there are > 2 matrices in the chain and it is not the last argument.
+        G = m.H(la.cholesky(self.r))
+        G_i = m.invtr(G, lower=True)
+        
+        for s in xrange(self.q):
+            m.matmul(self.A[s], G_i, self.A[s], G)
+        
+        #Test:
+        M.fill(0)
+        for s in xrange(self.q):
+            M += m.matmul(None, self.A[s], m.H(self.A[s]))
+        
+        print "Final difference: " + str(la.norm(M - sp.eye(M.shape[0])))
+        print "isCF: " + str(sp.allclose(M, sp.eye(M.shape[0])))
             
         #TODO: Move to symmetrical gauge.
+#        self.Calc_rl()
+#        G = la.sqrtm(la.sqrtm(self.l))
+#        G_i = la.inv(G)
+#        
+#        for s in xrange(self.q):
+#            m.matmul(self.A[s], G_i, self.A[s], G)
     
     def Calc_C(self):
         self.C.fill(0)
         
         AA = sp.empty_like(self.A[0])
         
-        for (u, v) in sp.ndindex(self.q, self.q):
-            m.matmul(AA, self.A[u], self.A[v])
-            for (s, t) in sp.ndindex(self.q, self.q):
+        for (s, t) in sp.ndindex(self.q, self.q):
+            m.matmul(AA, self.A[s], self.A[t])
+            for (u, v) in sp.ndindex(self.q, self.q):
                 self.C[s, t] += self.h_nn(s, t, u, v) * AA
     
     def Calc_K(self):
         Hr = sp.empty_like(self.A[0])
         
-        AAst = sp.empty_like(self.A[0])
-        
         for (s, t) in sp.ndindex(self.q, self.q):
-            m.matmul(AAst, self.A[s], self.A[t])
-            for (u, v) in sp.ndindex(self.q, self.q):
-                Hr += self.h_nn(u, v, s, t) * m.matmul(None, AAst, self.r, m.H(self.A[v]), m.H(self.A[u]))
+            Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), m.H(self.A[s]))
         
         self.h = sp.trace(sp.dot(self.l, Hr))
         
@@ -209,6 +218,9 @@ class evoMPS_TDVP_Uniform:
         self.K.fill(1)
         
         self.K = m.bicgstab_iso(Amod, self.K, QHr, myMVop, myVVop)
+        
+        #Test
+        print "Test K: " + str(sp.allclose(myMVop(Amod, self.K), QHr))
         
     def Calc_Vsh(self, r_sqrt): #this really is just the same as for the generic case
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
