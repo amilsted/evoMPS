@@ -42,7 +42,12 @@ def h_nn(s, t, u, v):
     else:
         res = 0
         
-    return res #+ h_ext(s, t)
+    if s == t:
+        res += 0
+    else:
+        res += -h        
+        
+    return res
     
 def z_ss(s, t):
     """Spin observable: z-direction
@@ -99,7 +104,7 @@ s.h_nn = h_nn
 Set the initial Hamiltonian parameters.
 """
 h = 1
-J = 0.25
+J = 1
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -111,7 +116,7 @@ J_real = 2
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.0001
+step = 0.01
 realstep = 0.01
 
 """
@@ -152,7 +157,7 @@ reCF = []
 reNorm = []
 
 T = sp.zeros((total_steps), dtype=sp.complex128)
-h = sp.zeros((total_steps), dtype=sp.complex128)
+E = sp.zeros((total_steps), dtype=sp.complex128)
 lN = sp.zeros((total_steps), dtype=sp.complex128)
 
 Sx = sp.zeros((total_steps), dtype=sp.complex128)
@@ -182,27 +187,27 @@ for i in xrange(total_steps):
     
     s.Calc_rl()
 
-    restoreCF = True #(i % 4 == 0) #Restore canonical form every 4 steps.
+    restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.Restore_CF()
+        s.Calc_rl()
         row.append("Yes")
     else:
-        row.append("No")
-
+        row.append("No")    
     
     s.Calc_C()    
     s.Calc_K()    
         
-    h[i] = s.h
-    row.append("%.15g" % h[i].real)
+    E[i] = s.h
+    row.append("%.15g" % E[i].real)
     
     if i > 0:        
-        dh = h[i].real - h[i - 1].real
+        dE = E[i].real - E[i - 1].real
     else:
-        dh = h[i]
+        dE = E[i]
     
-    row.append("%.2e" % (dh.real))
+    row.append("%.2e" % (dE.real))
         
     """
     Compute obserables!
@@ -229,7 +234,7 @@ for i in xrange(total_steps):
     """
     Switch to real time evolution if we have the ground state.
     """
-    if loaded or (not real_time and abs(dh) < tol_im):
+    if loaded or (not real_time and abs(dE) < tol_im):
         real_time = True
         s.SaveState(grnd_fname)
         J = J_real
@@ -256,7 +261,7 @@ for i in xrange(total_steps):
         print "\t".join(row)
         s.TakeStep_RK4(step)
     else:
-        s.Takestep(step)
+        s.TakeStep(step)
     
     t += 1.j * sp.conj(step)
 
@@ -276,7 +281,7 @@ if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
     M_tau.set_xlabel('tau')
     M_tau.set_ylabel('M_x')    
     
-    K1_tau.plot(tau, h.real[0:imsteps])
+    K1_tau.plot(tau, E.real[0:imsteps])
     M_tau.plot(tau, Mx.real[0:imsteps])
 
 #Now plot the real time evolution of K1 and Mx
@@ -291,7 +296,7 @@ M_t = fig4.add_subplot(111)
 M_t.set_xlabel('t')
 M_t.set_ylabel('M_x')
 
-K1_t.plot(t, h.real[imsteps + 1:])
+K1_t.plot(t, E.real[imsteps + 1:])
 M_t.plot(t, Mx.real[imsteps + 1:])
 
 plt.show()
