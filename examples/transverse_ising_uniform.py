@@ -81,7 +81,7 @@ the evoMPS class.
 """
 The bond dimension is given as a vector, length N.
 """
-D = 16
+D = 32
 
 
 """
@@ -104,7 +104,7 @@ s.h_nn = h_nn
 Set the initial Hamiltonian parameters.
 """
 h = 1
-J = 1
+J = 0.25
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -125,7 +125,7 @@ When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
 tol_im = 5E-15
-total_steps = 500
+total_steps = 100
 
 """
 The following handles loading the ground state from a file.
@@ -196,6 +196,8 @@ for i in xrange(total_steps):
     else:
         row.append("No")    
     
+    #print "Manual h = " + str(s.Expect_2S(h_nn))
+    
     s.Calc_C()    
     s.Calc_K()    
         
@@ -226,7 +228,7 @@ for i in xrange(total_steps):
 #    row.append("%.9g" % E_v.real)
     
     #x-Magnetization
-    m = s.Expect_SS(x_ss) 
+    m = Sx[i]
         
     row.append("%.9g" % m.real)
     Mx[i] = m    

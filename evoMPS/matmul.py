@@ -289,7 +289,7 @@ def bicgstab_iso(A, x, b, MVop, VVop):
         x += alpha * p + omega * s
         
         #Test x
-        if sp.allclose(MVop(A, x), b):
+        if sp.allclose(MVop(A, x), b): #TODO: Be more lenient?
             break
         
         r_prv = s - omega * t

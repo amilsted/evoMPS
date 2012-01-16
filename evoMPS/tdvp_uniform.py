@@ -119,49 +119,67 @@ class evoMPS_TDVP_Uniform:
 #        
 #        #Method using eps maps... Depends on max. ev = 1
         print "Isomorphic power iteration:"
-        ev = 1
+        ev = 0
         
-        self.l.fill(1)
+        #self.l.fill(1)
         #self.l.real = sp.eye(self.D)
         
-        l_new = sp.empty_like(self.l)
+        new = sp.empty_like(self.l)
         
-        for i in xrange(100):
-            l_new = self.EpsL(self.l, out=l_new)
-            #print l_new
-            ev = la.norm(l_new)
-            #print ev
-            l_new = l_new * (1 / ev)
-            #print l_new - self.l
-            if sp.allclose(l_new, self.l):
+        while not sp.allclose(ev, 1, rtol=0, atol=1E-13):
+            for i in xrange(1000):
+                new = self.EpsL(self.l, out=new)
+                #print l_new
+                ev = la.norm(new)
+                #print ev
+                new = new * (1 / ev)
+                #print l_new - self.l
+                if sp.allclose(new, self.l, rtol=0, atol=1E-14):
+                    self.l[:] = new
+                    break
+                self.l[:] = new
+                
+            print "Found left ev: " + str(ev)
+            print "Iterations: " + str(i)
+                
+            if renorm:
+                self.A *= 1 / sp.sqrt(ev)
+                ev = la.norm(self.EpsL(self.l, out=new))
+                print "After renorm: " + str(ev)
+            else:
                 break
-            self.l = l_new.copy()
-            
-        print "Found left ev: " + str(ev)
-        print "Iterations: " + str(i)
-            
-        if renorm:
-            self.A *= 1 / sp.sqrt(ev)
         
-        self.r.fill(1)
+        #self.r.fill(1)
         #self.r.real = sp.eye(self.D)
-        
-        r_new = sp.empty_like(self.r)
-        
-        for i in xrange(100):
-            r_new = self.EpsR(self.r, out=r_new)
-            ev = la.norm(r_new)
-            r_new = r_new * (1 / ev)
-            if sp.allclose(r_new, self.r):
+
+        for i in xrange(1000):
+            new = self.EpsR(self.r, out=new)
+            ev = la.norm(new)
+            new = new * (1 / ev)
+            if sp.allclose(new, self.r, rtol=0, atol=1E-14):
+                self.r[:] = new
                 break
-            self.r = r_new.copy()
+            self.r[:] = new
         
         print "Right ev: " + str(ev)
         print "Iterations: " + str(i)
-         
+
+        if renorm:
+            self.A *= 1 / sp.sqrt(ev)
+            ev = la.norm(self.EpsR(self.r, out=new))
+            print "After renorm: " + str(ev)
+                    
+        #normalize eigenvectors:
+        norm = sp.trace(sp.dot(self.l, self.r))
+        
+        self.l *= 1 / sp.sqrt(norm)
+        self.r *= 1 / sp.sqrt(norm)
+        
         #Test!
-        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l * ev))
-        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r * ev))
+        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l, rtol=0, atol=1E-13))
+        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r, rtol=0, atol=1E-13))
+        
+        print "Norm = " + str(sp.trace(sp.dot(self.l, self.r)))
     
     def Restore_CF(self):
         print "Restore CF..."
@@ -199,13 +217,13 @@ class evoMPS_TDVP_Uniform:
         
         AA = sp.empty_like(self.A[0])
         
-        for (s, t) in sp.ndindex(self.q, self.q):
-            m.matmul(AA, self.A[s], self.A[t])
-            for (u, v) in sp.ndindex(self.q, self.q):
+        for (u, v) in sp.ndindex(self.q, self.q):
+            m.matmul(AA, self.A[u], self.A[v])
+            for (s, t) in sp.ndindex(self.q, self.q):
                 self.C[s, t] += self.h_nn(s, t, u, v) * AA
     
     def Calc_K(self):
-        Hr = sp.empty_like(self.A[0])
+        Hr = sp.zeros_like(self.A[0])
         
         for (s, t) in sp.ndindex(self.q, self.q):
             Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), m.H(self.A[s]))
@@ -268,9 +286,9 @@ class evoMPS_TDVP_Uniform:
         return out
         
     def TakeStep(self, dtau):
-        l_sqrt = la.sqrtm(self.l)
+        l_sqrt = m.sqrtmh(self.l)
         l_sqrt_i = la.inv(l_sqrt)
-        r_sqrt = la.sqrtm(self.r)
+        r_sqrt = m.sqrtmh(self.r)
         r_sqrt_i = la.inv(r_sqrt)
         
         Vsh = self.Calc_Vsh(r_sqrt)
@@ -279,6 +297,12 @@ class evoMPS_TDVP_Uniform:
         
         B = self.Calc_B(x, Vsh, l_sqrt_i, r_sqrt_i)
         
+        #Test gauge-fixing:
+        tst = sp.zeros_like(self.l)
+        for s in xrange(self.q):
+            tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
+        print "Gauge-fixing: " + str(sp.allclose(tst, 0))
+        
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
             
@@ -286,6 +310,17 @@ class evoMPS_TDVP_Uniform:
         Or = self.EpsR(self.r, op=op)
         
         return sp.trace(sp.dot(self.l, Or))        
+            
+    def Expect_2S(self, op):
+        AAuv = sp.empty_like(self.A[0])
+        res = sp.zeros_like(self.r)
+        
+        for (u, v) in sp.ndindex(self.q, self.q):
+            m.matmul(AAuv, self.A[u], self.A[v])
+            for (s, t) in sp.ndindex(self.q, self.q):
+                res += op(u, v, s, t) * m.matmul(None, self.A[s], self.A[t], self.r, m.H(AAuv))
+        
+        return sp.trace(sp.dot(self.l, res))
             
     def SaveState(self, file):
         sp.save(file, self.A)
