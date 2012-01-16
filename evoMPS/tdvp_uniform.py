@@ -11,12 +11,16 @@ import nullspace as ns
 import matmul as m
 
 
-def myMVop(A, x):
-    opres = sp.zeros_like(A[2][0])
-    for i in xrange(A[2].shape[0]):
-        opres += m.matmul(None, A[2][i], x, m.H(A[2][i]))
+def myMVop(opData, x):
+    l = opData[0]
+    r = opData[1]
+    A = opData[2]
+    
+    opres = sp.zeros_like(A[0])
+    for s in xrange(A.shape[0]):
+        opres += m.matmul(None, A[s], x, m.H(A[s]))
         
-    return x - opres  + A[1] * sp.trace(sp.dot(A[0], x))
+    return x - opres  + r * sp.trace(sp.dot(l, x))
 
 def myVVop(a, b):
     return sp.trace(sp.dot(a, b))
@@ -27,7 +31,11 @@ class evoMPS_TDVP_Uniform:
     
     h_nn = None
     
+    symm_gauge = False
+    
     def __init__(self, D, q):
+        self.eta = 0
+        
         self.D = D
         self.q = q
         
@@ -126,15 +134,17 @@ class evoMPS_TDVP_Uniform:
         
         new = sp.empty_like(self.l)
         
+        #TODO: Currently, we always end up with norm = 1
+        
         while not sp.allclose(ev, 1, rtol=0, atol=1E-13):
-            for i in xrange(1000):
+            for i in xrange(5000):
                 new = self.EpsL(self.l, out=new)
                 #print l_new
                 ev = la.norm(new)
                 #print ev
                 new = new * (1 / ev)
                 #print l_new - self.l
-                if sp.allclose(new, self.l, rtol=0, atol=1E-14):
+                if sp.allclose(new, self.l, rtol=1E-14, atol=1E-14):
                     self.l[:] = new
                     break
                 self.l[:] = new
@@ -152,11 +162,11 @@ class evoMPS_TDVP_Uniform:
         #self.r.fill(1)
         #self.r.real = sp.eye(self.D)
 
-        for i in xrange(1000):
+        for i in xrange(5000):
             new = self.EpsR(self.r, out=new)
             ev = la.norm(new)
             new = new * (1 / ev)
-            if sp.allclose(new, self.r, rtol=0, atol=1E-14):
+            if sp.allclose(new, self.r, rtol=1E-14, atol=1E-14):
                 self.r[:] = new
                 break
             self.r[:] = new
@@ -175,9 +185,20 @@ class evoMPS_TDVP_Uniform:
         self.l *= 1 / sp.sqrt(norm)
         self.r *= 1 / sp.sqrt(norm)
         
+        if not self.symm_gauge: #right to do this every time?
+            fac = self.D / sp.trace(self.r)
+            self.l *= 1 / fac
+            self.r *= fac
+
         #Test!
-        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l, rtol=0, atol=1E-13))
-        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r, rtol=0, atol=1E-13))
+        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l, rtol=0, atol=1E-12)) + " (" + str(la.norm(self.EpsL(self.l) - self.l)) + ")"
+        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r, rtol=0, atol=1E-12)) + " (" + str(la.norm(self.EpsR(self.r) - self.r)) + ")"
+        
+        print "Test hermitian, left: " + str(sp.allclose(self.l, m.H(self.l)))
+        print "Test hermitian, right: " + str(sp.allclose(self.r, m.H(self.r)))
+        
+        print "Test pos. def., left: " + str(sp.all(la.eigvalsh(self.l) > 0))
+        print "Test pos. def., right: " + str(sp.all(la.eigvalsh(self.r) > 0))
         
         print "Norm = " + str(sp.trace(sp.dot(self.l, self.r)))
     
@@ -202,15 +223,30 @@ class evoMPS_TDVP_Uniform:
             M += m.matmul(None, self.A[s], m.H(self.A[s]))
         
         print "Final difference: " + str(la.norm(M - sp.eye(M.shape[0])))
-        print "isCF: " + str(sp.allclose(M, sp.eye(M.shape[0])))
+        print "isCF_R M?: " + str(sp.allclose(M, sp.eye(M.shape[0])))
+                            
+        #self.l.fill(1)
+        #self.r.fill(1)
+        self.Calc_rl()
+        
+        print "isCF_R r?: " + str(sp.allclose(self.r, sp.eye(self.D)))
             
-        #TODO: Move to symmetrical gauge.
-#        self.Calc_rl()
-#        G = la.sqrtm(la.sqrtm(self.l))
-#        G_i = la.inv(G)
-#        
-#        for s in xrange(self.q):
-#            m.matmul(self.A[s], G_i, self.A[s], G)
+        if self.symm_gauge:    #Move to symmetrical gauge.
+            sqrt_l = m.sqrtmh(self.l)
+    
+            G = m.sqrtmh(sqrt_l)
+            G_i = la.inv(G)
+            
+            for s in xrange(self.q):
+                m.matmul(self.A[s], G, self.A[s], G_i)
+                
+            self.l = sqrt_l
+            #self.l.fill(1)
+            self.r = self.l
+            
+            self.Calc_rl()
+            
+            print "Test symm. gauge: " + str(sp.allclose(self.l, self.r))
     
     def Calc_C(self):
         self.C.fill(0)
@@ -232,13 +268,13 @@ class evoMPS_TDVP_Uniform:
         
         QHr = Hr - self.r * sp.trace(m.matmul(None, self.l, Hr))
         
-        Amod = (self.l, self.r, self.A)
-        self.K.fill(1)
+        opData = (self.l, self.r, self.A)
+        #self.K.fill(1)
         
-        self.K = m.bicgstab_iso(Amod, self.K, QHr, myMVop, myVVop)
+        self.K = m.bicgstab_iso(opData, self.K, QHr, myMVop, myVVop)
         
         #Test
-        print "Test K: " + str(sp.allclose(myMVop(Amod, self.K), QHr))
+        print "Test K: " + str(sp.allclose(myMVop(opData, self.K), QHr, atol=1E-13, rtol=1E-13))
         
     def Calc_Vsh(self, r_sqrt): #this really is just the same as for the generic case
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
@@ -250,8 +286,9 @@ class evoMPS_TDVP_Uniform:
         V = m.H(ns.nullspace(m.H(R)))
         #print (q[n]*D[n] - D[n-1], q[n]*D[n])
         #print V.shape
-        #print allclose(mat(V) * mat(V).H, eye(q[n]*D[n] - D[n-1]))
-        #print allclose(mat(V) * mat(Rh).H, 0)
+#        print "V Checks..."
+#        print sp.allclose(sp.dot(V, m.H(V)), sp.eye(self.q*self.D - self.D))
+#        print sp.allclose(sp.dot(V, R), 0)
         V = V.reshape(((self.q - 1) * self.D, self.D, self.q)) #this works with the above form for R
         
         #prepare for using V[s] and already take the adjoint, since we use it more often
@@ -291,9 +328,16 @@ class evoMPS_TDVP_Uniform:
         r_sqrt = m.sqrtmh(self.r)
         r_sqrt_i = la.inv(r_sqrt)
         
+        print "l_sqrt: " + str(sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l))
+        print "l_sqrt_i: " + str(sp.allclose(sp.dot(l_sqrt, l_sqrt_i), sp.eye(self.D)))
+        print "r_sqrt: " + str(sp.allclose(sp.dot(r_sqrt, r_sqrt), self.r))
+        print "r_sqrt_i: " + str(sp.allclose(sp.dot(r_sqrt, r_sqrt_i), sp.eye(self.D)))
+        
         Vsh = self.Calc_Vsh(r_sqrt)
         
         x = self.Calc_x(l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh)
+        
+        self.eta = sp.sqrt(sp.trace(sp.dot(m.H(x), x)))
         
         B = self.Calc_B(x, Vsh, l_sqrt_i, r_sqrt_i)
         

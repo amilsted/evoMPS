@@ -37,15 +37,18 @@ def h_nn(s, t, u, v):
     
     The global variable J determines the strength.
     """
+    res = 0
+    
     if s == u and t == v:
         res = -J * (-1)**s * (-1)**t
-    else:
-        res = 0
         
-    if s == t:
-        res += 0
-    else:
-        res += -h        
+    if s != u and t == v:
+        res += -h
+        
+#    if t == v:
+#        res += 0
+#    else:
+#        res += -h
         
     return res
     
@@ -103,8 +106,8 @@ s.h_nn = h_nn
 """
 Set the initial Hamiltonian parameters.
 """
-h = 1
-J = 0.25
+h = 1.0
+J = 0
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -116,7 +119,7 @@ J_real = 2
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.01
+step = 0.1
 realstep = 0.01
 
 """
@@ -124,8 +127,8 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 5E-15
-total_steps = 100
+tol_im = 1E-12
+total_steps = 50
 
 """
 The following handles loading the ground state from a file.
@@ -172,7 +175,7 @@ Print a table header.
 """
 print "Bond dimensions: " + str(s.D)
 print
-col_heads = ["Step", "t", "Restore CF?", "H", "dH", 
+col_heads = ["Step", "t", "eta", "Restore CF?", "H", "dH", 
              "sig_x", "sig_y", "sig_z",
              "M_x", "Next step",
              "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
@@ -185,13 +188,14 @@ for i in xrange(total_steps):
     row = [str(i)]
     row.append(str(t))
     
+    row.append("%.4g" % s.eta.real)
+    
     s.Calc_rl()
 
-    restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
+    restoreCF = (i % 4 == 0) #Restore canonical form every 16 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.Restore_CF()
-        s.Calc_rl()
         row.append("Yes")
     else:
         row.append("No")    
@@ -237,6 +241,8 @@ for i in xrange(total_steps):
     Switch to real time evolution if we have the ground state.
     """
     if loaded or (not real_time and abs(dE) < tol_im):
+        break
+    
         real_time = True
         s.SaveState(grnd_fname)
         J = J_real
