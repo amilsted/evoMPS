@@ -107,7 +107,7 @@ s.h_nn = h_nn
 Set the initial Hamiltonian parameters.
 """
 h = 1.0
-J = 0.
+J = 0.75
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -190,7 +190,7 @@ for i in xrange(total_steps):
     
     row.append("%.4g" % s.eta.real)
     
-    s.Calc_rl()
+    s.Calc_lr()
 
     restoreCF = (i % 4 == 0) #Restore canonical form every 16 steps.
     reCF.append(restoreCF)

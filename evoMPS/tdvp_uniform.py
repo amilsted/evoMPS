@@ -34,6 +34,8 @@ class evoMPS_TDVP_Uniform:
     
     symm_gauge = True
     
+    sanity_checks = True
+    
     def __init__(self, D, q):
         self.eps = sp.finfo(self.typ).eps
         
@@ -59,6 +61,8 @@ class evoMPS_TDVP_Uniform:
             
         self.A.real = sp.rand(q, D, D) - 0.5
         self.A.imag = sp.rand(q, D, D) - 0.5
+        
+        self.tmp = sp.empty_like(self.A[0])
             
     def EpsR(self, x, op=None, out=None):
         """Implements the right epsilon map
@@ -84,17 +88,16 @@ class evoMPS_TDVP_Uniform:
         else:
             out.fill(0.)
             
-        tmp = sp.empty_like(out)
         if op is None:
             for s in xrange(self.q):
-                out += m.matmul(tmp, self.A[s], x, m.H(self.A[s]))            
+                out += m.matmul(self.tmp, self.A[s], x, m.H(self.A[s]))            
         else:
             for (s, t) in sp.ndindex(self.q, self.q):
                 o_st = op(s, t)
                 if o_st != 0.:
-                    m.matmul(tmp, self.A[t], x, m.H(self.A[s]))
-                    tmp *= o_st
-                    out += tmp
+                    m.matmul(self.tmp, self.A[t], x, m.H(self.A[s]))
+                    self.tmp *= o_st
+                    out += self.tmp
         return out
         
     def EpsL(self, x, out=None):
@@ -103,13 +106,33 @@ class evoMPS_TDVP_Uniform:
         else:
             out.fill(0.)
             
-        tmp = sp.empty_like(out)
         for s in xrange(self.q):
-            out += m.matmul(tmp, m.H(self.A[s]), x, self.A[s])
+            out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])
             
         return out
+        
+    def _Calc_lr(self, x, e, tmp, max_itr=5000, rtol=1E-14, atol=1E-14):        
+        for i in xrange(5000):
+            e(x, out=tmp)
+            ev = la.norm(tmp)
+            tmp *= (1 / ev)
+            if sp.allclose(tmp, x, rtol=rtol, atol=atol):
+                x[:] = tmp
+                break
+            x[:] = tmp
+        
+        print "Iterations: " + str(i + 1)
+        print "Found ev: " + str(ev)        
+        
+        #re-scale
+        if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
+            self.A *= 1 / sp.sqrt(ev)
+            ev = la.norm(self.EpsL(self.l, out=tmp))
+            print "After re-scale: " + str(ev) 
+        
+        return x
     
-    def Calc_rl(self, renorm=True):
+    def Calc_lr(self, renorm=True, force_r_CF=False):
 #        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
 #        
 #        for s in xrange(self.q):
@@ -129,130 +152,95 @@ class evoMPS_TDVP_Uniform:
 #        print sp.allclose(self.EpsR(self.r), self.r * ev[i])
 #        
 #        #Method using eps maps... Depends on max. ev = 1
-        print "Isomorphic power iteration:"
-        ev = 0
         
-        #self.l.fill(1)
-        #self.l.real = sp.eye(self.D)
+        tmp = sp.empty_like(self.tmp)
         
-        new = sp.empty_like(self.l)
+        print "Left..."
+        self._Calc_lr(self.l, self.EpsL, tmp)
         
-        #TODO: Currently, we always end up with norm = 1
-        
-        for i in xrange(5000):
-            new = self.EpsL(self.l, out=new)
-            #print l_new                        #Something fishy going on here?
-            ev = la.norm(new)
-            #print ev
-            new = new * (1 / ev)
-            #print l_new - self.l
-            if sp.allclose(new, self.l, rtol=1E-14, atol=1E-14):
-                self.l[:] = new
-                break
-            self.l[:] = new
-            
-        print "Found left ev: " + str(ev)
-        print "Iterations: " + str(i)
-        
-        if renorm:
-            self.A *= 1 / sp.sqrt(ev)
-            ev = la.norm(self.EpsL(self.l, out=new))
-            print "After renorm: " + str(ev)
-        
-        #self.r.fill(1)
-        #self.r.real = sp.eye(self.D)
-
-        for i in xrange(5000):
-            new = self.EpsR(self.r, out=new)
-            ev = la.norm(new)
-            new = new * (1 / ev)
-            if sp.allclose(new, self.r, rtol=1E-14, atol=1E-14):
-                self.r[:] = new
-                break
-            self.r[:] = new
-        
-        print "Right ev: " + str(ev)
-        print "Iterations: " + str(i)
-
-        if renorm:
-            self.A *= 1 / sp.sqrt(ev)
-            ev = la.norm(self.EpsR(self.r, out=new))
-            print "After renorm: " + str(ev)
+        print "Right..."
+        self._Calc_lr(self.r, self.EpsR, tmp)
                     
         #normalize eigenvectors:
-        norm = sp.trace(sp.dot(self.l, self.r))
+        norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
         while not sp.allclose(norm, 1, atol=1E-14, rtol=0):
-            print "Norm: " + str(norm)
-            
             self.l *= 1 / sp.sqrt(norm)
             self.r *= 1 / sp.sqrt(norm)
             
-            norm = sp.trace(sp.dot(self.l, self.r))
+            norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
         
-        if not self.symm_gauge: #right to do this every time?
+        if force_r_CF or not self.symm_gauge: #right to do this every time?
             fac = self.D / sp.trace(self.r)
             self.l *= 1 / fac
             self.r *= fac
 
         #Test!
-        print "Test left: " + str(sp.allclose(self.EpsL(self.l), self.l, rtol=0, atol=1E-12)) + " (" + str(la.norm(self.EpsL(self.l) - self.l)) + ")"
-        print "Test right: " + str(sp.allclose(self.EpsR(self.r), self.r, rtol=0, atol=1E-12)) + " (" + str(la.norm(self.EpsR(self.r) - self.r)) + ")"
-        
-        print "Test hermitian, left: " + str(sp.allclose(self.l, m.H(self.l)))
-        print "Test hermitian, right: " + str(sp.allclose(self.r, m.H(self.r)))
-        
-        print "Test pos. def., left: " + str(sp.all(la.eigvalsh(self.l) > 0))
-        print "Test pos. def., right: " + str(sp.all(la.eigvalsh(self.r) > 0))
-        
-        print "Norm = " + str(sp.trace(sp.dot(self.l, self.r)))
-        
+        if self.sanity_checks:
+            if not sp.allclose(self.EpsL(self.l), self.l, rtol=1E-12, atol=1E-12):
+                print "Sanity check failed: Left eigenvector bad! Off by: " \
+                       + str(la.norm(self.EpsL(self.l) - self.l))
+                       
+            if not sp.allclose(self.EpsR(self.r), self.r, rtol=1E-12, atol=1E-12):
+                print "Sanity check failed: Right eigenvector bad! Off by: " \
+                       + str(la.norm(self.EpsR(self.r) - self.r))
+            
+            if not sp.allclose(self.l, m.H(self.l), rtol=1E-12, atol=1E-12):
+                print "Sanity check failed: l is not hermitian!"
+
+            if not sp.allclose(self.r, m.H(self.r), rtol=1E-12, atol=1E-12):
+                print "Sanity check failed: r is not hermitian!"
+            
+            if not sp.all(la.eigvalsh(self.l) > 0):
+                print "Sanity check failed: l is not pos. def.!"
+                
+            if not sp.all(la.eigvalsh(self.r) > 0):
+                print "Sanity check failed: r is not pos. def.!"
+            
+        print "Norm = " + str(sp.trace(sp.dot(self.l, self.r, out=tmp)))
+            
         print "IsCF symm: " + str(sp.allclose(self.l, self.r))
     
-    def Restore_CF(self):
-        print "Restore CF..."
-        
+    def Restore_CF(self):      
         M = sp.zeros_like(self.r)
         for s in xrange(self.q):
             M += m.matmul(None, self.A[s], m.H(self.A[s]))
-        
-        print "Initial difference: " + str(la.norm(M - sp.eye(M.shape[0])))
         
         G = m.H(la.cholesky(self.r))
         G_i = m.invtr(G, lower=True)
         
         for s in xrange(self.q):
             m.matmul(self.A[s], G_i, self.A[s], G)
-        
-        #Test:
-        M.fill(0)
-        for s in xrange(self.q):
-            M += m.matmul(None, self.A[s], m.H(self.A[s]))
-        
-        print "Final difference: " + str(la.norm(M - sp.eye(M.shape[0])))
-        print "isCF_R M?: " + str(sp.allclose(M, sp.eye(M.shape[0])))
-                            
-        #self.l.fill(1)
-        #self.r.fill(1)
-        self.Calc_rl()
-        
-        print "isCF_R r?: " + str(sp.allclose(self.r, sp.eye(self.D)))
             
+        m.matmul(self.l, m.H(G), self.l, G)
+        self.r[:] = sp.eye(self.D)
+            
+        self.Calc_lr(force_r_CF=True)
+        
+        if self.sanity_checks:
+            M.fill(0)
+            for s in xrange(self.q):
+                M += m.matmul(None, self.A[s], m.H(self.A[s]))            
+                
+            if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r, sp.eye(self.D)):
+                print "Sanity check failed: Could not achieve R-CF."
+
         if self.symm_gauge:    #Move to symmetrical gauge.
             sqrt_l = m.sqrtmh(self.l)
     
             G = m.sqrtmh(sqrt_l)
             G_i = la.inv(G)
             
-            print "Check 4th-root inv.: " + str(sp.allclose(m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)))
+            if self.sanity_checks and not sp.allclose(
+                m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)):
+                    print "Sanity check failed: 4th root of l is bad!"
             
             for s in xrange(self.q):
                 m.matmul(self.A[s], G, self.A[s], G_i)
                 
             self.l[:] = sqrt_l
-            #self.l.fill(1)
             self.r[:] = self.l
             
-            self.Calc_rl()
+            self.Calc_lr()
     
     def Calc_C(self):
         self.C.fill(0)
@@ -336,11 +324,16 @@ class evoMPS_TDVP_Uniform:
         r_sqrt = m.sqrtmh(self.r)
         r_sqrt_i = la.inv(r_sqrt)
         
-        print "l_sqrt: " + str(sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l))
-        print "l_sqrt_i: " + str(sp.allclose(sp.dot(l_sqrt, l_sqrt_i), sp.eye(self.D)))
-        print "r_sqrt: " + str(sp.allclose(sp.dot(r_sqrt, r_sqrt), self.r))
-        print "r_sqrt_i: " + str(sp.allclose(sp.dot(r_sqrt, r_sqrt_i), sp.eye(self.D)))
-        
+        if self.sanity_checks:
+            if not sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l):
+                print "Sanity check failed: l_sqrt is bad!"
+            if not sp.allclose(sp.dot(l_sqrt, l_sqrt_i), sp.eye(self.D)):
+                print "Sanity check failed: l_sqrt_i is bad!"
+            if not sp.allclose(sp.dot(r_sqrt, r_sqrt), self.r):
+                print "Sanity check failed: l_sqrt is bad!"
+            if not sp.allclose(sp.dot(r_sqrt, r_sqrt_i), sp.eye(self.D)):
+                print "Sanity check failed: l_sqrt_i is bad!"
+                
         Vsh = self.Calc_Vsh(r_sqrt)
         
         x = self.Calc_x(l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh)
@@ -349,11 +342,13 @@ class evoMPS_TDVP_Uniform:
         
         B = self.Calc_B(x, Vsh, l_sqrt_i, r_sqrt_i)
         
-        #Test gauge-fixing:
-        tst = sp.zeros_like(self.l)
-        for s in xrange(self.q):
-            tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
-        print "Gauge-fixing: " + str(sp.allclose(tst, 0))
+        if self.sanity_checks:
+            #Test gauge-fixing:
+            tst = sp.zeros_like(self.l)
+            for s in xrange(self.q):
+                tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
+            if not sp.allclose(tst, 0):
+                print "Sanity check failed: Gauge-fixing violation!"
         
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
@@ -370,7 +365,8 @@ class evoMPS_TDVP_Uniform:
         for (u, v) in sp.ndindex(self.q, self.q):
             m.matmul(AAuv, self.A[u], self.A[v])
             for (s, t) in sp.ndindex(self.q, self.q):
-                res += op(u, v, s, t) * m.matmul(None, self.A[s], self.A[t], self.r, m.H(AAuv))
+                res += op(u, v, s, t) * m.matmul(None, self.A[s], self.A[t], 
+                                                       self.r, m.H(AAuv))
         
         return sp.trace(sp.dot(self.l, res))
             
