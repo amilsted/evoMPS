@@ -226,7 +226,7 @@ def invpo(A, out=None, lower=False):
                                                                     % -info)    
     return inv_A
     
-def bicgstab_iso(A, x, b, MVop, VVop):
+def bicgstab_iso(A, x, b, MVop, VVop, max_itr=500, atol=1E-14, rtol=1E-14):
     """Implements the Bi-CGSTAB method for isomorphic operations.
     
     The Bi-CGSTAB method is used to solve linear equations Ax = b.
@@ -252,11 +252,19 @@ def bicgstab_iso(A, x, b, MVop, VVop):
         The matrix-vector multiplication operation.
     VVop : function(ndarray, ndarray)
         The vector-vector multiplication operation.
+    max_itr : int
+        Maximum number of iterations.
+    atol : float
+        Absolute tolerance for solution.
+    rtol : float
+        Relative tolerance for solution.
 
     Returns
     -------
     x : ndarray
         The final value for the unknown vector x.
+    convg : bool
+        Whether the algorithm converged within max_itr iterations.
     """
     r_prv = b - MVop(A, x)
     
@@ -266,10 +274,10 @@ def bicgstab_iso(A, x, b, MVop, VVop):
     alpha = 1
     omega_prv = 1
     
-    v_prv = sp.zeros((1, 1))
-    p_prv = sp.zeros((1, 1))
+    v_prv = sp.zeros_like(x)
+    p_prv = sp.zeros_like(x)
     
-    for i in xrange(100):
+    for i in xrange(max_itr):
         rho = sp.trace(sp.dot(r0, r_prv))
         
         beta = (rho / rho_prv) * (alpha / omega_prv)
@@ -289,15 +297,17 @@ def bicgstab_iso(A, x, b, MVop, VVop):
         x += alpha * p + omega * s
         
         #Test x
-        if sp.allclose(MVop(A, x), b, atol=1E-14, rtol=1E-14): #TODO: Be more/less lenient?
+        if sp.allclose(MVop(A, x), b, atol=atol, rtol=rtol):
             break
         
         r_prv = s - omega * t
         
-        rho_prv = rho.copy()
-        omega_prv = omega.copy()
+        rho_prv = rho
+        omega_prv = omega
         
-        v_prv = v.copy()
-        p_prv = p.copy()
+        v_prv[:] = v
+        p_prv[:] = p
+        
+    convg = i < max_itr - 1
     
-    return x
+    return x, convg
