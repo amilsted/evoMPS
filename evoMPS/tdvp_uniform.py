@@ -30,11 +30,15 @@ class evoMPS_TDVP_Uniform:
     typ = sp.complex128
     eps = 0
     
+    itr_rtol = 1E-8
+    itr_atol = 1E-10
+    
     h_nn = None    
     
     symm_gauge = True
     
     sanity_checks = True
+    check_fac = 50
     
     def __init__(self, D, q):
         self.eps = sp.finfo(self.typ).eps
@@ -110,9 +114,32 @@ class evoMPS_TDVP_Uniform:
             out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])
             
         return out
+
+    def _Calc_lr_brute(self):
+        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
+        
+        for s in xrange(self.q):
+            E += sp.kron(self.A[s], self.A[s].conj())
+            
+        ev, eVL, eVR = la.eig(E, left=True, right=True)
+        
+        i = sp.argmax(ev)
+        
+        self.A *= 1 / sp.sqrt(ev[i])        
+        
+        self.l = eVL[:,i].reshape((self.D, self.D))
+        self.r = eVR[:,i].reshape((self.D, self.D))
+        
+        norm = sp.trace(sp.dot(self.l, self.r))
+        self.l *= 1 / sp.sqrt(norm)
+        self.r *= 1 / sp.sqrt(norm)        
+        
+        print "Sledgehammer:"
+        print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
+        print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
     def _Calc_lr(self, x, e, tmp, max_itr=5000, rtol=1E-14, atol=1E-14):        
-        for i in xrange(5000):
+        for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
             tmp *= (1 / ev)
@@ -121,45 +148,22 @@ class evoMPS_TDVP_Uniform:
                 break
             x[:] = tmp
         
-        print "Iterations: " + str(i + 1)
-        print "Found ev: " + str(ev)        
+        if i == max_itr - 1:
+            print "Warning: Max. iterations reached finding eigenvector!"
         
         #re-scale
         if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
             self.A *= 1 / sp.sqrt(ev)
             ev = la.norm(self.EpsL(self.l, out=tmp))
-            print "After re-scale: " + str(ev) 
         
         return x
     
-    def Calc_lr(self, renorm=True, force_r_CF=False):
-#        E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
-#        
-#        for s in xrange(self.q):
-#            E += sp.kron(self.A[s], self.A[s].conj())
-#            
-#        ev, eVL, eVR = la.eig(E, left=True, right=True)
-#        
-#        i = sp.argmax(ev)
-#        
-#        self.l = eVL[i].reshape((self.D, self.D))
-#        self.r = eVR[i].reshape((self.D, self.D))
-#        
-#        #Test!
-#        print "Sledgehammer:"
-#        print ev[i]
-#        print sp.allclose(self.EpsL(self.l), self.l * ev[i])
-#        print sp.allclose(self.EpsR(self.r), self.r * ev[i])
-#        
-#        #Method using eps maps... Depends on max. ev = 1
-        
+    def Calc_lr(self, renorm=True, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
         
-        print "Left..."
-        self._Calc_lr(self.l, self.EpsL, tmp)
+        self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, atol=self.itr_atol)
         
-        print "Right..."
-        self._Calc_lr(self.r, self.EpsR, tmp)
+        self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, atol=self.itr_atol)
                     
         #normalize eigenvectors:
         norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
@@ -176,18 +180,26 @@ class evoMPS_TDVP_Uniform:
 
         #Test!
         if self.sanity_checks:
-            if not sp.allclose(self.EpsL(self.l), self.l, rtol=1E-12, atol=1E-12):
+            if not sp.allclose(self.EpsL(self.l), self.l,
+                                rtol=self.itr_rtol*self.check_fac, 
+                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Left eigenvector bad! Off by: " \
                        + str(la.norm(self.EpsL(self.l) - self.l))
                        
-            if not sp.allclose(self.EpsR(self.r), self.r, rtol=1E-12, atol=1E-12):
+            if not sp.allclose(self.EpsR(self.r), self.r,
+                                rtol=self.itr_rtol*self.check_fac,
+                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Right eigenvector bad! Off by: " \
                        + str(la.norm(self.EpsR(self.r) - self.r))
             
-            if not sp.allclose(self.l, m.H(self.l), rtol=1E-12, atol=1E-12):
+            if not sp.allclose(self.l, m.H(self.l),
+                                rtol=self.itr_rtol*self.check_fac, 
+                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: l is not hermitian!"
 
-            if not sp.allclose(self.r, m.H(self.r), rtol=1E-12, atol=1E-12):
+            if not sp.allclose(self.r, m.H(self.r),
+                                rtol=self.itr_rtol*self.check_fac, 
+                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: r is not hermitian!"
             
             if not sp.all(la.eigvalsh(self.l) > 0):
@@ -196,9 +208,9 @@ class evoMPS_TDVP_Uniform:
             if not sp.all(la.eigvalsh(self.r) > 0):
                 print "Sanity check failed: r is not pos. def.!"
             
-        print "Norm = " + str(sp.trace(sp.dot(self.l, self.r, out=tmp)))
-            
-        print "IsCF symm: " + str(sp.allclose(self.l, self.r))
+            norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
+            if not sp.allclose(norm, 1.0, atol=1E-14, rtol=0):
+                print "Sanity check failed: Bad norm = " + str(norm)
     
     def Restore_CF(self):      
         M = sp.zeros_like(self.r)
@@ -241,6 +253,10 @@ class evoMPS_TDVP_Uniform:
             self.r[:] = self.l
             
             self.Calc_lr()
+            
+            if self.sanity_checks:
+                if not sp.allclose(self.l, self.r):
+                    print "Sanity check failed: Could not achieve S-CF."
     
     def Calc_C(self):
         self.C.fill(0)
@@ -265,12 +281,19 @@ class evoMPS_TDVP_Uniform:
         opData = (self.l, self.r, self.A)
         #self.K.fill(1)
         
-        self.K = m.bicgstab_iso(opData, self.K, QHr, myMVop, myVVop)
+        self.K, convg = m.bicgstab_iso(opData, self.K, QHr, myMVop, myVVop, 
+                                       rtol=self.itr_rtol, atol=self.itr_atol)
+        
+        if not convg:
+            print "Warning: Did not converge on solution for K!"
         
         #Test
-        if self.sanity_checks and not sp.allclose(myMVop(opData, self.K),
-                                                  QHr, atol=1E-13, rtol=1E-13):
-            print "Sanity check failed: Bad K solution!"
+        if self.sanity_checks:
+            RHS_test = myMVop(opData, self.K)
+            if not sp.allclose(RHS_test, QHr, rtol=self.itr_rtol*self.check_fac,
+                                atol=self.itr_atol*self.check_fac):
+                print "Sanity check failed: Bad K solution! Off by: " + str(
+                        la.norm(RHS_test - QHr))
             
     def Calc_Vsh(self, r_sqrt): #this really is just the same as for the generic case
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')

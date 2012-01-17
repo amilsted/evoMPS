@@ -84,7 +84,7 @@ the evoMPS class.
 """
 The bond dimension is given as a vector, length N.
 """
-D = 32
+D = 128
 
 
 """
@@ -107,7 +107,7 @@ s.h_nn = h_nn
 Set the initial Hamiltonian parameters.
 """
 h = 1.0
-J = 0.75
+J = 0.25
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -120,7 +120,7 @@ Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
 step = 0.1
-realstep = 0.01
+realstep = 0.0001
 
 """
 Now set the tolerance for the imaginary time evolution.
@@ -128,7 +128,7 @@ When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
 tol_im = 1E-12
-total_steps = 50
+total_steps = 200
 
 """
 The following handles loading the ground state from a file.
@@ -241,8 +241,6 @@ for i in xrange(total_steps):
     Switch to real time evolution if we have the ground state.
     """
     if loaded or (not real_time and abs(dE) < tol_im):
-        break
-    
         real_time = True
         s.SaveState(grnd_fname)
         J = J_real
@@ -269,6 +267,7 @@ for i in xrange(total_steps):
         print "\t".join(row)
         s.TakeStep_RK4(step)
     else:
+        print "\t".join(row)
         s.TakeStep(step)
     
     t += 1.j * sp.conj(step)
