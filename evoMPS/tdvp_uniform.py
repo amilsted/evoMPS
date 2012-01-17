@@ -28,12 +28,15 @@ def myVVop(a, b):
 class evoMPS_TDVP_Uniform:
     odr = 'C'
     typ = sp.complex128
+    eps = 0
     
-    h_nn = None
+    h_nn = None    
     
-    symm_gauge = False
+    symm_gauge = True
     
     def __init__(self, D, q):
+        self.eps = sp.finfo(self.typ).eps
+        
         self.eta = 0
         
         self.D = D
@@ -136,28 +139,25 @@ class evoMPS_TDVP_Uniform:
         
         #TODO: Currently, we always end up with norm = 1
         
-        while not sp.allclose(ev, 1, rtol=0, atol=1E-13):
-            for i in xrange(5000):
-                new = self.EpsL(self.l, out=new)
-                #print l_new
-                ev = la.norm(new)
-                #print ev
-                new = new * (1 / ev)
-                #print l_new - self.l
-                if sp.allclose(new, self.l, rtol=1E-14, atol=1E-14):
-                    self.l[:] = new
-                    break
+        for i in xrange(5000):
+            new = self.EpsL(self.l, out=new)
+            #print l_new                        #Something fishy going on here?
+            ev = la.norm(new)
+            #print ev
+            new = new * (1 / ev)
+            #print l_new - self.l
+            if sp.allclose(new, self.l, rtol=1E-14, atol=1E-14):
                 self.l[:] = new
-                
-            print "Found left ev: " + str(ev)
-            print "Iterations: " + str(i)
-                
-            if renorm:
-                self.A *= 1 / sp.sqrt(ev)
-                ev = la.norm(self.EpsL(self.l, out=new))
-                print "After renorm: " + str(ev)
-            else:
                 break
+            self.l[:] = new
+            
+        print "Found left ev: " + str(ev)
+        print "Iterations: " + str(i)
+        
+        if renorm:
+            self.A *= 1 / sp.sqrt(ev)
+            ev = la.norm(self.EpsL(self.l, out=new))
+            print "After renorm: " + str(ev)
         
         #self.r.fill(1)
         #self.r.real = sp.eye(self.D)
@@ -181,9 +181,13 @@ class evoMPS_TDVP_Uniform:
                     
         #normalize eigenvectors:
         norm = sp.trace(sp.dot(self.l, self.r))
-        
-        self.l *= 1 / sp.sqrt(norm)
-        self.r *= 1 / sp.sqrt(norm)
+        while not sp.allclose(norm, 1, atol=1E-14, rtol=0):
+            print "Norm: " + str(norm)
+            
+            self.l *= 1 / sp.sqrt(norm)
+            self.r *= 1 / sp.sqrt(norm)
+            
+            norm = sp.trace(sp.dot(self.l, self.r))
         
         if not self.symm_gauge: #right to do this every time?
             fac = self.D / sp.trace(self.r)
@@ -201,6 +205,8 @@ class evoMPS_TDVP_Uniform:
         print "Test pos. def., right: " + str(sp.all(la.eigvalsh(self.r) > 0))
         
         print "Norm = " + str(sp.trace(sp.dot(self.l, self.r)))
+        
+        print "IsCF symm: " + str(sp.allclose(self.l, self.r))
     
     def Restore_CF(self):
         print "Restore CF..."
@@ -237,16 +243,16 @@ class evoMPS_TDVP_Uniform:
             G = m.sqrtmh(sqrt_l)
             G_i = la.inv(G)
             
+            print "Check 4th-root inv.: " + str(sp.allclose(m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)))
+            
             for s in xrange(self.q):
                 m.matmul(self.A[s], G, self.A[s], G_i)
                 
-            self.l = sqrt_l
+            self.l[:] = sqrt_l
             #self.l.fill(1)
-            self.r = self.l
+            self.r[:] = self.l
             
             self.Calc_rl()
-            
-            print "Test symm. gauge: " + str(sp.allclose(self.l, self.r))
     
     def Calc_C(self):
         self.C.fill(0)
@@ -274,8 +280,10 @@ class evoMPS_TDVP_Uniform:
         self.K = m.bicgstab_iso(opData, self.K, QHr, myMVop, myVVop)
         
         #Test
-        print "Test K: " + str(sp.allclose(myMVop(opData, self.K), QHr, atol=1E-13, rtol=1E-13))
-        
+        if self.sanity_checks and not sp.allclose(myMVop(opData, self.K),
+                                                  QHr, atol=1E-13, rtol=1E-13):
+            print "Sanity check failed: Bad K solution!"
+            
     def Calc_Vsh(self, r_sqrt): #this really is just the same as for the generic case
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
         

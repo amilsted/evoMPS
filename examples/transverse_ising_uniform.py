@@ -107,7 +107,7 @@ s.h_nn = h_nn
 Set the initial Hamiltonian parameters.
 """
 h = 1.0
-J = 0
+J = 0.
 
 """
 We're going to simulate a quench after we find the ground state.
