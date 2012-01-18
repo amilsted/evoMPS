@@ -108,6 +108,11 @@ def H(m, out=None):
         out = sp.conjugate(m.T, out)
         return out
     
+def randomize_cmplx(x, a=-0.5, b=0.5):        
+    x[:] = ((b - a) * sp.random.ranf(x.shape) + a) + 1.j * (
+            (b - a) * sp.random.ranf(x.shape) + a)
+    return x
+    
 def sqrtmh(A, out=None):
     """Return the matrix square root of a hermitian or symmetric matrix
 
