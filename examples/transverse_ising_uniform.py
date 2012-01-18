@@ -84,7 +84,7 @@ the evoMPS class.
 """
 The bond dimension is given as a vector, length N.
 """
-D = 128
+D = 64
 
 
 """
@@ -127,8 +127,8 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-12
-total_steps = 200
+tol_im = 2E-13
+total_steps = 1000
 
 """
 The following handles loading the ground state from a file.
@@ -136,13 +136,17 @@ The ground state will be saved automatically when it is declared found.
 If this script is run again with the same settings, an existing
 ground state will be loaded, if present.
 """
-grnd_fname = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy" % (q, D, J, h, tol_im, step)
+grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy"
+
+grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
+
+expand = True
 
 try:
    a_file = open(grnd_fname, 'rb')
    s.LoadState(a_file)
    a_file.close
-   real_time = True
+   real_time = not expand
    loaded = True
    print 'Using saved ground state: ' + grnd_fname
 except IOError as e:
@@ -192,7 +196,7 @@ for i in xrange(total_steps):
     
     s.Calc_lr()
 
-    restoreCF = (i % 4 == 0) #Restore canonical form every 16 steps.
+    restoreCF = (i % 4 == 3) #Restore canonical form every 16 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.Restore_CF()
@@ -240,8 +244,27 @@ for i in xrange(total_steps):
     """
     Switch to real time evolution if we have the ground state.
     """
-    if loaded or (not real_time and abs(dE) < tol_im):
+    expand = True
+    if expand and (loaded or (not real_time and abs(dE) < tol_im)):
+        grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)        
+        
+        if not loaded:
+            if not restoreCF:
+                s.Restore_CF()
+            s.SaveState(grnd_fname)
+        
+        D = D * 2
+        print "***MOVING TO D = " + str(D) + "***"
+        s.Expand_D(D)
+        s.Calc_lr()
+        #s.Restore_CF()
+        s.Calc_C()
+        s.Calc_K()
+        
+        loaded = False
+    elif loaded or (not real_time and abs(dE) < tol_im):
         real_time = True
+        
         s.SaveState(grnd_fname)
         J = J_real
         step = realstep * 1.j

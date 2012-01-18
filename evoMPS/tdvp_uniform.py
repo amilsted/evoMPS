@@ -30,14 +30,14 @@ class evoMPS_TDVP_Uniform:
     typ = sp.complex128
     eps = 0
     
-    itr_rtol = 1E-8
-    itr_atol = 1E-10
+    itr_rtol = 1E-13
+    itr_atol = 1E-14
     
     h_nn = None    
     
     symm_gauge = True
     
-    sanity_checks = True
+    sanity_checks = False
     check_fac = 50
     
     def __init__(self, D, q):
@@ -45,26 +45,26 @@ class evoMPS_TDVP_Uniform:
         
         self.eta = 0
         
+        self._init_arrays(D, q)
+        
+        #self.A.fill(0)
+        #for s in xrange(q):
+        #    self.A[s] = sp.eye(D)
+            
+        m.randomize_cmplx(self.A)                
+    
+    def _init_arrays(self, D, q):
         self.D = D
         self.q = q
         
-        self.A = sp.zeros((q, D, D), dtype=self.typ, order=self.odr)
+        self.A = sp.empty((q, D, D), dtype=self.typ, order=self.odr)
         
         self.C = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
         self.K = sp.ones_like(self.A[0])
         
-        self.l = sp.zeros_like(self.A[0])
-        self.r = sp.zeros_like(self.A[0])
-        
-        self.l.real = sp.eye(self.D)
-        self.r.real = sp.eye(self.D)
-        
-        #for s in xrange(q):
-        #    self.A[s] = sp.eye(D)
-            
-        self.A.real = sp.rand(q, D, D) - 0.5
-        self.A.imag = sp.rand(q, D, D) - 0.5
+        self.l = sp.ones_like(self.A[0])
+        self.r = sp.ones_like(self.A[0])
         
         self.tmp = sp.empty_like(self.A[0])
             
@@ -161,9 +161,11 @@ class evoMPS_TDVP_Uniform:
     def Calc_lr(self, renorm=True, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
         
-        self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, atol=self.itr_atol)
+        self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, 
+                      atol=self.itr_atol)
         
-        self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, atol=self.itr_atol)
+        self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, 
+                      atol=self.itr_atol)
                     
         #normalize eigenvectors:
         norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
@@ -181,25 +183,25 @@ class evoMPS_TDVP_Uniform:
         #Test!
         if self.sanity_checks:
             if not sp.allclose(self.EpsL(self.l), self.l,
-                                rtol=self.itr_rtol*self.check_fac, 
-                                atol=self.itr_atol*self.check_fac):
+            rtol=self.itr_rtol*self.check_fac, 
+            atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Left eigenvector bad! Off by: " \
                        + str(la.norm(self.EpsL(self.l) - self.l))
                        
             if not sp.allclose(self.EpsR(self.r), self.r,
-                                rtol=self.itr_rtol*self.check_fac,
-                                atol=self.itr_atol*self.check_fac):
+            rtol=self.itr_rtol*self.check_fac,
+            atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Right eigenvector bad! Off by: " \
                        + str(la.norm(self.EpsR(self.r) - self.r))
             
             if not sp.allclose(self.l, m.H(self.l),
-                                rtol=self.itr_rtol*self.check_fac, 
-                                atol=self.itr_atol*self.check_fac):
+            rtol=self.itr_rtol*self.check_fac, 
+            atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: l is not hermitian!"
 
             if not sp.allclose(self.r, m.H(self.r),
-                                rtol=self.itr_rtol*self.check_fac, 
-                                atol=self.itr_atol*self.check_fac):
+            rtol=self.itr_rtol*self.check_fac, 
+            atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: r is not hermitian!"
             
             if not sp.all(la.eigvalsh(self.l) > 0):
@@ -233,7 +235,8 @@ class evoMPS_TDVP_Uniform:
             for s in xrange(self.q):
                 M += m.matmul(None, self.A[s], m.H(self.A[s]))            
                 
-            if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r, sp.eye(self.D)):
+            if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r,
+            sp.eye(self.D)):
                 print "Sanity check failed: Could not achieve R-CF."
 
         if self.symm_gauge:    #Move to symmetrical gauge.
@@ -272,7 +275,8 @@ class evoMPS_TDVP_Uniform:
         Hr = sp.zeros_like(self.A[0])
         
         for (s, t) in sp.ndindex(self.q, self.q):
-            Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), m.H(self.A[s]))
+            Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), 
+                           m.H(self.A[s]))
         
         self.h = sp.trace(sp.dot(self.l, Hr))
         
@@ -295,7 +299,7 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: Bad K solution! Off by: " + str(
                         la.norm(RHS_test - QHr))
             
-    def Calc_Vsh(self, r_sqrt): #this really is just the same as for the generic case
+    def Calc_Vsh(self, r_sqrt):
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
         
         for s in xrange(self.q):
@@ -303,15 +307,15 @@ class evoMPS_TDVP_Uniform:
 
         R = R.reshape((self.q * self.D, self.D))
         V = m.H(ns.nullspace(m.H(R)))
-        #print (q[n]*D[n] - D[n-1], q[n]*D[n])
-        #print V.shape
+
 #        print "V Checks..."
 #        print sp.allclose(sp.dot(V, m.H(V)), sp.eye(self.q*self.D - self.D))
 #        print sp.allclose(sp.dot(V, R), 0)
-        V = V.reshape(((self.q - 1) * self.D, self.D, self.q)) #this works with the above form for R
+        V = V.reshape(((self.q - 1) * self.D, self.D, self.q)) 
         
         #prepare for using V[s] and already take the adjoint, since we use it more often
-        Vsh = sp.empty((self.q, self.D, (self.q - 1) * self.D), dtype=self.typ, order=self.odr)
+        Vsh = sp.empty((self.q, self.D, (self.q - 1) * self.D), dtype=self.typ, 
+                       order=self.odr)
         for s in xrange(self.q):
             Vsh[s] = m.H(V[:,:,s])
         
@@ -319,13 +323,16 @@ class evoMPS_TDVP_Uniform:
         
     def Calc_x(self, l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh, out=None):
         if out is None:
-            out = sp.zeros(((self.q - 1) * self.D, self.D), dtype=self.typ, order=self.odr)
+            out = sp.zeros(((self.q - 1) * self.D, self.D), dtype=self.typ, 
+                           order=self.odr)
             
         for (s, t) in sp.ndindex(self.q, self.q):
-            out += m.matmul(None, l_sqrt, self.C[s, t], self.r, m.H(self.A[t]), r_sqrt_i, Vsh[s])
+            out += m.matmul(None, l_sqrt, self.C[s, t], self.r, m.H(self.A[t]), 
+                            r_sqrt_i, Vsh[s])
             
         for (s, t) in sp.ndindex(self.q, self.q):
-            out += m.matmul(None, l_sqrt_i, m.H(self.A[t]), self.l, self.C[t, s], r_sqrt, Vsh[s])
+            out += m.matmul(None, l_sqrt_i, m.H(self.A[t]), self.l, self.C[t, s], 
+                            r_sqrt, Vsh[s])
             
         for s in xrange(self.q):
             out += m.matmul(None, l_sqrt, self.A[s], self.K, r_sqrt_i, Vsh[s])
@@ -394,7 +401,67 @@ class evoMPS_TDVP_Uniform:
         return sp.trace(sp.dot(self.l, res))
             
     def SaveState(self, file):
-        sp.save(file, self.A)
+        tosave = sp.empty((4), dtype=sp.ndarray)
+        tosave[0] = self.A
+        tosave[1] = self.l
+        tosave[2] = self.r
+        tosave[3] = self.K
+        sp.save(file, tosave)
         
-    def LoadState(self, file):
-        self.A = sp.load(file)            
+    def LoadState(self, file, expand=False):
+        state = sp.load(file)
+        
+        newA = state[0]
+        newl = state[1]
+        newr = state[2]
+        newK = state[3]
+        
+        if (newA.shape == self.A.shape) and (newl.shape == self.l.shape) and (
+        newr.shape == self.r.shape) and (newK.shape == self.K.shape):
+            self.A[:] = newA
+            self.l[:] = newl
+            self.r[:] = newr
+            self.K[:] = newK
+            return True
+        elif expand and (len(newA.shape) == 2) and (newA.shape[0] == 
+        self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
+        <= self.A.shape[1]):
+            D = newA.shape[1]
+            self.A[:, 0:D, 0:D] = newA #TODO: Change this...
+        else:
+            return False
+            
+    def Expand_D(self, newD):
+        if newD < self.D:
+            return False
+        
+        oldD = self.D
+        oldA = self.A
+        oldl = self.l
+        oldr = self.r
+        oldK = self.K
+        
+        self._init_arrays(newD, self.q)
+        
+        norm = la.norm(oldA)
+        fac = (norm / oldD**2) * 100
+#        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
+        m.randomize_cmplx(self.A[:, :oldD, oldD:], a=-fac, b=fac)
+        m.randomize_cmplx(self.A[:, oldD:, :oldD], a=-fac, b=fac)
+        self.A[:, oldD:, oldD:] = 0 #for nearest-neighbour hamiltonian
+
+#        self.A[:, :oldD, oldD:] = oldA[:, :, :(newD - oldD)]
+#        self.A[:, oldD:, :oldD] = oldA[:, :(newD - oldD), :]
+        self.A[:, :oldD, :oldD] = oldA
+        
+        self.l[:oldD, :oldD] = oldl
+        self.l[:oldD, oldD:].fill(la.norm(oldl) / oldD**2)
+        self.l[oldD:, :oldD].fill(la.norm(oldl) / oldD**2)
+        self.l[oldD:, oldD:].fill(la.norm(oldl) / oldD**2)
+        
+        self.r[:oldD, :oldD] = oldr
+        self.r[oldD:, :oldD].fill(la.norm(oldr) / oldD**2)
+        self.r[:oldD, oldD:].fill(la.norm(oldr) / oldD**2)
+        self.r[oldD:, oldD:].fill(la.norm(oldr) / oldD**2)
+        
+        self.K[:oldD, :oldD] = oldK
