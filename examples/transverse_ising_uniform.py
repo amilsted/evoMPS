@@ -74,7 +74,7 @@ def y_ss(s, t):
     if s == t:
         return 0
     else:
-        return 1.j * -(-1)**t
+        return 1.j * (-1)**t
 
 """
 Next, we set up some global variables to be used as parameters to 
@@ -84,7 +84,7 @@ the evoMPS class.
 """
 The bond dimension is given as a vector, length N.
 """
-D = 64
+D = 32
 
 
 """
@@ -140,7 +140,7 @@ grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy"
 
 grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
 
-expand = True
+expand = False
 
 try:
    a_file = open(grnd_fname, 'rb')
@@ -244,7 +244,6 @@ for i in xrange(total_steps):
     """
     Switch to real time evolution if we have the ground state.
     """
-    expand = True
     if expand and (loaded or (not real_time and abs(dE) < tol_im)):
         grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)        
         
@@ -257,7 +256,7 @@ for i in xrange(total_steps):
         print "***MOVING TO D = " + str(D) + "***"
         s.Expand_D(D)
         s.Calc_lr()
-        #s.Restore_CF()
+        s.Restore_CF() #this helps a lot
         s.Calc_C()
         s.Calc_K()
         

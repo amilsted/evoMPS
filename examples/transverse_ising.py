@@ -64,14 +64,14 @@ def y_ss(n, s, t):
     if s == t:
         return 0
     else:
-        return 1.j * -(-1)**t
+        return 1.j * (-1)**t
 
 """
 Next, we set up some global variables to be used as parameters to 
 the evoMPS class.
 """
 
-N = 13 #The length of the finite spin chain.
+N = 7 #The length of the finite spin chain.
 
 
 """
