@@ -7,6 +7,7 @@ From the Scipy Cookbook
 
 import numpy as np
 from scipy.linalg import svd
+from scipy.linalg import qr
 
 
 def rank(A, atol=1e-13, rtol=0):
@@ -85,8 +86,40 @@ def nullspace(A, atol=1e-13, rtol=0):
     """
 
     A = np.atleast_2d(A)
+
     u, s, vh = svd(A)
+
     tol = max(atol, rtol * s[0])
     nnz = (s >= tol).sum()
     ns = vh[nnz:].conj().T
+    return ns
+    
+def nullspace_qr(A):
+    """Compute an approximate basis for the nullspace of A.
+
+    The algorithm used by this function is based on the QR
+    decomposition of `A`.
+
+    Parameters
+    ----------
+    A : ndarray
+        A should be at most 2-D.  A 1-D array with length k will be treated
+        as a 2-D with shape (1, k)
+
+    Return value
+    ------------
+    ns : ndarray
+        If `A` is an array with shape (m, k), then `ns` will be an array
+        with shape (k, n), where n is the estimated dimension of the
+        nullspace of `A`.  The columns of `ns` are a basis for the
+        nullspace; each element in numpy.dot(A, ns) will be approximately
+        zero.
+    """
+
+    A = np.atleast_2d(A)
+
+    Q, R = qr(A.T)
+    
+    ns = Q[:, R.shape[1]:].conj()
+    
     return ns
