@@ -9,6 +9,7 @@ import scipy as sp
 import scipy.linalg as la
 import nullspace as ns
 import matmul as m
+import tdvp_common as tc
 
 
 def myMVop(opData, x):
@@ -34,6 +35,7 @@ class evoMPS_TDVP_Uniform:
     itr_atol = 1E-14
     
     h_nn = None    
+    h_nn_ptr = None
     
     symm_gauge = True
     
@@ -65,6 +67,8 @@ class evoMPS_TDVP_Uniform:
         
         self.l = sp.ones_like(self.A[0])
         self.r = sp.ones_like(self.A[0])
+        self.conv_l = True
+        self.conv_r = True
         
         self.tmp = sp.empty_like(self.A[0])
             
@@ -138,7 +142,7 @@ class evoMPS_TDVP_Uniform:
         print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
-    def _Calc_lr(self, x, e, tmp, max_itr=5000, rtol=1E-14, atol=1E-14):        
+    def _Calc_lr(self, x, e, tmp, max_itr=100, rtol=1E-14, atol=1E-14):        
         for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
@@ -148,24 +152,21 @@ class evoMPS_TDVP_Uniform:
                 break
             x[:] = tmp
         
-        if i == max_itr - 1:
-            print "Warning: Max. iterations reached finding eigenvector!"
-        
         #re-scale
         if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
             self.A *= 1 / sp.sqrt(ev)
-            ev = la.norm(self.EpsL(self.l, out=tmp))
+            ev = la.norm(e(x, out=tmp))
         
-        return x
+        return i < max_itr - 1
     
     def Calc_lr(self, renorm=True, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
         
-        self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, 
-                      atol=self.itr_atol)
+        self.conv_l = self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, 
+                                    atol=self.itr_atol)
         
-        self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, 
-                      atol=self.itr_atol)
+        self.conv_r = self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, 
+                                    atol=self.itr_atol)
                     
         #normalize eigenvectors:
         norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
@@ -262,14 +263,19 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Could not achieve S-CF."
     
     def Calc_C(self):
-        self.C.fill(0)
-        
-        AA = sp.empty_like(self.A[0])
-        
-        for (u, v) in sp.ndindex(self.q, self.q):
-            m.matmul(AA, self.A[u], self.A[v])
-            for (s, t) in sp.ndindex(self.q, self.q):
-                self.C[s, t] += self.h_nn(s, t, u, v) * AA
+        if not self.h_nn_ptr is None:
+            self.C = tc.calc_C(self.A, self.A, self.h_nn_ptr, self.C)
+        else:
+            self.C.fill(0)
+            
+            AA = sp.empty_like(self.A[0])
+            
+            for (u, v) in sp.ndindex(self.q, self.q):
+                m.matmul(AA, self.A[u], self.A[v])
+                for (s, t) in sp.ndindex(self.q, self.q):
+                    h = self.h_nn(s, t, u, v) #for large q, this executes a lot..
+                    if h != 0:
+                        self.C[s, t] += h * AA
     
     def Calc_K(self):
         Hr = sp.zeros_like(self.A[0])
@@ -304,9 +310,11 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             R[:,s,:] = m.matmul(None, r_sqrt, m.H(self.A[s]))
-
+        
         R = R.reshape((self.q * self.D, self.D))
-        V = m.H(ns.nullspace(m.H(R)))
+        
+        V = m.H(ns.nullspace_qr(m.H(R))) 
+        #R can be pretty huge for large q and D. The decomp. can take a long time...
 
 #        print "V Checks..."
 #        print sp.allclose(sp.dot(V, m.H(V)), sp.eye(self.q*self.D - self.D))
@@ -323,19 +331,28 @@ class evoMPS_TDVP_Uniform:
         
     def Calc_x(self, l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh, out=None):
         if out is None:
-            out = sp.zeros(((self.q - 1) * self.D, self.D), dtype=self.typ, 
+            out = sp.zeros((self.D, (self.q - 1) * self.D), dtype=self.typ, 
                            order=self.odr)
-            
-        for (s, t) in sp.ndindex(self.q, self.q):
-            out += m.matmul(None, l_sqrt, self.C[s, t], self.r, m.H(self.A[t]), 
-                            r_sqrt_i, Vsh[s])
-            
-        for (s, t) in sp.ndindex(self.q, self.q):
-            out += m.matmul(None, l_sqrt_i, m.H(self.A[t]), self.l, self.C[t, s], 
-                            r_sqrt, Vsh[s])
-            
+        
+        tmp = sp.zeros_like(out)
+        tmp2 = sp.zeros_like(self.A[0])
         for s in xrange(self.q):
-            out += m.matmul(None, l_sqrt, self.A[s], self.K, r_sqrt_i, Vsh[s])
+            tmp += m.matmul(None, self.A[s], self.K, r_sqrt_i, Vsh[s])
+            
+            tmp2.fill(0)
+            for t in xrange(self.q):
+                tmp2 += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]))
+            tmp += m.matmul(None, tmp2, r_sqrt_i, Vsh[s])
+            
+        out += sp.dot(l_sqrt, tmp)
+        
+        tmp.fill(0)
+        for s in xrange(self.q):
+            tmp2.fill(0)
+            for t in xrange(self.q):
+                tmp2 += m.matmul(None, m.H(self.A[t]), self.l, self.C[t, s])
+            tmp += m.matmul(None, tmp2, r_sqrt, Vsh[s])
+        out += sp.dot(l_sqrt_i, tmp)
         
         return out
         
@@ -349,10 +366,12 @@ class evoMPS_TDVP_Uniform:
         return out
         
     def TakeStep(self, dtau):
+        #print "sqrts and inverses start"
         l_sqrt = m.sqrtmh(self.l)
         l_sqrt_i = la.inv(l_sqrt)
         r_sqrt = m.sqrtmh(self.r)
         r_sqrt_i = la.inv(r_sqrt)
+        #print "sqrts and inverses stop"
         
         if self.sanity_checks:
             if not sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l):
@@ -364,13 +383,19 @@ class evoMPS_TDVP_Uniform:
             if not sp.allclose(sp.dot(r_sqrt, r_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
                 
+        #print "Vsh start"
         Vsh = self.Calc_Vsh(r_sqrt)
+        #print "Vsh stop"
         
+        #print "x start"
         x = self.Calc_x(l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh)
+        #print "x stop"
         
         self.eta = sp.sqrt(sp.trace(sp.dot(m.H(x), x)))
         
+        #print "B start"
         B = self.Calc_B(x, Vsh, l_sqrt_i, r_sqrt_i)
+        #print "B stop"
         
         if self.sanity_checks:
             #Test gauge-fixing:
@@ -444,7 +469,7 @@ class evoMPS_TDVP_Uniform:
         self._init_arrays(newD, self.q)
         
         norm = la.norm(oldA)
-        fac = (norm / oldD**2) * 100
+        fac = (norm / (self.q * oldD**2))
 #        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
         m.randomize_cmplx(self.A[:, :oldD, oldD:], a=-fac, b=fac)
         m.randomize_cmplx(self.A[:, oldD:, :oldD], a=-fac, b=fac)
@@ -465,3 +490,6 @@ class evoMPS_TDVP_Uniform:
         self.r[oldD:, oldD:].fill(la.norm(oldr) / oldD**2)
         
         self.K[:oldD, :oldD] = oldK
+        self.K[oldD:, :oldD].fill(la.norm(oldK) / oldD**2)
+        self.K[:oldD, oldD:].fill(la.norm(oldK) / oldD**2)
+        self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
