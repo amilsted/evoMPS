@@ -295,10 +295,11 @@ class evoMPS_TDVP_Generic:
                 
                 x_subpart += matmul(tmp, x_subsubpart, sqrt_r_inv)
             
-            x_subsubpart.fill(0)
-            for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
-                x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-            x_subpart += matmul(tmp, x_subsubpart, sqrt_r)
+            if not self.h_ext is None:
+                x_subsubpart.fill(0)
+                for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
+                    x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
+                x_subpart += matmul(tmp, x_subsubpart, sqrt_r)
             
             x_part += matmul(None, x_subpart, Vsh[s])
                 
