@@ -35,9 +35,9 @@ class evoMPS_TDVP_Uniform:
     itr_atol = 1E-14
     
     h_nn = None    
-    h_nn_ptr = None
+    h_nn_cptr = None
     
-    symm_gauge = True
+    symm_gauge = False
     
     sanity_checks = False
     check_fac = 50
@@ -142,7 +142,7 @@ class evoMPS_TDVP_Uniform:
         print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
-    def _Calc_lr(self, x, e, tmp, max_itr=100, rtol=1E-14, atol=1E-14):        
+    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):        
         for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
@@ -215,7 +215,7 @@ class evoMPS_TDVP_Uniform:
             if not sp.allclose(norm, 1.0, atol=1E-14, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
-    def Restore_CF(self):      
+    def Restore_CF(self, force_r_CF=False):      
         M = sp.zeros_like(self.r)
         for s in xrange(self.q):
             M += m.matmul(None, self.A[s], m.H(self.A[s]))
@@ -240,7 +240,7 @@ class evoMPS_TDVP_Uniform:
             sp.eye(self.D)):
                 print "Sanity check failed: Could not achieve R-CF."
 
-        if self.symm_gauge:    #Move to symmetrical gauge.
+        if self.symm_gauge and not force_r_CF:
             sqrt_l = m.sqrtmh(self.l)
     
             G = m.sqrtmh(sqrt_l)
@@ -263,8 +263,8 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Could not achieve S-CF."
     
     def Calc_C(self):
-        if not self.h_nn_ptr is None:
-            self.C = tc.calc_C(self.A, self.A, self.h_nn_ptr, self.C)
+        if not self.h_nn_cptr is None:
+            self.C = tc.calc_C(self.A, self.A, self.h_nn_cptr, self.C)
         else:
             self.C.fill(0)
             
@@ -356,7 +356,7 @@ class evoMPS_TDVP_Uniform:
         
         return out
         
-    def Calc_B(self, x, Vsh, l_sqrt_i, r_sqrt_i, out=None):
+    def B_from_x(self, x, Vsh, l_sqrt_i, r_sqrt_i, out=None):
         if out is None:
             out = sp.zeros_like(self.A)
             
@@ -365,7 +365,7 @@ class evoMPS_TDVP_Uniform:
             
         return out
         
-    def TakeStep(self, dtau):
+    def Calc_B(self):
         #print "sqrts and inverses start"
         l_sqrt = m.sqrtmh(self.l)
         l_sqrt_i = la.inv(l_sqrt)
@@ -393,9 +393,12 @@ class evoMPS_TDVP_Uniform:
         
         self.eta = sp.sqrt(sp.trace(sp.dot(m.H(x), x)))
         
-        #print "B start"
-        B = self.Calc_B(x, Vsh, l_sqrt_i, r_sqrt_i)
-        #print "B stop"
+        return self.B_from_x(x, Vsh, l_sqrt_i, r_sqrt_i)
+        
+    def TakeStep(self, dtau, B=None):
+        
+        if B is None:
+            B = self.Calc_B()
         
         if self.sanity_checks:
             #Test gauge-fixing:
@@ -424,6 +427,13 @@ class evoMPS_TDVP_Uniform:
                                                        self.r, m.H(AAuv))
         
         return sp.trace(sp.dot(self.l, res))
+        
+    def Density_SS(self):
+        rho = sp.empty((self.q, self.q), dtype=self.typ)
+        for (s, t) in sp.ndindex(self.q, self.q):            
+            rho[s, t] = sp.trace(m.matmul(self.tmp, self.l, self.A[t], self.r, 
+                                          m.H(self.A[s])))
+        return rho
             
     def SaveState(self, file):
         tosave = sp.empty((4), dtype=sp.ndarray)
