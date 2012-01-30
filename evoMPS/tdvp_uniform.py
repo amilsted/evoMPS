@@ -7,10 +7,10 @@ Created on Thu Oct 13 17:29:27 2011
 """
 import scipy as sp
 import scipy.linalg as la
+import scipy.sparse.linalg as las
 import nullspace as ns
 import matmul as m
 import tdvp_common as tc
-
 
 def myMVop(opData, x):
     l = opData[0]
@@ -23,8 +23,44 @@ def myMVop(opData, x):
         
     return x - opres  + r * sp.trace(sp.dot(l, x))
 
-def myVVop(a, b):
-    return sp.trace(sp.dot(a, b))
+def myVVop(a, b, out=None):
+    #return sp.trace(sp.dot(a, b))
+    if out is None:
+        return sp.sum(sp.multiply(sp.conj(a), b))
+    else:
+        return sp.sum(sp.multiply(sp.conj(a, out=out), b, out=out))
+        
+class KsuperOP:
+    l = None
+    r = None
+    A = None
+    
+    shape = (0)
+    
+    dtype = None
+    
+    def __init__(self, l, r, A):
+        self.l = l
+        self.r = r
+        self.A = A
+        
+        self.D = self.l.shape[0]
+        
+        self.shape = (self.D**2, self.D**2)
+        
+        self.dtype = A.dtype
+    
+    def matvec(self, v):
+        x = v.reshape((self.D, self.D))
+        
+        opres = sp.zeros_like(self.A[0])
+        for s in xrange(self.A.shape[0]):
+            opres += m.matmul(None, self.A[s], x, m.H(self.A[s]))
+            
+        opres = x - opres  + self.r * sp.sum(sp.multiply(self.l.conj(), x))
+            
+        return opres.reshape((self.D**2))
+        
         
 class evoMPS_TDVP_Uniform:
     odr = 'C'
@@ -37,7 +73,7 @@ class evoMPS_TDVP_Uniform:
     h_nn = None    
     h_nn_cptr = None
     
-    symm_gauge = False
+    symm_gauge = True
     
     sanity_checks = False
     check_fac = 50
@@ -134,7 +170,7 @@ class evoMPS_TDVP_Uniform:
         self.l = eVL[:,i].reshape((self.D, self.D))
         self.r = eVR[:,i].reshape((self.D, self.D))
         
-        norm = sp.trace(sp.dot(self.l, self.r))
+        norm = myVVop(self.l, self.r, out=self.tmp)
         self.l *= 1 / sp.sqrt(norm)
         self.r *= 1 / sp.sqrt(norm)        
         
@@ -169,12 +205,19 @@ class evoMPS_TDVP_Uniform:
                                     atol=self.itr_atol)
                     
         #normalize eigenvectors:
-        norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
-        while not sp.allclose(norm, 1, atol=1E-14, rtol=0):
+        #norm = sp.sum(sp.multiply(self.l.conj(), self.r, out=tmp))
+        norm = myVVop(self.l, self.r, out=tmp)
+        itr = 0
+        while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 20:
             self.l *= 1 / sp.sqrt(norm)
             self.r *= 1 / sp.sqrt(norm)
             
-            norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
+            norm = myVVop(self.l, self.r, out=tmp)
+            
+            itr += 1
+            
+        if itr == 20:
+            print "Warning: Max. iterations reached during normalization!"
         
         if force_r_CF or not self.symm_gauge: #right to do this every time?
             fac = self.D / sp.trace(self.r)
@@ -211,8 +254,8 @@ class evoMPS_TDVP_Uniform:
             if not sp.all(la.eigvalsh(self.r) > 0):
                 print "Sanity check failed: r is not pos. def.!"
             
-            norm = sp.trace(sp.dot(self.l, self.r, out=tmp))
-            if not sp.allclose(norm, 1.0, atol=1E-14, rtol=0):
+            norm = myVVop(self.l, self.r, out=tmp)
+            if not sp.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
     def Restore_CF(self, force_r_CF=False):      
@@ -284,26 +327,30 @@ class evoMPS_TDVP_Uniform:
             Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), 
                            m.H(self.A[s]))
         
-        self.h = sp.trace(sp.dot(self.l, Hr))
+        self.h = myVVop(self.l, Hr, out=self.tmp)
         
-        QHr = Hr - self.r * sp.trace(m.matmul(None, self.l, Hr))
+        QHr = Hr - self.r * self.h
         
-        opData = (self.l, self.r, self.A)
-        #self.K.fill(1)
+        op = KsuperOP(self.l, self.r, self.A)
         
-        self.K, convg = m.bicgstab_iso(opData, self.K, QHr, myMVop, myVVop, 
-                                       rtol=self.itr_rtol, atol=self.itr_atol)
+        self.K = self.K.reshape((self.D**2))
+        QHr = QHr.reshape((self.D**2))
         
-        if not convg:
+        self.K, info = las.bicgstab(op, QHr, x0=self.K, maxiter=1000, 
+                                    tol=self.itr_rtol)
+        
+        if info > 0:
             print "Warning: Did not converge on solution for K!"
         
         #Test
         if self.sanity_checks:
-            RHS_test = myMVop(opData, self.K)
+            RHS_test = op.matvec(self.K)
             if not sp.allclose(RHS_test, QHr, rtol=self.itr_rtol*self.check_fac,
                                 atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Bad K solution! Off by: " + str(
                         la.norm(RHS_test - QHr))
+        
+        self.K = self.K.reshape((self.D, self.D))
             
     def Calc_Vsh(self, r_sqrt):
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
@@ -391,8 +438,8 @@ class evoMPS_TDVP_Uniform:
         x = self.Calc_x(l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh)
         #print "x stop"
         
-        self.eta = sp.sqrt(sp.trace(sp.dot(m.H(x), x)))
-        
+        self.eta = sp.sqrt(myVVop(x, x))
+
         return self.B_from_x(x, Vsh, l_sqrt_i, r_sqrt_i)
         
     def TakeStep(self, dtau, B=None):
@@ -414,7 +461,7 @@ class evoMPS_TDVP_Uniform:
     def Expect_SS(self, op):
         Or = self.EpsR(self.r, op=op)
         
-        return sp.trace(sp.dot(self.l, Or))        
+        return myVVop(self.l, Or)
             
     def Expect_2S(self, op):
         AAuv = sp.empty_like(self.A[0])
@@ -426,13 +473,13 @@ class evoMPS_TDVP_Uniform:
                 res += op(u, v, s, t) * m.matmul(None, self.A[s], self.A[t], 
                                                        self.r, m.H(AAuv))
         
-        return sp.trace(sp.dot(self.l, res))
+        return myVVop(self.l, res)
         
     def Density_SS(self):
         rho = sp.empty((self.q, self.q), dtype=self.typ)
-        for (s, t) in sp.ndindex(self.q, self.q):            
-            rho[s, t] = sp.trace(m.matmul(self.tmp, self.l, self.A[t], self.r, 
-                                          m.H(self.A[s])))
+        for (s, t) in sp.ndindex(self.q, self.q):
+            m.matmul(self.tmp, self.A[t], self.r, m.H(self.A[s]))
+            rho[s, t] = myVVop(self.l, self.tmp)
         return rho
             
     def SaveState(self, file):
