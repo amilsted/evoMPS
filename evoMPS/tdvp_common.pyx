@@ -5,19 +5,24 @@ Created on Sat Jan 21 13:21:20 2012
 @author: ash
 """
 
+import cython as cy
 import scipy as sp
 import numpy as np
 cimport numpy as np
+cimport cpython.pycapsule as pc
 
 ctypedef np.complex128_t DTYPE_t
 
 ctypedef DTYPE_t (*h_nn_func)(int s, int t, int u, int v)
 
+@cy.boundscheck(False)
 def calc_C(np.ndarray[DTYPE_t, ndim=3] A1 not None,
              np.ndarray[DTYPE_t, ndim=3] A2 not None,
-             long int h_nn_ptr, np.ndarray[DTYPE_t, ndim=4] out):
+             h_nn_cptr, np.ndarray[DTYPE_t, ndim=4] out):
     
-    cdef h_nn_func h_nn = <h_nn_func>h_nn_ptr
+    assert pc.PyCapsule_CheckExact(h_nn_cptr)
+    
+    cdef h_nn_func h_nn = <h_nn_func>pc.PyCapsule_GetPointer(h_nn_cptr, NULL)
     
     cdef int q1 = A1.shape[0]
     cdef int q2 = A2.shape[0]
