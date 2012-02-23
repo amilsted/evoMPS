@@ -10,6 +10,7 @@ import scipy as sp
 import numpy as np
 cimport numpy as np
 cimport cpython.pycapsule as pc
+#from cython.parallel import *
 
 ctypedef np.complex128_t DTYPE_t
 
@@ -41,7 +42,7 @@ def calc_C(np.ndarray[DTYPE_t, ndim=3] A1 not None,
     
     cdef DTYPE_t h
     
-    for u in range(q1):
+    for u in range(q1): #can't prange-parallelize this, because we call dot(), which is python
         for v in range(q2):
             np.dot(A1[u], A2[v], out=AA)
             for s in range(q1):

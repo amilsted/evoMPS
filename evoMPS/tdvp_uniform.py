@@ -4,6 +4,20 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
+TODO:
+    - Think about whether it is better to move back to RCF before
+      applying B, since B does *right* gauge fixing. Then we would
+      switch back to symm. form before calculating the next B.
+       0. Restore RCF if needed
+       1. RCF to SCF (with 4th root of l etc.)
+       2. Calc B
+       3. SCF to RCF (can do this quickly?)
+       4. Apply B (take step)
+    - Also, find out what happens in theory when this is *not* done...
+      Should cause the gauge choice to drift... right?
+    
+    - Remove silly threading attempt?
+
 """
 import scipy as sp
 import scipy.linalg as la
@@ -26,10 +40,13 @@ def myMVop(opData, x):
 def myVVop(a, b, out=None):
     #return sp.trace(sp.dot(a, b))
     if out is None:
-        return sp.sum(sp.multiply(sp.conj(a), b))
+        #return sp.sum(sp.multiply(sp.conj(a), b))
+        return sp.inner(a.ravel().conj(), b.ravel())
     else:
-        return sp.sum(sp.multiply(sp.conj(a, out=out), b, out=out))
+        #return sp.sum(sp.multiply(sp.conj(a, out=out), b, out=out))
+        return sp.inner(sp.conj(a, out=out).ravel(), b.ravel())
         
+#This class allows us to use scipy's bicgstab implementation
 class KsuperOP:
     l = None
     r = None
@@ -89,7 +106,7 @@ class evoMPS_TDVP_Uniform:
         #for s in xrange(q):
         #    self.A[s] = sp.eye(D)
             
-        m.randomize_cmplx(self.A)                
+        m.randomize_cmplx(self.A)         
     
     def _init_arrays(self, D, q):
         self.D = D
@@ -107,7 +124,7 @@ class evoMPS_TDVP_Uniform:
         self.conv_r = True
         
         self.tmp = sp.empty_like(self.A[0])
-            
+           
     def EpsR(self, x, op=None, out=None):
         """Implements the right epsilon map
         
@@ -134,7 +151,7 @@ class evoMPS_TDVP_Uniform:
             
         if op is None:
             for s in xrange(self.q):
-                out += m.matmul(self.tmp, self.A[s], x, m.H(self.A[s]))            
+                out += m.matmul(self.tmp, self.A[s], x, m.H(self.A[s]))
         else:
             for (s, t) in sp.ndindex(self.q, self.q):
                 o_st = op(s, t)
@@ -151,7 +168,7 @@ class evoMPS_TDVP_Uniform:
             out.fill(0.)
             
         for s in xrange(self.q):
-            out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])
+            out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])        
             
         return out
 
@@ -224,7 +241,6 @@ class evoMPS_TDVP_Uniform:
             self.l *= 1 / fac
             self.r *= fac
 
-        #Test!
         if self.sanity_checks:
             if not sp.allclose(self.EpsL(self.l), self.l,
             rtol=self.itr_rtol*self.check_fac, 
@@ -550,3 +566,12 @@ class evoMPS_TDVP_Uniform:
         self.K[oldD:, :oldD].fill(la.norm(oldK) / oldD**2)
         self.K[:oldD, oldD:].fill(la.norm(oldK) / oldD**2)
         self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
+        
+    def Fuzz_State(self, f=1.0):
+        norm = la.norm(self.A)
+        fac = f*(norm / (self.q * self.D**2))        
+        
+        R = sp.empty_like(self.A)
+        m.randomize_cmplx(R, -fac/2.0, fac/2.0)
+        
+        self.A += R
