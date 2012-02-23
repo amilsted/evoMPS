@@ -210,16 +210,18 @@ class evoMPS_TDVP_Uniform:
             self.A *= 1 / sp.sqrt(ev)
             ev = la.norm(e(x, out=tmp))
         
-        return i < max_itr - 1
+        return i < max_itr - 1, i
     
     def Calc_lr(self, renorm=True, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
         
-        self.conv_l = self._Calc_lr(self.l, self.EpsL, tmp, rtol=self.itr_rtol, 
-                                    atol=self.itr_atol)
+        self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
+                                                rtol=self.itr_rtol, 
+                                                atol=self.itr_atol)
         
-        self.conv_r = self._Calc_lr(self.r, self.EpsR, tmp, rtol=self.itr_rtol, 
-                                    atol=self.itr_atol)
+        self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
+                                                rtol=self.itr_rtol, 
+                                                atol=self.itr_atol)
                     
         #normalize eigenvectors:
         #norm = sp.sum(sp.multiply(self.l.conj(), self.r, out=tmp))
