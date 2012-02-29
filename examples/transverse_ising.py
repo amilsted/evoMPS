@@ -8,11 +8,11 @@ for the transverse Ising model.
 @author: Ashley Milsted
 """
 
-from scipy import *
+import scipy as sp
 import scipy.linalg as la
 import matplotlib.pyplot as plt
 
-from evoMPS import *
+import evoMPS.tdvp_gen as tdvp
 
 """
 First, we define our Hamiltonian and some observables.
@@ -71,16 +71,16 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-N = 7 #The length of the finite spin chain.
+N = 21 #The length of the finite spin chain.
 
 
 """
 The bond dimension for each site is given as a vector, length N.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 8 #The maximum bond dimension
+bond_dim = 256 #The maximum bond dimension
 
-D = empty(N + 1, dtype=int32)
+D = sp.empty(N + 1, dtype=sp.int32)
 D.fill(bond_dim)
 
 
@@ -90,13 +90,13 @@ Here, we set all sites to dimension = qn.
 """
 qn = 2 #The site dimension
 
-q = empty(N + 1, dtype=int32)
+q = sp.empty(N + 1, dtype=sp.int32)
 q.fill(qn)
 
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp_gen.evoMPS_TDVP_Generic(N, D, q)
+s = tdvp.evoMPS_TDVP_Generic(N, D, q)
 
 """
 Tell evoMPS about our Hamiltonian.
@@ -129,7 +129,7 @@ When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
 tol_im = 5E-15
-total_steps = 500
+total_steps = 10
 
 """
 The following handles loading the ground state from a file.
@@ -160,15 +160,15 @@ imsteps = 0
 reCF = []
 reNorm = []
 
-T = zeros((total_steps), dtype=complex128)
-K1 = zeros((total_steps), dtype=complex128)
-lN = zeros((total_steps), dtype=complex128)
+T = sp.zeros((total_steps), dtype=sp.complex128)
+K1 = sp.zeros((total_steps), dtype=sp.complex128)
+lN = sp.zeros((total_steps), dtype=sp.complex128)
 
-Sx_3 = zeros((total_steps), dtype=complex128) #Observables for site 3.
-Sy_3 = zeros((total_steps), dtype=complex128)
-Sz_3 = zeros((total_steps), dtype=complex128)
+Sx_3 = sp.zeros((total_steps), dtype=sp.complex128) #Observables for site 3.
+Sy_3 = sp.zeros((total_steps), dtype=sp.complex128)
+Sz_3 = sp.zeros((total_steps), dtype=sp.complex128)
 
-Mx = zeros((total_steps), dtype=complex128)   #Magnetization in x-direction.
+Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
    
    
 """
@@ -204,7 +204,7 @@ for i in xrange(total_steps):
         row.append("No")
     
     #Renormalize if the norm is drifting.
-    reNormalize = not allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
+    reNormalize = not sp.allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
     reNorm.append(reNormalize)
     if reNormalize:
         row.append("True")
@@ -237,7 +237,7 @@ for i in xrange(total_steps):
     row.append("%.3g" % Sz_3[i].real)
     
     rho_34 = s.DensityMatrix_2S(3, 4) #Reduced density matrix for sites 3 and 4.
-    E_v = -trace(dot(rho_34, la.logm(rho_34)/log(2))) #The von Neumann entropy.
+    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
     
     row.append("%.9g" % E_v.real)
     
@@ -259,7 +259,7 @@ for i in xrange(total_steps):
         loaded = False
         print 'Starting real time evolution!'
     
-    row.append(str(1.j * conj(step)))
+    row.append(str(1.j * sp.conj(step)))
     
     """
     Carry out next step!
@@ -278,40 +278,40 @@ for i in xrange(total_steps):
         print "\t".join(row)
         s.TakeStep_RK4(step)
     
-    t += 1.j * conj(step)
+    t += 1.j * sp.conj(step)
 
-"""
-Simple plots of the results.
-"""
-
-if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-    tau = T.imag[0:imsteps]
-    
-    fig1 = plt.figure(1)
-    fig2 = plt.figure(2) 
-    K1_tau = fig1.add_subplot(111)
-    K1_tau.set_xlabel('tau')
-    K1_tau.set_ylabel('H')
-    M_tau = fig2.add_subplot(111)
-    M_tau.set_xlabel('tau')
-    M_tau.set_ylabel('M_x')    
-    
-    K1_tau.plot(tau, K1.real[0:imsteps])
-    M_tau.plot(tau, Mx.real[0:imsteps])
-
-#Now plot the real time evolution of K1 and Mx
-t = T.real[imsteps + 1:]
-fig3 = plt.figure(3)
-fig4 = plt.figure(4)
-
-K1_t = fig3.add_subplot(111)
-K1_t.set_xlabel('t')
-K1_t.set_ylabel('H')
-M_t = fig4.add_subplot(111)
-M_t.set_xlabel('t')
-M_t.set_ylabel('M_x')
-
-K1_t.plot(t, K1.real[imsteps + 1:])
-M_t.plot(t, Mx.real[imsteps + 1:])
-
-plt.show()
+#"""
+#Simple plots of the results.
+#"""
+#
+#if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
+#    tau = T.imag[0:imsteps]
+#    
+#    fig1 = plt.figure(1)
+#    fig2 = plt.figure(2) 
+#    K1_tau = fig1.add_subplot(111)
+#    K1_tau.set_xlabel('tau')
+#    K1_tau.set_ylabel('H')
+#    M_tau = fig2.add_subplot(111)
+#    M_tau.set_xlabel('tau')
+#    M_tau.set_ylabel('M_x')    
+#    
+#    K1_tau.plot(tau, K1.real[0:imsteps])
+#    M_tau.plot(tau, Mx.real[0:imsteps])
+#
+##Now plot the real time evolution of K1 and Mx
+#t = T.real[imsteps + 1:]
+#fig3 = plt.figure(3)
+#fig4 = plt.figure(4)
+#
+#K1_t = fig3.add_subplot(111)
+#K1_t.set_xlabel('t')
+#K1_t.set_ylabel('H')
+#M_t = fig4.add_subplot(111)
+#M_t.set_xlabel('t')
+#M_t.set_ylabel('M_x')
+#
+#K1_t.plot(t, K1.real[imsteps + 1:])
+#M_t.plot(t, Mx.real[imsteps + 1:])
+#
+#plt.show()

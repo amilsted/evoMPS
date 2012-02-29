@@ -7,7 +7,7 @@ Created on Thu Oct 13 17:29:27 2011
 TODO:
     - Implement evaluation of the error due to restriction to bond dim.
     - Investigate whether a different gauge choice would reduce numerical inaccuracies.
-        - The current choice gives us r_n = eye() and l_n containing
+        - The current choice gives us r_n = sp.eye() and l_n containing
           the Schmidt spectrum.
         - Maybe the l's could be better conditioned?
     - Build more into TakeStep or add a new method that does Restore_ON_R etc. itself.
@@ -17,13 +17,12 @@ TODO:
 """
 import scipy as sp
 import scipy.linalg as la
-from scipy import *
 import nullspace as ns
-from matmul import *
+import matmul as m
 
 class evoMPS_TDVP_Generic:
     odr = 'C'
-    typ = complex128
+    typ = sp.complex128
     
     #Numsites
     N = 0
@@ -42,11 +41,11 @@ class evoMPS_TDVP_Generic:
         for n in xrange(1, self.N + 1):
             self.A[n].fill(0)
             
-            f = sqrt(1. / self.q[n])
+            f = sp.sqrt(1. / self.q[n])
             
             if self.D[n-1] == self.D[n]:
                 for s in xrange(self.q[n]):
-                    fill_diagonal(self.A[n][s], f)
+                    sp.fill_diagonal(self.A[n][s], f)
             else:
                 x = 0
                 y = 0
@@ -73,8 +72,8 @@ class evoMPS_TDVP_Generic:
         Does it really have to be?
         """
         for n in xrange(1, self.N + 1):
-            self.A[n].real = (rand(self.D[n - 1], self.D[n]) - 0.5) / sqrt(self.q[n]) #/ sqrt(self.N) #/ sqrt(self.D[n])
-            self.A[n].imag = (rand(self.D[n - 1], self.D[n]) - 0.5) / sqrt(self.q[n]) #/ sqrt(self.N) #/ sqrt(self.D[n])
+            self.A[n].real = (sp.rand(self.D[n - 1], self.D[n]) - 0.5) / sp.sqrt(self.q[n]) #/ sp.sqrt(self.N) #/ sp.sqrt(self.D[n])
+            self.A[n].imag = (sp.rand(self.D[n - 1], self.D[n]) - 0.5) / sp.sqrt(self.q[n]) #/ sp.sqrt(self.N) #/ sp.sqrt(self.D[n])
                 
         self.Restore_ON_R()
             
@@ -104,19 +103,19 @@ class evoMPS_TDVP_Generic:
         sqrt_A : ndarray
             An array of the same shape and type as A containing the matrix square root of A.        
         """
-        self.eps = finfo(self.typ).eps
+        self.eps = sp.finfo(self.typ).eps
         
         self.N = numsites
-        self.D = array(D)
-        self.q = array(q)
+        self.D = sp.array(D)
+        self.q = sp.array(q)
         
         #Make indicies correspond to the thesis
-        self.K = empty((self.N + 1), dtype=ndarray) #Elements 1..N
-        self.C = empty((self.N), dtype=ndarray) #Elements 1..N-1
-        self.A = empty((self.N + 1), dtype=ndarray) #Elements 1..N
+        self.K = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
+        self.C = sp.empty((self.N), dtype=sp.ndarray) #Elements 1..N-1
+        self.A = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         
-        self.r = empty((self.N + 1), dtype=ndarray) #Elements 0..N
-        self.l = empty((self.N + 1), dtype=ndarray)        
+        self.r = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 0..N
+        self.l = sp.empty((self.N + 1), dtype=sp.ndarray)        
         
         if (self.D.ndim != 1) or (self.q.ndim != 1):
             raise NameError('D and q must be 1-dimensional!')
@@ -139,19 +138,19 @@ class evoMPS_TDVP_Generic:
             if self.D[n] > qacc:
                 self.D[n] = qacc
         
-        matmul_init(dtype=self.typ, order=self.odr)
+        m.matmul_init(dtype=self.typ, order=self.odr)
         
-        self.r[0] = zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)  
-        self.l[0] = eye(self.D[0], self.D[0], dtype=self.typ).copy(order=self.odr) #Already set the 0th element (not a dummy)    
+        self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)  
+        self.l[0] = sp.eye(self.D[0], self.D[0], dtype=self.typ).copy(order=self.odr) #Already set the 0th element (not a dummy)    
     
         for n in xrange(1, self.N + 1):
-            self.K[n] = zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
-            self.r[n] = zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-            self.l[n] = zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-            self.A[n] = empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
+            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
+            self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+            self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+            self.A[n] = sp.empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
             if n < self.N:
-                self.C[n] = empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
-        fill_diagonal(self.r[self.N], 1.)
+                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
+        sp.fill_diagonal(self.r[self.N], 1.)
         self.SetupAs()
     
     def BuildC(self, n_low=-1, n_high=-1):
@@ -176,10 +175,10 @@ class evoMPS_TDVP_Generic:
         
         for n in xrange(n_low, n_high):
             self.C[n].fill(0)
-            AA = empty_like(self.C[n][0][0], order='A')
+            AA = sp.empty_like(self.C[n][0][0], order='A')
             for u in xrange(self.q[n]):
                 for v in xrange(self.q[n + 1]):
-                    matmul(AA, self.A[n][u], self.A[n + 1][v]) #only do this once for each 
+                    m.matmul(AA, self.A[n][u], self.A[n + 1][v]) #only do this once for each 
                     for s in xrange(self.q[n]):
                         for t in xrange(self.q[n + 1]):                
                             h_nn_stuv = self.h_nn(n, s, t, u, v)
@@ -210,22 +209,26 @@ class evoMPS_TDVP_Generic:
             
         for n in reversed(xrange(n_low, n_high)):
             self.K[n].fill(0)
-            tmp = empty_like(self.K[n])
+            tmp = sp.empty_like(self.K[n])
             if n < self.N:
                 for s in xrange(self.q[n]): 
                     for t in xrange(self.q[n+1]):
-                        self.K[n] += matmul(tmp, self.C[n][s, t], self.r[n + 1], H(self.A[n+1][t]), H(self.A[n][s]))
-                    self.K[n] += matmul(tmp, self.A[n][s], self.K[n + 1], H(self.A[n][s]))
+                        self.K[n] += m.matmul(tmp, self.C[n][s, t],
+                                              self.r[n + 1], m.H(self.A[n+1][t]), 
+                                              m.H(self.A[n][s]))
+                    self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
+                                          m.H(self.A[n][s]))
             
             if not self.h_ext is None:
                 for s in xrange(self.q[n]):
                     for t in xrange(self.q[n]):
                         h_ext_st = self.h_ext(n, s, t)
                         if h_ext_st != 0:
-                            self.K[n] += h_ext_st * matmul(tmp, self.A[n][t], self.r[n], H(self.A[n][s]))
+                            self.K[n] += h_ext_st * m.matmul(tmp, self.A[n][t], 
+                                                    self.r[n], m.H(self.A[n][s]))
     
     def BuildVsh(self, n, sqrt_r):
-        """Generates H(V[n][s]) for a given n, used for generating B[n][s]
+        """Generates m.H(V[n][s]) for a given n, used for generating B[n][s]
         
         This is described on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el] for left 
         gauge fixing. Here, we are using right gauge fixing.
@@ -234,25 +237,25 @@ class evoMPS_TDVP_Generic:
         
         Each V[n] directly depends only on A[n] and r[n].
         
-        We return the conjugate H(V) because we use it in more places than V.
+        We return the conjugate m.H(V) because we use it in more places than V.
         """
-        R = zeros((self.D[n], self.q[n], self.D[n-1]), dtype=self.typ, order='C')
+        R = sp.zeros((self.D[n], self.q[n], self.D[n-1]), dtype=self.typ, order='C')
         
         for s in xrange(self.q[n]):
-            R[:,s,:] = matmul(None, sqrt_r, H(self.A[n][s]))
+            R[:,s,:] = m.matmul(None, sqrt_r, m.H(self.A[n][s]))
 
         R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
-        V = H(ns.nullspace(H(R)))
+        V = m.H(ns.nullspace(m.H(R)))
         #print (q[n]*D[n] - D[n-1], q[n]*D[n])
         #print V.shape
-        #print allclose(mat(V) * mat(V).H, eye(q[n]*D[n] - D[n-1]))
-        #print allclose(mat(V) * mat(Rh).H, 0)
+        #print sp.allclose(mat(V) * mat(V).H, sp.eye(q[n]*D[n] - D[n-1]))
+        #print sp.allclose(mat(V) * mat(Rh).H, 0)
         V = V.reshape((self.q[n] * self.D[n] - self.D[n - 1], self.D[n], self.q[n])) #this works with the above form for R
         
         #prepare for using V[s] and already take the adjoint, since we use it more often
-        Vsh = empty((self.q[n], self.D[n], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
+        Vsh = sp.empty((self.q[n], self.D[n], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
         for s in xrange(self.q[n]):
-            Vsh[s] = H(V[:,:,s])
+            Vsh[s] = m.H(V[:,:,s])
         
         return Vsh
         
@@ -276,11 +279,11 @@ class evoMPS_TDVP_Generic:
             - K[n + 1]
             - V[n]
         """
-        x = zeros((self.D[n - 1], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
-        x_part = empty_like(x)
-        x_subpart = empty_like(self.A[n][0])
-        x_subsubpart = empty_like(self.A[n][0])
-        tmp = empty_like(x_subpart)
+        x = sp.zeros((self.D[n - 1], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
+        x_part = sp.empty_like(x)
+        x_subpart = sp.empty_like(self.A[n][0])
+        x_subsubpart = sp.empty_like(self.A[n][0])
+        tmp = sp.empty_like(x_subpart)
         
         x_part.fill(0)
         for s in xrange(self.q[n]):
@@ -289,30 +292,30 @@ class evoMPS_TDVP_Generic:
             if n < self.N:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += matmul(tmp, self.C[n][s,t], self.r[n + 1], H(self.A[n + 1][t])) #~1st line
+                    x_subsubpart += m.matmul(tmp, self.C[n][s,t], self.r[n + 1], m.H(self.A[n + 1][t])) #~1st line
                     
-                x_subsubpart += matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line               
+                x_subsubpart += m.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line               
                 
-                x_subpart += matmul(tmp, x_subsubpart, sqrt_r_inv)
+                x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r_inv)
             
             if not self.h_ext is None:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
                     x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-                x_subpart += matmul(tmp, x_subsubpart, sqrt_r)
+                x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r)
             
-            x_part += matmul(None, x_subpart, Vsh[s])
+            x_part += m.matmul(None, x_subpart, Vsh[s])
                 
-        x += matmul(None, sqrt_l, x_part)
+        x += m.matmul(None, sqrt_l, x_part)
             
         if n > 1:
             x_part.fill(0)
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += matmul(tmp, H(self.A[n - 1][t]), self.l[n - 2], self.C[n - 1][t, s])
-                x_part += matmul(None, x_subsubpart, sqrt_r, Vsh[s])
-            x += matmul(None, sqrt_l_inv, x_part)
+                    x_subsubpart += m.matmul(tmp, m.H(self.A[n - 1][t]), self.l[n - 2], self.C[n - 1][t, s])
+                x_part += m.matmul(None, x_subsubpart, sqrt_r, Vsh[s])
+            x += m.matmul(None, sqrt_l_inv, x_part)
                 
         return x
         
@@ -331,9 +334,9 @@ class evoMPS_TDVP_Generic:
             
             x = self.CalcOpt_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
     
-            B = empty_like(self.A[n])
+            B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = matmul(B[s], l_sqrt_inv, x, H(Vsh[s]), r_sqrt_inv)
+                B[s] = m.matmul(B[s], l_sqrt_inv, x, m.H(Vsh[s]), r_sqrt_inv)
             return B
         else:
             return None
@@ -345,9 +348,9 @@ class evoMPS_TDVP_Generic:
         If an exception occurs here, it is probably because these matrices
         are not longer Hermitian (enough).
         """
-        l_sqrt = sqrtmh(self.l[n - 1])
+        l_sqrt = m.sqrtmh(self.l[n - 1])
         #l_sqrt = la.sqrtm(self.l[n - 1])
-        r_sqrt =  sqrtmh(self.r[n])
+        r_sqrt =  m.sqrtmh(self.r[n])
         #r_sqrt =  la.sqrtm(self.r[n])        
         l_sqrt_inv = la.inv(l_sqrt) #matmul invpo() not yet working properly....
         r_sqrt_inv = la.inv(r_sqrt)  
@@ -417,7 +420,7 @@ class evoMPS_TDVP_Generic:
         dbg_bstep = False
         safe_mode = False
         
-        tol = finfo(complex128).eps * 3
+        tol = sp.finfo(sp.complex128).eps * 3
         max_iter = 10
         itr_switch_mode = 10
         #---------------------------
@@ -428,7 +431,7 @@ class evoMPS_TDVP_Generic:
         self.Restore_ON_R()
 
         #Take a copy of the current state
-        A0 = empty_like(self.A)
+        A0 = sp.empty_like(self.A)
         for n in xrange(1, self.N + 1):
             A0[n] = self.A[n].copy()
         
@@ -452,7 +455,7 @@ class evoMPS_TDVP_Generic:
                 self.BuildC() #we really do need all of these, since B directly uses C[n-1]
                 self.CalcK()            
             
-            g0_n = eye(self.D[self.N - 1], dtype=self.typ)       #g0_n is the gauge transform matrix needed to solve the implicit equation
+            g0_n = sp.eye(self.D[self.N - 1], dtype=self.typ)       #g0_n is the gauge transform matrix needed to solve the implicit equation
             
             #Loop through the chain, optimizing the individual A's
             delta = 0
@@ -470,9 +473,9 @@ class evoMPS_TDVP_Generic:
                 itr_n = 0
                 while True:
                     #Find transformation to gauge-align A0 with the backwards-obtained A.. is this enough?
-                    M = matmul(None, A0[n][0], g0_n, self.r[n], H(self.A[n][0]))
+                    M = m.matmul(None, A0[n][0], g0_n, self.r[n], m.H(self.A[n][0]))
                     for s in xrange(1, self.q[n]):
-                        M += matmul(None, A0[n][s], g0_n, self.r[n], H(self.A[n][s]))
+                        M += m.matmul(None, A0[n][s], g0_n, self.r[n], m.H(self.A[n][s]))
                     
                     g0_nm1 = la.solve(self.r[n - 1], M, sym_pos=True, overwrite_b=True)
                     
@@ -487,23 +490,23 @@ class evoMPS_TDVP_Generic:
                         break
                     
                     g0_nm1_inv = la.inv(g0_nm1) #sadly, we need the inverse too...    
-                    r_dA = zeros_like(self.r[n - 1])
-                    dA = empty_like(self.A[n])
+                    r_dA = sp.zeros_like(self.r[n - 1])
+                    dA = sp.empty_like(self.A[n])
                     sqsum = 0
                     for s in xrange(self.q[n]):
-                        matmul(dA[s], g0_nm1_inv, A0[n][s], g0_n)
+                        m.matmul(dA[s], g0_nm1_inv, A0[n][s], g0_n)
                         dA[s] -= self.A[n][s] 
                         dA[s] -= dtau * B[s]
                         if not final_check:
                             self.A[n][s] += dA[s]
     
                     for s in xrange(self.q[n]):
-                        r_dA += matmul(None, dA[s], self.r[n], H(dA[s]))
+                        r_dA += m.matmul(None, dA[s], self.r[n], m.H(dA[s]))
                         sqsum += sum(dA[s]**2)
                     
-                    fnorm = sqrt(sqsum)
+                    fnorm = sp.sqrt(sqsum)
                     
-                    delta_n = sqrt(trace(matmul(None, self.l[n - 1], r_dA)))
+                    delta_n = sp.sqrt(sp.trace(m.matmul(None, self.l[n - 1], r_dA)))
                     
                     if running_update: #Since we want to use the current A[n] and A[n + 1], we need this:
                         if safe_mode:
@@ -548,7 +551,7 @@ class evoMPS_TDVP_Generic:
         
         #Test backward step!        
         if dbg_bstep:
-            Anew = empty_like(self.A)
+            Anew = sp.empty_like(self.A)
             for n in xrange(1, self.N + 1):
                 Anew[n] = self.A[n].copy()
             
@@ -566,15 +569,15 @@ class evoMPS_TDVP_Generic:
                 dA = A0[n] - self.A[n]
                 #Surely this dA should also preserve the gauge choice, since both A's are in ON_R...                
                 #print dA/A0[n]
-                r_dA = zeros_like(self.r[n - 1])
+                r_dA = sp.zeros_like(self.r[n - 1])
                 sqsum = 0
                 for s in xrange(self.q[n]):
-                    r_dA += matmul(None, dA[s], self.r[n], H(dA[s]))
+                    r_dA += m.matmul(None, dA[s], self.r[n], m.H(dA[s]))
                     sqsum += sum(dA[s]**2)
-                delta_n = sqrt(trace(matmul(None, self.l[n - 1], r_dA)))                
+                delta_n = sp.sqrt(sp.trace(m.matmul(None, self.l[n - 1], r_dA)))                
                 delta2 += delta_n
                 if debug:
-                    print "A[%d] OK?: " % n + str(allclose(dA, 0)) + ", delta = " + str(delta_n) + ", fnorm = " + str(sqrt(sqsum))
+                    print "A[%d] OK?: " % n + str(sp.allclose(dA, 0)) + ", delta = " + str(delta_n) + ", fnorm = " + str(sp.sqrt(sqsum))
                 #print delta_n
             if debug:
                 print "Total delta: " + str(delta2)
@@ -607,11 +610,11 @@ class evoMPS_TDVP_Generic:
         #self.Restore_ON_R()
         
         #Take a copy of the current state
-        A0 = empty_like(self.A)
+        A0 = sp.empty_like(self.A)
         for n in xrange(1, self.N):
             A0[n] = self.A[n].copy()
             
-        B_fin = empty_like(self.A)
+        B_fin = sp.empty_like(self.A)
 
         B_prev = None
         for n in xrange(1, self.N + 2):
@@ -680,8 +683,8 @@ class evoMPS_TDVP_Generic:
         """
         for n in xrange(1, self.N + 1):
             for s in xrange(self.q[n]):
-                self.A[n][s].real += (rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
-                self.A[n][s].imag += (rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
+                self.A[n][s].real += (sp.rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
+                self.A[n][s].imag += (sp.rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
                 
     
     def Upd_l(self, start=-1, finish=-1):
@@ -695,9 +698,9 @@ class evoMPS_TDVP_Generic:
             finish = self.N
         for n in xrange(start, finish + 1):
             self.l[n].fill(0)
-            tmp = empty_like(self.l[n])
+            tmp = sp.empty_like(self.l[n])
             for s in xrange(self.q[n]):
-                self.l[n] += matmul(tmp, H(self.A[n][s]), self.l[n - 1], self.A[n][s])
+                self.l[n] += m.matmul(tmp, m.H(self.A[n][s]), self.l[n - 1], self.A[n][s])
     
     def Upd_r(self, n_low=-1, n_high=-1):
         """Updates the r matrices using the current state.
@@ -731,7 +734,7 @@ class evoMPS_TDVP_Generic:
         """
         changed = False
         itr = 0
-        while not allclose(self.l[self.N], 1. + 0.j, atol=self.eps*3, rtol=0) and itr < 20:
+        while not sp.allclose(self.l[self.N], 1. + 0.j, atol=self.eps*3, rtol=0) and itr < 20:
             G_N_I = sp.sqrt(self.l[self.N][0, 0])
             
             for s in xrange(self.q[self.N]):
@@ -768,19 +771,19 @@ class evoMPS_TDVP_Generic:
             The resulting matrix.
         """
         if res is None:
-            res = zeros_like(self.r[n - 1])
+            res = sp.zeros_like(self.r[n - 1])
         else:
             res.fill(0.)
-        tmp = empty_like(res)
+        tmp = sp.empty_like(res)
         if o is None:
             for s in xrange(self.q[n]):
-                res += matmul(tmp, self.A[n][s], x, H(self.A[n][s]))            
+                res += m.matmul(tmp, self.A[n][s], x, m.H(self.A[n][s]))            
         else:
             for s in xrange(self.q[n]):
                 for t in xrange(self.q[n]):
                     o_st = o(n, s, t)
                     if o_st != 0.:
-                        matmul(tmp, self.A[n][t], x, H(self.A[n][s]))
+                        m.matmul(tmp, self.A[n][t], x, m.H(self.A[n][s]))
                         tmp *= o_st
                         res += tmp
         return res
@@ -814,29 +817,29 @@ class evoMPS_TDVP_Generic:
         G_n_m1_i : ndarray
             The inverse gauge transformation matrix for the site n - 1.
         """
-        GGh_n_i = matmul(None, G_n_i, H(G_n_i)) #r[n] does not belong here. The condition is for sum(AA). r[n] = 1 is a consequence. 
+        GGh_n_i = m.matmul(None, G_n_i, m.H(G_n_i)) #r[n] does not belong here. The condition is for sum(AA). r[n] = 1 is a consequence. 
         
         M = self.EpsR(None, n, GGh_n_i, None)
                     
         #The following should be more efficient than eigh():
         try:
             tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
-            G_nm1 = H(invtr(tu, overwrite=True), out=tu) #G is now lower-triangular
+            G_nm1 = m.H(m.invtr(tu, overwrite=True), out=tu) #G is now lower-triangular
             is_tri = True
         except sp.linalg.LinAlgError:
             print "Restore_ON_R_n: Falling back to eigh()!"
             e,Gh = la.eigh(M)
-            G_nm1 = H(matmul(None, Gh, diag(1/sqrt(e) + 0.j)))
+            G_nm1 = m.H(m.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
             is_tri = False
             
         
         for s in xrange(self.q[n]):                
-            matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
+            m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
             #It's ok to use the same matrix as out and as an operand here
             #since there are > 2 matrices in the chain and it is not the last argument.
         
         if is_tri:
-            G_nm1_i = invtr(G_nm1, overwrite=True, lower=True)
+            G_nm1_i = m.invtr(G_nm1, overwrite=True, lower=True)
         else:
             G_nm1_i = la.inv(G_nm1)        
         
@@ -884,7 +887,7 @@ class evoMPS_TDVP_Generic:
         if start < 1:
             start = self.N
         
-        G_n_i = eye(self.D[start], dtype=self.typ) #This is actually just the number 1
+        G_n_i = sp.eye(self.D[start], dtype=self.typ) #This is actually just the number 1
         for n in reversed(xrange(2, start + 1)):
             G_n_i = self.Restore_ON_R_n(n, G_n_i)
             self.EpsR(self.r[n - 1], n, self.r[n], None) #Update r[n - 1], which should, ideally, now equal 1
@@ -892,14 +895,14 @@ class evoMPS_TDVP_Generic:
         #Now do A[1]...
         #Apply the remaining G[1]^-1 from the previous step.
         for s in xrange(self.q[1]):                
-            self.A[1][s] = matmul(None, self.A[1][s], G_n_i)
+            self.A[1][s] = m.matmul(None, self.A[1][s], G_n_i)
         self.EpsR(self.r[0], 1, self.r[1], None)
         
         #Now finish off, demanding high accuracy.
         if normalize:            
             itr = 0
             #print "r[0] = " + str(self.r[0])
-            while not allclose(self.r[0], 1, atol=self.eps*2, rtol=0) and itr < 10:
+            while not sp.allclose(self.r[0], 1, atol=self.eps*2, rtol=0) and itr < 10:
                 G0 = 1. / sp.sqrt(self.r[0][0, 0])
                 self.A[1] *= G0
                 self.EpsR(self.r[0], 1, self.r[1], None)
@@ -922,12 +925,12 @@ class evoMPS_TDVP_Generic:
         ls_pos = True
         
         for n in xrange(1, self.N + 1):
-            rnsOK = rnsOK and allclose(self.r[n], eye(self.r[n].shape[0]), atol=self.eps*2, rtol=0)
-            ls_herm = ls_herm and allclose(self.l[n] - H(self.l[n]), 0, atol=self.eps*2)
-            ls_trOK = ls_trOK and allclose(trace(self.l[n]), 1, atol=self.eps*2, rtol=0)
+            rnsOK = rnsOK and sp.allclose(self.r[n], sp.eye(self.r[n].shape[0]), atol=self.eps*2, rtol=0)
+            ls_herm = ls_herm and sp.allclose(self.l[n] - m.H(self.l[n]), 0, atol=self.eps*2)
+            ls_trOK = ls_trOK and sp.allclose(sp.trace(self.l[n]), 1, atol=self.eps*2, rtol=0)
             ls_pos = ls_pos and all(la.eigvalsh(self.l[n]) > 0)
         
-        normOK = allclose(self.l[self.N], 1., atol=self.eps, rtol=0)
+        normOK = sp.allclose(self.l[self.N], 1., atol=self.eps, rtol=0)
         
         return (rnsOK, ls_trOK, ls_pos, normOK)
     
@@ -948,7 +951,7 @@ class evoMPS_TDVP_Generic:
             The site number.
         """
         res = self.EpsR(None, n, self.r[n], o)
-        res = matmul(None, self.l[n - 1], res)
+        res = m.matmul(None, self.l[n - 1], res)
         return res.trace()
         
     def Expect_SS_Cor(self, o1, o2, n1, n2):
@@ -978,7 +981,7 @@ class evoMPS_TDVP_Generic:
 
         r_n = self.EpsR(None, n1, r_n, o1)   
          
-        res = matmul(None, self.l[n1 - 1], r_n)
+        res = m.matmul(None, self.l[n1 - 1], r_n)
         return res.trace()
         
     def DensityMatrix_2S(self, n1, n2):
@@ -991,14 +994,14 @@ class evoMPS_TDVP_Generic:
         n2 : int
             The site number of the second site (must be > n1).        
         """
-        rho = empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=complex128)
-        r_n2 = empty_like(self.r[n2 - 1])
-        r_n1 = empty_like(self.r[n1 - 1])
-        tmp = empty_like(self.r[n1 - 1])
+        rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
+        r_n2 = sp.empty_like(self.r[n2 - 1])
+        r_n1 = sp.empty_like(self.r[n1 - 1])
+        tmp = sp.empty_like(self.r[n1 - 1])
         
         for s2 in xrange(self.q[n2]):
             for t2 in xrange(self.q[n2]):
-                matmul(r_n2, self.A[n2][t2], self.r[n2], H(self.A[n2][s2]))
+                m.matmul(r_n2, self.A[n2][t2], self.r[n2], m.H(self.A[n2][s2]))
                 
                 r_n = r_n2
                 for n in reversed(xrange(n1 + 1, n2)):
@@ -1006,13 +1009,13 @@ class evoMPS_TDVP_Generic:
                     
                 for s1 in xrange(self.q[n1]):
                     for t1 in xrange(self.q[n1]):
-                        matmul(r_n1, self.A[n1][t1], r_n, H(self.A[n1][s1]))
-                        matmul(tmp, self.l[n1 - 1], r_n1)
+                        m.matmul(r_n1, self.A[n1][t1], r_n, m.H(self.A[n1][s1]))
+                        m.matmul(tmp, self.l[n1 - 1], r_n1)
                         rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp.trace()
         return rho
     
     def SaveState(self, file):
-        save(file, self.A)
+        sp.save(file, self.A)
         
     def LoadState(self, file):
-        self.A = load(file)
+        self.A = sp.load(file)
