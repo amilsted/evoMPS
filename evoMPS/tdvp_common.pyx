@@ -23,7 +23,7 @@ def calc_C(np.ndarray[DTYPE_t, ndim=3] A1 not None,
     
     assert pc.PyCapsule_CheckExact(h_nn_cptr)
     
-    cdef h_nn_func h_nn = <h_nn_func>pc.PyCapsule_GetPointer(h_nn_cptr, NULL)
+    cdef h_nn_func h_nn = <h_nn_func>pc.PyCapsule_GetPointer(h_nn_cptr, 'h_nn')
     
     cdef int q1 = A1.shape[0]
     cdef int q2 = A2.shape[0]
