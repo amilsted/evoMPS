@@ -15,8 +15,6 @@ TODO:
        4. Apply B (take step)
     - Also, find out what happens in theory when this is *not* done...
       Should cause the gauge choice to drift... right?
-    
-    - Remove silly threading attempt?
 
 """
 import scipy as sp
@@ -24,59 +22,82 @@ import scipy.linalg as la
 import scipy.sparse.linalg as las
 import nullspace as ns
 import matmul as m
+
+import pyximport; pyximport.install()
 import tdvp_common as tc
 
-def myMVop(opData, x):
-    l = opData[0]
-    r = opData[1]
-    A = opData[2]
-    
-    opres = sp.zeros_like(A[0])
-    for s in xrange(A.shape[0]):
-        opres += m.matmul(None, A[s], x, m.H(A[s]))
-        
-    return x - opres  + r * sp.trace(sp.dot(l, x))
-
-def myVVop(a, b, out=None):
-    #return sp.trace(sp.dot(a, b))
-    if out is None:
-        #return sp.sum(sp.multiply(sp.conj(a), b))
+def adot(a, b, tmp=None):
+    """
+    Calculates the scalar product for the ancilla, expecting
+    the arguments in matrix form.
+    Equivalent to trace(dot(H(a), b))
+    """
+    if tmp is None:
         return sp.inner(a.ravel().conj(), b.ravel())
     else:
-        #return sp.sum(sp.multiply(sp.conj(a, out=out), b, out=out))
-        return sp.inner(sp.conj(a, out=out).ravel(), b.ravel())
+        return sp.inner(sp.conj(a, out=tmp).ravel(), b.ravel())
         
 #This class allows us to use scipy's bicgstab implementation
-class KsuperOP:
+class PPInv_op:
     l = None
     r = None
     A = None
+    p = 0
     
     shape = (0)
     
     dtype = None
     
-    def __init__(self, l, r, A):
-        self.l = l
-        self.r = r
-        self.A = A
+    def __init__(self, tdvp, p=0):
+        self.l = tdvp.l
+        self.r = tdvp.r
+        self.A = tdvp.A
+        self.p = 0
         
-        self.D = self.l.shape[0]
+        self.D = tdvp.D
         
         self.shape = (self.D**2, self.D**2)
         
-        self.dtype = A.dtype
+        self.dtype = self.A.dtype
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        opres = sp.zeros_like(self.A[0])
+        Ex = sp.zeros_like(self.A[0])
         for s in xrange(self.A.shape[0]):
-            opres += m.matmul(None, self.A[s], x, m.H(self.A[s]))
+            Ex += m.matmul(None, self.A[s], x, m.H(self.A[s]))
             
-        opres = x - opres  + self.r * sp.sum(sp.multiply(self.l.conj(), x))
+        QEQ = Ex - self.r * adot(self.l, x)
+        
+        if not self.p == 0:
+            QEQ *= sp.exp(1.j * self.p)
+        
+        res = x - QEQ
             
-        return opres.reshape((self.D**2))
+        return res.reshape((self.D**2))
+
+class H_tangeant_op:
+    tdvp = None
+    ppinvop = None
+    p = 0
+    B1 = None
+    
+    def __init__(self, tdvp, p):
+        self.tdvp = tdvp
+        self.p = p
+        self.ppinvop = PPInv_op(tdvp, p)
+        
+        self.B1 = tdvp.B_from_x(sp.ones((self.tdvp.D, self.tdvp.D * 
+                                        (self.tdvp.q))), 
+                                        self.tdvp.Vsh, self.tdvp.l_sqrt_i, 
+                                        self.tdvp.r_sqrt_i)
+        
+    def matvec(self, v):
+        x = v.reshape((self.tdvp.D, self.tdvp.D * (self.tdvp.q)))
+        
+        B2 = self.tdvp.B_from_x(x, self.tdvp.Vsh, self.tdvp.l_sqrt_i, 
+                                        self.tdvp.r_sqrt_i)
+        
         
         
 class evoMPS_TDVP_Uniform:
@@ -90,7 +111,7 @@ class evoMPS_TDVP_Uniform:
     h_nn = None    
     h_nn_cptr = None
     
-    symm_gauge = True
+    symm_gauge = False
     
     sanity_checks = False
     check_fac = 50
@@ -125,7 +146,7 @@ class evoMPS_TDVP_Uniform:
         
         self.tmp = sp.empty_like(self.A[0])
            
-    def EpsR(self, x, op=None, out=None):
+    def EpsR(self, x, A1=None, A2=None, op=None, out=None):
         """Implements the right epsilon map
         
         FIXME: Ref.
@@ -149,14 +170,19 @@ class evoMPS_TDVP_Uniform:
         else:
             out.fill(0.)
             
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+            
         if op is None:
             for s in xrange(self.q):
-                out += m.matmul(self.tmp, self.A[s], x, m.H(self.A[s]))
+                out += m.matmul(self.tmp, A1[s], x, m.H(A2[s]))
         else:
             for (s, t) in sp.ndindex(self.q, self.q):
                 o_st = op(s, t)
                 if o_st != 0.:
-                    m.matmul(self.tmp, self.A[t], x, m.H(self.A[s]))
+                    m.matmul(self.tmp, A1[t], x, m.H(A2[s]))
                     self.tmp *= o_st
                     out += self.tmp
         return out
@@ -171,6 +197,29 @@ class evoMPS_TDVP_Uniform:
             out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])        
             
         return out
+        
+    def EpsR_2(self, x, op, A1=None, A2=None, A3=None, A4=None):
+        AAuvH = sp.empty_like(self.A[0])
+        res = sp.zeros_like(self.r)
+        
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+        if A3 is None:
+            A3 = self.A
+        if A4 is None:
+            A4 = self.A
+        
+        for u in xrange(self.q):
+            for v in xrange(self.q):
+                m.matmul(AAuvH, A3[u], A4[v])
+                AAuvH = m.H(AAuvH, out=AAuvH)
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        res += op(u, v, s, t) * m.matmul(None, A1[s], 
+                                                         A2[t], x, AAuvH)
+        return res
 
     def _Calc_lr_brute(self):
         E = sp.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
@@ -187,7 +236,7 @@ class evoMPS_TDVP_Uniform:
         self.l = eVL[:,i].reshape((self.D, self.D))
         self.r = eVR[:,i].reshape((self.D, self.D))
         
-        norm = myVVop(self.l, self.r, out=self.tmp)
+        norm = adot(self.l, self.r, tmp=self.tmp)
         self.l *= 1 / sp.sqrt(norm)
         self.r *= 1 / sp.sqrt(norm)        
         
@@ -222,26 +271,35 @@ class evoMPS_TDVP_Uniform:
         self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
                                                 rtol=self.itr_rtol, 
                                                 atol=self.itr_atol)
-                    
         #normalize eigenvectors:
-        #norm = sp.sum(sp.multiply(self.l.conj(), self.r, out=tmp))
-        norm = myVVop(self.l, self.r, out=tmp)
-        itr = 0
-        while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 20:
-            self.l *= 1 / sp.sqrt(norm)
-            self.r *= 1 / sp.sqrt(norm)
-            
-            norm = myVVop(self.l, self.r, out=tmp)
-            
-            itr += 1
-            
-        if itr == 20:
-            print "Warning: Max. iterations reached during normalization!"
-        
-        if force_r_CF or not self.symm_gauge: #right to do this every time?
+
+        if self.symm_gauge and not force_r_CF:
+            norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+            itr = 0 
+            while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
+                self.l *= 1 / sp.sqrt(norm)
+                self.r *= 1 / sp.sqrt(norm)
+                
+                norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+                
+                itr += 1
+                
+            if itr == 10:
+                print "Warning: Max. iterations reached during normalization!"
+        else:
             fac = self.D / sp.trace(self.r)
             self.l *= 1 / fac
             self.r *= fac
+
+            norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+            itr = 0 
+            while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
+                self.l *= 1 / norm
+                norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+                itr += 1
+                
+            if itr == 10:
+                print "Warning: Max. iterations reached during normalization!"
 
         if self.sanity_checks:
             if not sp.allclose(self.EpsL(self.l), self.l,
@@ -272,56 +330,94 @@ class evoMPS_TDVP_Uniform:
             if not sp.all(la.eigvalsh(self.r) > 0):
                 print "Sanity check failed: r is not pos. def.!"
             
-            norm = myVVop(self.l, self.r, out=tmp)
+            norm = adot(self.l, self.r, tmp=tmp)
             if not sp.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
-    def Restore_CF(self, force_r_CF=False):      
-        M = sp.zeros_like(self.r)
-        for s in xrange(self.q):
-            M += m.matmul(None, self.A[s], m.H(self.A[s]))
+    def Restore_SCF(self):
+        X = la.cholesky(self.l, lower=True)
+        Y = la.cholesky(self.l, lower=False)
         
-        G = m.H(la.cholesky(self.r))
-        G_i = m.invtr(G, lower=True)
+        U, s, Vh = la.svd(sp.dot(Y, X))
+        
+        S = la.diagsvd(s, self.D, self.D)
+        Srt = la.diagsvd(sp.sqrt(s), self.D, self.D)
+        
+        g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
+        
+        g_i = m.matmul(None, m.invtr(Y, lower=False), U, Srt)
         
         for s in xrange(self.q):
-            m.matmul(self.A[s], G_i, self.A[s], G)
+            m.matmul(self.A[s], g, self.A[s], g_i)
+                
+        if self.sanity_checks:
+            l = m.matmul(None, m.H(g_i), self.l, g_i)
+            r = m.matmul(None, g, self.l, m.H(g))
             
-        m.matmul(self.l, m.H(G), self.l, G)
-        self.r[:] = sp.eye(self.D)
+            if not sp.allclose(S, l):
+                print "Sanity check failed: Restorce_SCF, left failed!"
+                
+            if not sp.allclose(S, r):
+                print "Sanity check failed: Restorce_SCF, right failed!"
+
+        self.l[:] = S
+        self.r[:] = self.l
+        
+        self.Calc_lr()
+    
+    def RCF_to_SCF(self):
+        sqrt_l = m.sqrtmh(self.l)
+
+        G = m.sqrtmh(sqrt_l)
+        G_i = la.inv(G)
+        
+        if self.sanity_checks and not sp.allclose(
+            m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)):
+                print "Sanity check failed: 4th root of l is bad!"
+        
+        for s in xrange(self.q):
+            m.matmul(self.A[s], G, self.A[s], G_i)
             
-        self.Calc_lr(force_r_CF=True)
+        self.l[:] = sqrt_l
+        self.r[:] = self.l
+        
+        self.Calc_lr()
         
         if self.sanity_checks:
-            M.fill(0)
-            for s in xrange(self.q):
-                M += m.matmul(None, self.A[s], m.H(self.A[s]))            
-                
-            if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r,
-            sp.eye(self.D)):
-                print "Sanity check failed: Could not achieve R-CF."
-
-        if self.symm_gauge and not force_r_CF:
-            sqrt_l = m.sqrtmh(self.l)
+            if not sp.allclose(self.l, self.r):
+                print "Sanity check failed: Could not achieve S-CF."        
     
-            G = m.sqrtmh(sqrt_l)
-            G_i = la.inv(G)
+    def Restore_CF(self, force_r_CF=False):
+        if self.symm_gauge and not force_r_CF:
+            self.Restore_SCF()
+        else:
+            M = sp.zeros_like(self.r)
+            for s in xrange(self.q):
+                M += m.matmul(None, self.A[s], m.H(self.A[s]))
             
-            if self.sanity_checks and not sp.allclose(
-                m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)):
-                    print "Sanity check failed: 4th root of l is bad!"
+            G = m.H(la.cholesky(self.r))
+            G_i = m.invtr(G, lower=True)
             
             for s in xrange(self.q):
-                m.matmul(self.A[s], G, self.A[s], G_i)
+                m.matmul(self.A[s], G_i, self.A[s], G)
                 
-            self.l[:] = sqrt_l
-            self.r[:] = self.l
-            
-            self.Calc_lr()
+            m.matmul(self.l, m.H(G), self.l, G)
+            self.r[:] = sp.eye(self.D) #this will be corrected in Calc_lr if needed
+            #m.matmul(self.r, G_i, self.r, m.H(G_i))
+                
+            self.Calc_lr(force_r_CF=True)
             
             if self.sanity_checks:
-                if not sp.allclose(self.l, self.r):
-                    print "Sanity check failed: Could not achieve S-CF."
+                M.fill(0)
+                for s in xrange(self.q):
+                    M += m.matmul(None, self.A[s], m.H(self.A[s]))            
+                    
+                if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r,
+                sp.eye(self.D)):
+                    print "Sanity check failed: Could not achieve R-CF."
+
+#        if self.symm_gauge and not force_r_CF:
+#            self.RCF_to_SCF()
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
@@ -331,44 +427,52 @@ class evoMPS_TDVP_Uniform:
             
             AA = sp.empty_like(self.A[0])
             
-            for (u, v) in sp.ndindex(self.q, self.q):
-                m.matmul(AA, self.A[u], self.A[v])
-                for (s, t) in sp.ndindex(self.q, self.q):
-                    h = self.h_nn(s, t, u, v) #for large q, this executes a lot..
-                    if h != 0:
-                        self.C[s, t] += h * AA
+            for u in xrange(self.q): #ndindex is just too slow..
+                for v in xrange(self.q):
+                    m.matmul(AA, self.A[u], self.A[v])
+                    for s in xrange(self.q):
+                        for t in xrange(self.q):
+                            h = self.h_nn(s, t, u, v) #for large q, this executes a lot..
+                            if h != 0:
+                                self.C[s, t] += h * AA
     
-    def Calc_K(self):
-        Hr = sp.zeros_like(self.A[0])
+    def Calc_PPinv(self, x, p=0, out=None):
+        op = PPInv_op(self, p)
         
-        for (s, t) in sp.ndindex(self.q, self.q):
-            Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), 
-                           m.H(self.A[s]))
+        res = out.reshape((self.D**2))
+        x = x.reshape((self.D**2))
         
-        self.h = myVVop(self.l, Hr, out=self.tmp)
-        
-        QHr = Hr - self.r * self.h
-        
-        op = KsuperOP(self.l, self.r, self.A)
-        
-        self.K = self.K.reshape((self.D**2))
-        QHr = QHr.reshape((self.D**2))
-        
-        self.K, info = las.bicgstab(op, QHr, x0=self.K, maxiter=1000, 
+        res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
                                     tol=self.itr_rtol)
         
         if info > 0:
-            print "Warning: Did not converge on solution for K!"
+            print "Warning: Did not converge on solution for ppinv!"
         
         #Test
         if self.sanity_checks:
-            RHS_test = op.matvec(self.K)
-            if not sp.allclose(RHS_test, QHr, rtol=self.itr_rtol*self.check_fac,
+            RHS_test = op.matvec(res)
+            if not sp.allclose(RHS_test, x, rtol=self.itr_rtol*self.check_fac,
                                 atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Bad K solution! Off by: " + str(
-                        la.norm(RHS_test - QHr))
+                print "Sanity check failed: Bad ppinv solution! Off by: " + str(
+                        la.norm(RHS_test - x))
         
-        self.K = self.K.reshape((self.D, self.D))
+        out[:] = res.reshape((self.D, self.D))
+        
+        return out
+        
+    def Calc_K(self):
+        Hr = sp.zeros_like(self.A[0])
+        
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), 
+                               m.H(self.A[s]))
+        
+        self.h = adot(self.l, Hr, tmp=self.tmp)
+        
+        QHr = Hr - self.r * self.h
+        
+        self.Calc_PPinv(QHr, out=self.K)
             
     def Calc_Vsh(self, r_sqrt):
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
@@ -433,32 +537,32 @@ class evoMPS_TDVP_Uniform:
     def Calc_B(self):
         #print "sqrts and inverses start"
         l_sqrt = m.sqrtmh(self.l)
-        l_sqrt_i = la.inv(l_sqrt)
+        self.l_sqrt_i = la.inv(l_sqrt)
         r_sqrt = m.sqrtmh(self.r)
-        r_sqrt_i = la.inv(r_sqrt)
+        self.r_sqrt_i = la.inv(r_sqrt)
         #print "sqrts and inverses stop"
         
         if self.sanity_checks:
             if not sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l):
                 print "Sanity check failed: l_sqrt is bad!"
-            if not sp.allclose(sp.dot(l_sqrt, l_sqrt_i), sp.eye(self.D)):
+            if not sp.allclose(sp.dot(l_sqrt, self.l_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
             if not sp.allclose(sp.dot(r_sqrt, r_sqrt), self.r):
                 print "Sanity check failed: l_sqrt is bad!"
-            if not sp.allclose(sp.dot(r_sqrt, r_sqrt_i), sp.eye(self.D)):
+            if not sp.allclose(sp.dot(r_sqrt, self.r_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
                 
         #print "Vsh start"
-        Vsh = self.Calc_Vsh(r_sqrt)
+        self.Vsh = self.Calc_Vsh(r_sqrt)
         #print "Vsh stop"
         
         #print "x start"
-        x = self.Calc_x(l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh)
+        x = self.Calc_x(l_sqrt, self.l_sqrt_i, r_sqrt, self.r_sqrt_i, self.Vsh)
         #print "x stop"
         
-        self.eta = sp.sqrt(myVVop(x, x))
+        self.eta = sp.sqrt(adot(x, x))
 
-        return self.B_from_x(x, Vsh, l_sqrt_i, r_sqrt_i)
+        return self.B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
     def TakeStep(self, dtau, B=None):
         
@@ -479,25 +583,18 @@ class evoMPS_TDVP_Uniform:
     def Expect_SS(self, op):
         Or = self.EpsR(self.r, op=op)
         
-        return myVVop(self.l, Or)
+        return adot(self.l, Or)
             
     def Expect_2S(self, op):
-        AAuv = sp.empty_like(self.A[0])
-        res = sp.zeros_like(self.r)
+        res = self.EpsR_2(self.r, op)
         
-        for (u, v) in sp.ndindex(self.q, self.q):
-            m.matmul(AAuv, self.A[u], self.A[v])
-            for (s, t) in sp.ndindex(self.q, self.q):
-                res += op(u, v, s, t) * m.matmul(None, self.A[s], self.A[t], 
-                                                       self.r, m.H(AAuv))
-        
-        return myVVop(self.l, res)
+        return adot(self.l, res)
         
     def Density_SS(self):
         rho = sp.empty((self.q, self.q), dtype=self.typ)
         for (s, t) in sp.ndindex(self.q, self.q):
             m.matmul(self.tmp, self.A[t], self.r, m.H(self.A[s]))
-            rho[s, t] = myVVop(self.l, self.tmp)
+            rho[s, t] = adot(self.l, self.tmp)
         return rho
             
     def SaveState(self, file):
