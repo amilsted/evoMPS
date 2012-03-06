@@ -274,13 +274,13 @@ class evoMPS_TDVP_Uniform:
         #normalize eigenvectors:
 
         if self.symm_gauge and not force_r_CF:
-            norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+            norm = adot(self.l, self.r, tmp=tmp).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
                 self.l *= 1 / sp.sqrt(norm)
                 self.r *= 1 / sp.sqrt(norm)
                 
-                norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+                norm = adot(self.l, self.r, tmp=tmp).real
                 
                 itr += 1
                 
@@ -291,11 +291,11 @@ class evoMPS_TDVP_Uniform:
             self.l *= 1 / fac
             self.r *= fac
 
-            norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+            norm = adot(self.l, self.r, tmp=tmp).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
                 self.l *= 1 / norm
-                norm = sp.real_if_close(adot(self.l, self.r, tmp=tmp))
+                norm = adot(self.l, self.r, tmp=tmp).real
                 itr += 1
                 
             if itr == 10:
