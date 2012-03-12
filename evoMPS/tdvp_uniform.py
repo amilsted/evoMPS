@@ -39,6 +39,7 @@ def adot(a, b, tmp=None):
         
 #This class allows us to use scipy's bicgstab implementation
 class PPInv_op:
+    tdvp = None
     l = None
     r = None
     A = None
@@ -49,23 +50,21 @@ class PPInv_op:
     dtype = None
     
     def __init__(self, tdvp, p=0):
+        self.tdvp = tdvp
         self.l = tdvp.l
         self.r = tdvp.r
-        self.A = tdvp.A
         self.p = 0
         
         self.D = tdvp.D
         
         self.shape = (self.D**2, self.D**2)
         
-        self.dtype = self.A.dtype
+        self.dtype = tdvp.typ
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        Ex = sp.zeros_like(self.A[0])
-        for s in xrange(self.A.shape[0]):
-            Ex += m.matmul(None, self.A[s], x, m.H(self.A[s]))
+        Ex = self.tdvp.EpsR(x)
             
         QEQ = Ex - self.r * adot(self.l, x)
         
@@ -80,25 +79,19 @@ class H_tangeant_op:
     tdvp = None
     ppinvop = None
     p = 0
-    B1 = None
     
     def __init__(self, tdvp, p):
         self.tdvp = tdvp
         self.p = p
         self.ppinvop = PPInv_op(tdvp, p)
         
-        self.B1 = tdvp.B_from_x(sp.ones((self.tdvp.D, self.tdvp.D * 
-                                        (self.tdvp.q))), 
-                                        self.tdvp.Vsh, self.tdvp.l_sqrt_i, 
-                                        self.tdvp.r_sqrt_i)
+        self.shape = (tdvp.D**2, tdvp.D**2)
+        self.dtype = tdvp.typ        
         
     def matvec(self, v):
         x = v.reshape((self.tdvp.D, self.tdvp.D * (self.tdvp.q)))
         
-        B2 = self.tdvp.B_from_x(x, self.tdvp.Vsh, self.tdvp.l_sqrt_i, 
-                                        self.tdvp.r_sqrt_i)
-        
-        
+        self.tdvp.Calc_BHB(x)                
         
 class evoMPS_TDVP_Uniform:
     odr = 'C'
@@ -536,28 +529,29 @@ class evoMPS_TDVP_Uniform:
         
     def Calc_B(self):
         #print "sqrts and inverses start"
-        l_sqrt = m.sqrtmh(self.l)
-        self.l_sqrt_i = la.inv(l_sqrt)
-        r_sqrt = m.sqrtmh(self.r)
-        self.r_sqrt_i = la.inv(r_sqrt)
+        self.l_sqrt = m.sqrtmh(self.l)
+        self.l_sqrt_i = la.inv(self.l_sqrt)
+        self.r_sqrt = m.sqrtmh(self.r)
+        self.r_sqrt_i = la.inv(self.r_sqrt)
         #print "sqrts and inverses stop"
         
         if self.sanity_checks:
-            if not sp.allclose(sp.dot(l_sqrt, l_sqrt), self.l):
+            if not sp.allclose(sp.dot(self.l_sqrt, self.l_sqrt), self.l):
                 print "Sanity check failed: l_sqrt is bad!"
-            if not sp.allclose(sp.dot(l_sqrt, self.l_sqrt_i), sp.eye(self.D)):
+            if not sp.allclose(sp.dot(self.l_sqrt, self.l_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
-            if not sp.allclose(sp.dot(r_sqrt, r_sqrt), self.r):
+            if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt), self.r):
                 print "Sanity check failed: l_sqrt is bad!"
-            if not sp.allclose(sp.dot(r_sqrt, self.r_sqrt_i), sp.eye(self.D)):
+            if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
                 
         #print "Vsh start"
-        self.Vsh = self.Calc_Vsh(r_sqrt)
+        self.Vsh = self.Calc_Vsh(self.r_sqrt)
         #print "Vsh stop"
         
         #print "x start"
-        x = self.Calc_x(l_sqrt, self.l_sqrt_i, r_sqrt, self.r_sqrt_i, self.Vsh)
+        x = self.Calc_x(self.l_sqrt, self.l_sqrt_i, self.r_sqrt, 
+                        self.r_sqrt_i, self.Vsh)
         #print "x stop"
         
         self.eta = sp.sqrt(adot(x, x))
@@ -579,6 +573,91 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
+            
+    def Calc_BHB(self, x):
+        B = self.B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
+        
+        rVsh = self.Vsh.copy()
+        for s in xrange(self.q):
+            rVsh[s] = sp.dot(self.r_sqrt_i, rVsh[s])
+        
+        res = sp.dot(self.l_sqrt, 
+                     self.EpsR_2(self.r, op=self.h_nn, A1=B, A3=rVsh))
+        
+        return None
+            
+    def Find_min_h(self, B, dtau_init):
+        dtau = dtau_init
+        d = 1.0
+        dh_dtau = 0
+        
+        tol = 5E-5
+        
+        tau = dtau
+        
+        h_min = self.h
+        A_min = self.A.copy()
+        
+        while abs(dtau) > tol:            
+            for s in xrange(self.q):
+                self.A[s] = A_min[s] -d * dtau * B[s]
+                
+            self.Calc_lr()
+            #self.Restore_CF()
+            self.Calc_C()
+            
+            self.h = self.Expect_2S(self.h_nn)
+            
+            dh_dtau = d * (self.h - h_min) / dtau
+            
+            print (tau, d * dtau, self.h.real, self.h.real - h_min.real,
+                   dh_dtau.real)
+            
+            if self.h.real < h_min.real:
+                h_min = self.h
+                A_min = self.A.copy()
+                
+                dtau = min(dtau * 1.1, dtau_init * 10)
+                
+                if tau + d * dtau > 0:
+                    tau += d * dtau
+                else:
+                    d = -1.0
+                    dtau = tau
+            else:
+                d *= -1.0
+                dtau = dtau / 2.0
+                
+                if tau + d * dtau < 0:
+                    dtau = tau #only happens if dtau is -ive
+                
+        self.A[:] = A_min
+        self.h = h_min
+        
+        print tau
+        
+        return tau
+
+    def Takestep_CG(self, B_CG_0, eta_0, dtau_init):
+        #self.Calc_lr()
+        #self.Calc_C()
+        #self.Calc_K()
+        
+        B = self.Calc_B()
+        eta = self.eta
+        
+        beta = eta**2 / eta_0**2
+        
+        print "Beta = " + str(beta)
+        
+        beta = min(0, beta)
+        
+        B_CG = B + beta * B_CG_0
+        
+        dist = self.Find_min_h(B_CG, dtau_init)
+        
+        return B_CG, eta, dist
+        
             
     def Expect_SS(self, op):
         Or = self.EpsR(self.r, op=op)
