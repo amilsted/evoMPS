@@ -123,7 +123,10 @@ class evoMPS_TDVP_Uniform:
         #for s in xrange(q):
         #    self.A[s] = sp.eye(D)
             
-        m.randomize_cmplx(self.A)         
+        self.Randomize()
+
+    def Randomize(self):
+        m.randomize_cmplx(self.A)
     
     def _init_arrays(self, D, q):
         self.D = D
