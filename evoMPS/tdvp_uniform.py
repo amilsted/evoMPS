@@ -20,6 +20,7 @@ TODO:
 import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
+import scipy.optimize as op
 import nullspace as ns
 import matmul as m
 
@@ -108,6 +109,8 @@ class evoMPS_TDVP_Uniform:
     
     sanity_checks = False
     check_fac = 50
+    
+    userdata = None
     
     def __init__(self, D, q):
         self.eps = sp.finfo(self.typ).eps
@@ -550,13 +553,13 @@ class evoMPS_TDVP_Uniform:
         #print "Vsh stop"
         
         #print "x start"
-        x = self.Calc_x(self.l_sqrt, self.l_sqrt_i, self.r_sqrt, 
+        self.x = self.Calc_x(self.l_sqrt, self.l_sqrt_i, self.r_sqrt, 
                         self.r_sqrt_i, self.Vsh)
         #print "x stop"
         
-        self.eta = sp.sqrt(adot(x, x))
+        self.eta = sp.sqrt(adot(self.x, self.x))
 
-        return self.B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
+        return self.B_from_x(self.x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
     def TakeStep(self, dtau, B=None):
         
@@ -591,20 +594,25 @@ class evoMPS_TDVP_Uniform:
         d = 1.0
         dh_dtau = 0
         
-        tol = 5E-5
+        tol = 1E-2
         
-        tau = dtau
+        tau = 0
         
         h_min = self.h
         A_min = self.A.copy()
+        l_min = self.l.copy()
+        r_min = self.r.copy()
         
-        while abs(dtau) > tol:            
+        itr = 0
+        while itr < 30 and (abs(dtau) > tol or tau == 0):
+            itr += 1
             for s in xrange(self.q):
                 self.A[s] = A_min[s] -d * dtau * B[s]
                 
+            self.l[:] = l_min
+            self.r[:] = r_min
+            
             self.Calc_lr()
-            #self.Restore_CF()
-            self.Calc_C()
             
             self.h = self.Expect_2S(self.h_nn)
             
@@ -614,49 +622,95 @@ class evoMPS_TDVP_Uniform:
                    dh_dtau.real)
             
             if self.h.real < h_min.real:
+                self.Restore_CF()
                 h_min = self.h
                 A_min = self.A.copy()
+                l_min = self.l.copy()
+                r_min = self.r.copy()
                 
                 dtau = min(dtau * 1.1, dtau_init * 10)
                 
-                if tau + d * dtau > 0:
-                    tau += d * dtau
-                else:
-                    d = -1.0
-                    dtau = tau
+#                if tau + d * dtau > 0:
+                tau += d * dtau
+#                else:
+#                    d = -1.0
+#                    dtau = tau
             else:
                 d *= -1.0
                 dtau = dtau / 2.0
                 
-                if tau + d * dtau < 0:
-                    dtau = tau #only happens if dtau is -ive
+#                if tau + d * dtau < 0:
+#                    dtau = tau #only happens if dtau is -ive
                 
         self.A[:] = A_min
+        self.l[:] = l_min
+        self.r[:] = r_min
         self.h = h_min
         
         print tau
         
         return tau
+        
+    def Find_min_h_Brent(self, B, dtau_init):
+        def f(tau, *args):
+            for s in xrange(self.q):
+                self.A[s] = A0[s] - tau * B[s]
+            
+            self.Calc_lr()
+            
+            self.h = self.Expect_2S(self.h_nn)
+            
+            print (tau, self.h.real)
+            
+            res = self.h.real
+            
+            return res
+        
+        A0 = self.A.copy()
+        
+        try:
+            tau_opt = op.brent(f, 
+                               brack=(dtau_init * 0.5, dtau_init, dtau_init * 1.5), 
+                               tol=5E-2)
+        except ValueError:
+            print "Bracketing attempt failed..."
+            tau_opt = op.brent(f, 
+                               brack=(dtau_init * 0.5, dtau_init * 10.), 
+                               tol=5E-2)            
 
-    def Takestep_CG(self, B_CG_0, eta_0, dtau_init):
+        for s in xrange(self.q):
+            self.A[s] = A0[s] - tau_opt * B[s]
+            
+        return tau_opt
+
+    def Takestep_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False):
         #self.Calc_lr()
         #self.Calc_C()
         #self.Calc_K()
         
         B = self.Calc_B()
         eta = self.eta
+        x = self.x
         
-        beta = eta**2 / eta_0**2
+        xy = adot(x_0, x)
         
-        print "Beta = " + str(beta)
+        if reset:
+            beta = 0.
+            print "RESET"
+        else:
+            beta = (eta**2) / eta_0**2
+            betaPR = (eta**2 - xy) / eta_0**2
         
-        beta = min(0, beta)
+            print "BetaFR = " + str(beta)
+            print "BetaPR = " + str(betaPR)
+        
+            beta = max(0, beta.real)
         
         B_CG = B + beta * B_CG_0
         
-        dist = self.Find_min_h(B_CG, dtau_init)
+        dist = self.Find_min_h_Brent(B_CG, dtau_init)
         
-        return B_CG, eta, dist
+        return B_CG, x, eta, dist
         
             
     def Expect_SS(self, op):
@@ -676,12 +730,15 @@ class evoMPS_TDVP_Uniform:
             rho[s, t] = adot(self.l, self.tmp)
         return rho
             
-    def SaveState(self, file):
-        tosave = sp.empty((4), dtype=sp.ndarray)
+    def SaveState(self, file, userdata=None):
+        if userdata is None:
+            userdata = self.userdata
+        tosave = sp.empty((5), dtype=sp.ndarray)
         tosave[0] = self.A
         tosave[1] = self.l
         tosave[2] = self.r
         tosave[3] = self.K
+        tosave[4] = sp.asarray(userdata)
         sp.save(file, tosave)
         
     def LoadState(self, file, expand=False):
@@ -691,6 +748,8 @@ class evoMPS_TDVP_Uniform:
         newl = state[1]
         newr = state[2]
         newK = state[3]
+        if state.shape[0] > 4:
+            self.userdata = state[4]
         
         if (newA.shape == self.A.shape) and (newl.shape == self.l.shape) and (
         newr.shape == self.r.shape) and (newK.shape == self.K.shape):
@@ -699,11 +758,18 @@ class evoMPS_TDVP_Uniform:
             self.r[:] = newr
             self.K[:] = newK
             return True
-        elif expand and (len(newA.shape) == 2) and (newA.shape[0] == 
+        elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
         <= self.A.shape[1]):
-            D = newA.shape[1]
-            self.A[:, 0:D, 0:D] = newA #TODO: Change this...
+            newD = self.D
+            savedD = newA.shape[1]
+            self._init_arrays(savedD, self.q)
+            self.A[:] = newA
+            self.l[:] = newl
+            self.r[:] = newr
+            self.K[:] = newK
+            self.Expand_D(newD)
+            print "EXPANDED"
         else:
             return False
             
