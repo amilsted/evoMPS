@@ -125,8 +125,8 @@ class evoMPS_TDVP_Uniform:
             
         self.Randomize()
 
-    def Randomize(self):
-        m.randomize_cmplx(self.A)
+    def Randomize(self, fac=0.5):
+        m.randomize_cmplx(self.A, a=-fac, b=fac)
     
     def _init_arrays(self, D, q):
         self.D = D
@@ -561,13 +561,8 @@ class evoMPS_TDVP_Uniform:
         #print "x stop"
         
         self.eta = sp.sqrt(adot(self.x, self.x))
-
-        return self.B_from_x(self.x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
-    def TakeStep(self, dtau, B=None):
-        
-        if B is None:
-            B = self.Calc_B()
+        B = self.B_from_x(self.x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
         if self.sanity_checks:
             #Test gauge-fixing:
@@ -576,6 +571,12 @@ class evoMPS_TDVP_Uniform:
                 tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
             if not sp.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
+
+        return B
+        
+    def TakeStep(self, dtau, B=None):
+        if B is None:
+            B = self.Calc_B()
         
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
@@ -656,20 +657,30 @@ class evoMPS_TDVP_Uniform:
         
     def Find_min_h_Brent(self, B, dtau_init):
         def f(tau, *args):
-            for s in xrange(self.q):
-                self.A[s] = A0[s] - tau * B[s]
-            
-            self.Calc_lr()
-            
-            self.h = self.Expect_2S(self.h_nn)
-            
-            print (tau, self.h.real)
-            
-            res = self.h.real
-            
-            return res
+            try:
+                i = taus.index(tau)
+                return hs[i]
+            except ValueError:
+                for s in xrange(self.q):
+                    self.A[s] = A0[s] - tau * B[s]
+                
+                self.Calc_lr()
+                
+                self.h = self.Expect_2S(self.h_nn)
+                
+                print (tau, self.h.real)
+                
+                res = self.h.real
+                
+                taus.append(tau)
+                hs.append(res)
+                
+                return res
         
         A0 = self.A.copy()
+        
+        taus = []
+        hs = []
         
         try:
             tau_opt = op.brent(f, 
@@ -678,15 +689,14 @@ class evoMPS_TDVP_Uniform:
         except ValueError:
             print "Bracketing attempt failed..."
             tau_opt = op.brent(f, 
-                               brack=(dtau_init * 0.5, dtau_init * 10.), 
+                               brack=(dtau_init * 0.5, dtau_init * 1.5), 
                                tol=5E-2)            
-
-        for s in xrange(self.q):
-            self.A[s] = A0[s] - tau_opt * B[s]
+        
+        self.A = A0
             
         return tau_opt
 
-    def Takestep_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False):
+    def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False):
         #self.Calc_lr()
         #self.Calc_C()
         #self.Calc_K()
@@ -695,25 +705,27 @@ class evoMPS_TDVP_Uniform:
         eta = self.eta
         x = self.x
         
-        xy = adot(x_0, x)
-        
         if reset:
             beta = 0.
             print "RESET"
+            
+            B_CG = B
         else:
             beta = (eta**2) / eta_0**2
-            betaPR = (eta**2 - xy) / eta_0**2
+            
+            #xy = adot(x_0, x)
+            #betaPR = (eta**2 - xy) / eta_0**2
         
             print "BetaFR = " + str(beta)
-            print "BetaPR = " + str(betaPR)
+            #print "BetaPR = " + str(betaPR)
         
             beta = max(0, beta.real)
         
-        B_CG = B + beta * B_CG_0
+            B_CG = B + beta * B_CG_0
         
-        dist = self.Find_min_h_Brent(B_CG, dtau_init)
+        tau = self.Find_min_h_Brent(B_CG, dtau_init)
         
-        return B_CG, x, eta, dist
+        return B_CG, B, x, eta, tau
         
             
     def Expect_SS(self, op):
