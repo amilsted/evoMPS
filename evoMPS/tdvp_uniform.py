@@ -593,14 +593,14 @@ class evoMPS_TDVP_Uniform:
         
         return None
             
-    def Find_min_h(self, B, dtau_init):
+    def Find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
         d = 1.0
-        dh_dtau = 0
+        #dh_dtau = 0
         
-        tol = 1E-2
+        tau_min = 0
         
-        tau = 0
+        A0 = self.A.copy()
         
         h_min = self.h
         A_min = self.A.copy()
@@ -608,11 +608,11 @@ class evoMPS_TDVP_Uniform:
         r_min = self.r.copy()
         
         itr = 0
-        while itr < 30 and (abs(dtau) > tol or tau == 0):
+        while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
             itr += 1
             for s in xrange(self.q):
                 self.A[s] = A_min[s] -d * dtau * B[s]
-                
+            
             self.l[:] = l_min
             self.r[:] = r_min
             
@@ -620,22 +620,21 @@ class evoMPS_TDVP_Uniform:
             
             self.h = self.Expect_2S(self.h_nn)
             
-            dh_dtau = d * (self.h - h_min) / dtau
+            #dh_dtau = d * (self.h - h_min) / dtau
             
-            print (tau, d * dtau, self.h.real, self.h.real - h_min.real,
-                   dh_dtau.real)
+            print (tau_min + dtau, self.h.real, tau_min)
             
             if self.h.real < h_min.real:
-                self.Restore_CF()
+                #self.Restore_CF()
                 h_min = self.h
-                A_min = self.A.copy()
-                l_min = self.l.copy()
-                r_min = self.r.copy()
+                A_min[:] = self.A
+                l_min[:] = self.l
+                r_min[:] = self.r
                 
                 dtau = min(dtau * 1.1, dtau_init * 10)
                 
 #                if tau + d * dtau > 0:
-                tau += d * dtau
+                tau_min += d * dtau
 #                else:
 #                    d = -1.0
 #                    dtau = tau
@@ -646,17 +645,16 @@ class evoMPS_TDVP_Uniform:
 #                if tau + d * dtau < 0:
 #                    dtau = tau #only happens if dtau is -ive
                 
-        self.A[:] = A_min
-        self.l[:] = l_min
-        self.r[:] = r_min
-        self.h = h_min
+        self.A = A0
         
-        print tau
+        return tau_min
         
-        return tau
-        
-    def Find_min_h_Brent(self, B, dtau_init):
+    def Find_min_h_Brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
+                         taus=[], hs=[], trybracket=True):
         def f(tau, *args):
+            if tau == 0:
+                return self.h.real
+                
             try:
                 i = taus.index(tau)
                 return hs[i]
@@ -666,11 +664,11 @@ class evoMPS_TDVP_Uniform:
                 
                 self.Calc_lr()
                 
-                self.h = self.Expect_2S(self.h_nn)
+                h = self.Expect_2S(self.h_nn)
                 
-                print (tau, self.h.real)
+                print (tau, h.real)
                 
-                res = self.h.real
+                res = h.real
                 
                 taus.append(tau)
                 hs.append(res)
@@ -679,24 +677,46 @@ class evoMPS_TDVP_Uniform:
         
         A0 = self.A.copy()
         
-        taus = []
-        hs = []
+        if skipIfLower:
+            if f(dtau_init) < self.h.real:
+                return dtau_init
         
+        fb_brack = (dtau_init * 0.8, dtau_init * 1.5)
+        if trybracket:
+            brack = (dtau_init * 0.1, dtau_init, dtau_init * 2.0)
+        else:
+            brack = fb_brack
+                
         try:
             tau_opt = op.brent(f, 
-                               brack=(dtau_init * 0.5, dtau_init, dtau_init * 1.5), 
-                               tol=5E-2)
+                               brack=brack, 
+                               tol=tol)
         except ValueError:
             print "Bracketing attempt failed..."
             tau_opt = op.brent(f, 
-                               brack=(dtau_init * 0.5, dtau_init * 1.5), 
-                               tol=5E-2)            
+                               brack=fb_brack, 
+                               tol=tol)            
         
         self.A = A0
-            
+        
         return tau_opt
+        
+    def Step_Reduces_h(self, B, dtau):
+        A0 = self.A.copy()
+        
+        for s in xrange(self.q):
+            self.A[s] = A0[s] - dtau * B[s]
+        
+        self.Calc_lr()
+        
+        h = self.Expect_2S(self.h_nn)
+        
+        self.A = A0
+        
+        return h.real < self.h.real, h
 
-    def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False):
+    def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False,
+                 skipIfLower=False, brent=True):
         #self.Calc_lr()
         #self.Calc_C()
         #self.Calc_K()
@@ -707,7 +727,7 @@ class evoMPS_TDVP_Uniform:
         
         if reset:
             beta = 0.
-            print "RESET"
+            print "RESET CG"
             
             B_CG = B
         else:
@@ -723,7 +743,27 @@ class evoMPS_TDVP_Uniform:
         
             B_CG = B + beta * B_CG_0
         
-        tau = self.Find_min_h_Brent(B_CG, dtau_init)
+        taus = []
+        hs = []
+        
+        if skipIfLower:
+            stepRedH, h = self.Step_Reduces_h(B_CG, dtau_init)
+            taus.append(dtau_init)
+            hs.append(h)
+        
+        if skipIfLower and stepRedH:
+            tau = self.Find_min_h(B_CG, dtau_init)
+        else:
+            if brent:
+                tau = self.Find_min_h_Brent(B_CG, dtau_init, taus=taus, hs=hs,
+                                            trybracket=False)
+            else:
+                tau = self.Find_min_h(B_CG, dtau_init)
+        
+        if tau < 0:
+            print "RESET due to negative dtau!"
+            B_CG = B
+            tau = self.Find_min_h_Brent(B_CG, dtau_init)
         
         return B_CG, B, x, eta, tau
         
