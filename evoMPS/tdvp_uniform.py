@@ -681,7 +681,7 @@ class evoMPS_TDVP_Uniform:
             if f(dtau_init) < self.h.real:
                 return dtau_init
         
-        fb_brack = (dtau_init * 0.8, dtau_init * 1.5)
+        fb_brack = (dtau_init * 0.9, dtau_init * 1.1)
         if trybracket:
             brack = (dtau_init * 0.1, dtau_init, dtau_init * 2.0)
         else:
