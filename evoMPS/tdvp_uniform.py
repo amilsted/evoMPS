@@ -276,8 +276,8 @@ class evoMPS_TDVP_Uniform:
             norm = adot(self.l, self.r, tmp=tmp).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
-                self.l *= 1 / sp.sqrt(norm)
-                self.r *= 1 / sp.sqrt(norm)
+                self.l *= 1. / sp.sqrt(norm)
+                self.r *= 1. / sp.sqrt(norm)
                 
                 norm = adot(self.l, self.r, tmp=tmp).real
                 
@@ -293,7 +293,7 @@ class evoMPS_TDVP_Uniform:
             norm = adot(self.l, self.r, tmp=tmp).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
-                self.l *= 1 / norm
+                self.l *= 1. / norm
                 norm = adot(self.l, self.r, tmp=tmp).real
                 itr += 1
                 
@@ -334,7 +334,7 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: Bad norm = " + str(norm)
     
     def Restore_SCF(self):
-        X = la.cholesky(self.l, lower=True)
+        X = la.cholesky(self.r, lower=True)
         Y = la.cholesky(self.l, lower=False)
         
         U, s, Vh = la.svd(sp.dot(Y, X))
@@ -350,19 +350,33 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.A[s], g, self.A[s], g_i)
                 
         if self.sanity_checks:
+            if not sp.allclose(sp.dot(g, g_i), sp.eye(self.D)):
+                print "Sanity check failed! Restore_SCF, bad GT!"
+            
             l = m.matmul(None, m.H(g_i), self.l, g_i)
-            r = m.matmul(None, g, self.l, m.H(g))
+            r = m.matmul(None, g, self.r, m.H(g))
             
             if not sp.allclose(S, l):
                 print "Sanity check failed: Restorce_SCF, left failed!"
                 
             if not sp.allclose(S, r):
                 print "Sanity check failed: Restorce_SCF, right failed!"
+                
+            l = self.EpsL(S)
+            r = self.EpsR(S)
+            
+            if not sp.allclose(S, l, rtol=self.itr_rtol*self.check_fac, 
+                               atol=self.itr_atol*self.check_fac):
+                print "Sanity check failed: Restorce_SCF, left bad!"
+                
+            if not sp.allclose(S, r, rtol=self.itr_rtol*self.check_fac, 
+                               atol=self.itr_atol*self.check_fac):
+                print "Sanity check failed: Restorce_SCF, right bad!"
 
         self.l[:] = S
-        self.r[:] = self.l
+        self.r[:] = S
         
-        self.Calc_lr()
+        #self.Calc_lr()
     
     def RCF_to_SCF(self):
         sqrt_l = m.sqrtmh(self.l)
@@ -394,26 +408,49 @@ class evoMPS_TDVP_Uniform:
             for s in xrange(self.q):
                 M += m.matmul(None, self.A[s], m.H(self.A[s]))
             
-            G = m.H(la.cholesky(self.r))
-            G_i = m.invtr(G, lower=True)
+            G = la.cholesky(self.r, lower=False)
+            G_i = m.invtr(G, lower=False)
             
             for s in xrange(self.q):
                 m.matmul(self.A[s], G_i, self.A[s], G)
-                
+
             m.matmul(self.l, m.H(G), self.l, G)
-            self.r[:] = sp.eye(self.D) #this will be corrected in Calc_lr if needed
-            #m.matmul(self.r, G_i, self.r, m.H(G_i))
+            #self.r[:] = sp.eye(self.D)
+            m.matmul(self.r, G_i, self.r, m.H(G_i))
                 
-            self.Calc_lr(force_r_CF=True)
+            #self.Calc_lr()
             
             if self.sanity_checks:
                 M.fill(0)
                 for s in xrange(self.q):
                     M += m.matmul(None, self.A[s], m.H(self.A[s]))            
                     
-                if not sp.allclose(M, sp.eye(M.shape[0])) or not sp.allclose(self.r,
-                sp.eye(self.D)):
-                    print "Sanity check failed: Could not achieve R-CF."
+                if not sp.allclose(M, self.r, 
+                                   rtol=self.itr_rtol*self.check_fac,
+                                   atol=self.itr_atol*self.check_fac):
+                    print "Sanity check failed: RestoreRCF, bad M."
+                    print "Off by: " + str(la.norm(M - self.r))
+                    
+                if not sp.allclose(self.r, sp.eye(self.D),
+                                   rtol=self.itr_rtol*self.check_fac,
+                                   atol=self.itr_atol*self.check_fac):
+                    print "Sanity check failed: r not identity."
+                    print "Off by: " + str(la.norm(sp.eye(self.D) - self.r))
+                
+                l = self.EpsL(self.l)
+                r = self.EpsR(self.r)
+                
+                if not sp.allclose(r, self.r,
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    print "Sanity check failed: Restore_RCF, bad r!"
+                    print "Off by: " + str(la.norm(r - self.r))
+
+                if not sp.allclose(l, self.l,
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    print "Sanity check failed: Restore_RCF, bad l!"
+                    print "Off by: " + str(la.norm(l - self.l))
 
 #        if self.symm_gauge and not force_r_CF:
 #            self.RCF_to_SCF()
@@ -533,12 +570,28 @@ class evoMPS_TDVP_Uniform:
             
         return out
         
-    def Calc_B(self):
+    def Calc_sqrts(self, assumeCF=False):
         #print "sqrts and inverses start"
-        self.l_sqrt = m.sqrtmh(self.l)
-        self.l_sqrt_i = la.inv(self.l_sqrt)
-        self.r_sqrt = m.sqrtmh(self.r)
-        self.r_sqrt_i = la.inv(self.r_sqrt)
+        if self.symm_gauge and assumeCF:
+            #If we just did Restore_SCF, then l=r is diagonal, real
+            sqrtd = sp.sqrt(self.l.diagonal())
+            self.l_sqrt = sp.diag(sqrtd)
+            self.l_sqrt_i = sp.diag(1. / sqrtd)
+        else:
+            #In RCF case we just know that l is hermitian and diagonalizable
+            self.l_sqrt, evd = m.sqrtmh(self.l, ret_evd=True)
+            self.l_sqrt_i = m.invmh(self.l_sqrt, evd=evd)
+            
+        if self.symm_gauge and assumeCF:
+            #r=l
+            self.r_sqrt = self.l_sqrt
+            self.r_sqrt_i = self.l_sqrt_i
+        elif assumeCF:
+            self.r_sqrt = sp.eye(self.D)
+            self.r_sqrt_i = self.r_sqrt
+        else:
+            self.r_sqrt, evd = m.sqrtmh(self.r, ret_evd=True)
+            self.r_sqrt_i = m.invmh(self.r_sqrt, evd=evd)
         #print "sqrts and inverses stop"
         
         if self.sanity_checks:
@@ -547,9 +600,12 @@ class evoMPS_TDVP_Uniform:
             if not sp.allclose(sp.dot(self.l_sqrt, self.l_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
             if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt), self.r):
-                print "Sanity check failed: l_sqrt is bad!"
+                print "Sanity check failed: r_sqrt is bad!"
             if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt_i), sp.eye(self.D)):
-                print "Sanity check failed: l_sqrt_i is bad!"
+                print "Sanity check failed: r_sqrt_i is bad!"
+        
+    def Calc_B(self, assumeCF=False):
+        self.Calc_sqrts(assumeCF=assumeCF)
                 
         #print "Vsh start"
         self.Vsh = self.Calc_Vsh(self.r_sqrt)
@@ -716,12 +772,12 @@ class evoMPS_TDVP_Uniform:
         return h.real < self.h.real, h
 
     def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False,
-                 skipIfLower=False, brent=True):
+                 skipIfLower=False, brent=True, assumeCF=False):
         #self.Calc_lr()
         #self.Calc_C()
         #self.Calc_K()
         
-        B = self.Calc_B()
+        B = self.Calc_B(assumeCF=assumeCF)
         eta = self.eta
         x = self.x
         

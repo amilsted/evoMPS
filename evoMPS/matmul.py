@@ -113,7 +113,7 @@ def randomize_cmplx(x, a=-0.5, b=0.5):
             (b - a) * sp.random.ranf(x.shape) + a)
     return x
     
-def sqrtmh(A, out=None):
+def sqrtmh(A, out=None, ret_evd=False, evd=None):
     """Return the matrix square root of a hermitian or symmetric matrix
 
     Uses scipy.linalg.eigh() to diagonalize the input efficiently.
@@ -121,30 +121,62 @@ def sqrtmh(A, out=None):
     Parameters
     ----------
     A : ndarray
-        A hermitian or symmetric two-dimensional square array (a matrix)
+        A hermitian or symmetric two-dimensional square array (a matrix).
+    evd : (ev, EV)
+        A tuple containing the 1D array of eigenvalues ev and the matrix of eigenvectors EV.
+    ret_evd : Boolean
+        Return the eigenvalue decomposition of the result.
 
     Returns
     -------
     sqrt_A : ndarray
         An array of the same shape and type as A containing the matrix square root of A.
+    (ev, EV) : (ndarray, ndarray)
+        A 1D array of eigenvalues and the matrix of eigenvectors.
         
     Notes
     -----
     The result is also Hermitian.
 
     """
-    ev, V = la.eigh(A) #uses LAPACK ***EVR
+    if not evd is None:
+        (ev, EV) = evd
+    else:
+        ev, EV = la.eigh(A) #uses LAPACK ***EVR
     
     ev = sp.sqrt(ev) #we don't require positive (semi) definiteness, so we need the scipy sqrt here
     
     #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(V)
     B = sp.empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
-    for i in xrange(V.shape[0]):
-        B[:,i] = V[i,:] * ev
+    for i in xrange(EV.shape[0]):
+        B[:,i] = EV[i,:] * ev
 
     sp.conjugate(B, B) #in-place conjugate
+    
+    if ret_evd:
+        return matmul(out, EV, B), (ev, EV)
+    else:
+        return matmul(out, EV, B)
+        
+def invmh(A, out=None, ret_evd=False, evd=None):
+    if not evd is None:
+        (ev, EV) = evd
+    else:
+        ev, EV = la.eigh(A)
+    
+    ev = 1. / ev
+    
+    #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(V)
+    B = sp.empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
+    for i in xrange(EV.shape[0]):
+        B[:,i] = EV[i,:] * ev
 
-    return matmul(out, V, B)
+    sp.conjugate(B, B) #in-place conjugate
+    
+    if ret_evd:
+        return matmul(out, EV, B), (ev, EV)
+    else:
+        return matmul(out, EV, B)   
     
 def sqrtmpo(A, out=None):
     """Return the matrix square root of a hermitian or symmetric positive definite matrix
