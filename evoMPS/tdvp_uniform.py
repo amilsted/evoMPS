@@ -18,6 +18,7 @@ TODO:
 
 """
 import scipy as sp
+import scipy.sparse as sps
 import scipy.linalg as la
 import scipy.sparse.linalg as las
 import scipy.optimize as op
@@ -133,6 +134,7 @@ class evoMPS_TDVP_Uniform:
         self.q = q
         
         self.A = sp.empty((q, D, D), dtype=self.typ, order=self.odr)
+        self.AA = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
         self.C = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
@@ -197,8 +199,12 @@ class evoMPS_TDVP_Uniform:
             
         return out
         
+    def Calc_AA(self):
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                m.matmul(self.AA[s, t], self.A[s], self.A[t])
+        
     def EpsR_2(self, x, op, A1=None, A2=None, A3=None, A4=None):
-        AAuvH = sp.empty_like(self.A[0])
         res = sp.zeros_like(self.r)
         
         if A1 is None:
@@ -209,15 +215,31 @@ class evoMPS_TDVP_Uniform:
             A3 = self.A
         if A4 is None:
             A4 = self.A
-        
-        for u in xrange(self.q):
-            for v in xrange(self.q):
-                m.matmul(AAuvH, A3[u], A4[v])
-                AAuvH = m.H(AAuvH, out=AAuvH)
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        res += op(u, v, s, t) * m.matmul(None, A1[s], 
-                                                         A2[t], x, AAuvH)
+            
+        if (A1 is self.A) and (A2 is self.A) and (A3 is self.A) and (A4 is self.A):
+            for u in xrange(self.q):
+                for v in xrange(self.q):
+                    subres = sp.zeros_like(self.r)
+                    for s in xrange(self.q):
+                        for t in xrange(self.q):
+                            opval = op(u, v, s, t)
+                            if opval != 0:
+                                subres += opval * self.AA[s, t]
+                    res += m.matmul(subres, subres, x, m.H(self.AA[u, v]))
+        else:
+            AAuvH = sp.empty_like(self.A[0])
+            for u in xrange(self.q):
+                for v in xrange(self.q):
+                    m.matmul(AAuvH, A3[u], A4[v])
+                    AAuvH = m.H(AAuvH, out=AAuvH)
+                    subres = sp.zeros_like(self.r)
+                    for s in xrange(self.q):
+                        for t in xrange(self.q):
+                            opval = op(u, v, s, t)
+                            if opval != 0:
+                                subres += opval * sp.dot(A1[s], A2[t])
+                    res += m.matmul(subres, subres, x, AAuvH)
+                    
         return res
 
     def _Calc_lr_brute(self):
@@ -342,6 +364,8 @@ class evoMPS_TDVP_Uniform:
         S = la.diagsvd(s, self.D, self.D)
         Srt = la.diagsvd(sp.sqrt(s), self.D, self.D)
         
+        #TODO: Optimize mult. with diagonal matrix!
+        
         g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
         
         g_i = m.matmul(None, m.invtr(Y, lower=False), U, Srt)
@@ -408,8 +432,8 @@ class evoMPS_TDVP_Uniform:
             for s in xrange(self.q):
                 M += m.matmul(None, self.A[s], m.H(self.A[s]))
             
-            G = la.cholesky(self.r, lower=False)
-            G_i = m.invtr(G, lower=False)
+            G = la.cholesky(self.r, lower=True)
+            G_i = m.invtr(G, lower=True)
             
             for s in xrange(self.q):
                 m.matmul(self.A[s], G_i, self.A[s], G)
@@ -417,8 +441,6 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.l, m.H(G), self.l, G)
             #self.r[:] = sp.eye(self.D)
             m.matmul(self.r, G_i, self.r, m.H(G_i))
-                
-            #self.Calc_lr()
             
             if self.sanity_checks:
                 M.fill(0)
@@ -457,20 +479,17 @@ class evoMPS_TDVP_Uniform:
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
-            self.C = tc.calc_C(self.A, self.A, self.h_nn_cptr, self.C)
+            self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
         else:
             self.C.fill(0)
             
-            AA = sp.empty_like(self.A[0])
-            
             for u in xrange(self.q): #ndindex is just too slow..
                 for v in xrange(self.q):
-                    m.matmul(AA, self.A[u], self.A[v])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             h = self.h_nn(s, t, u, v) #for large q, this executes a lot..
                             if h != 0:
-                                self.C[s, t] += h * AA
+                                self.C[s, t] += h * self.AA[u, v]
     
     def Calc_PPinv(self, x, p=0, out=None):
         op = PPInv_op(self, p)
@@ -501,8 +520,7 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             for t in xrange(self.q):
-                Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]), 
-                               m.H(self.A[s]))
+                Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.AA[s, t]))
         
         self.h = adot(self.l, Hr, tmp=self.tmp)
         
@@ -577,6 +595,9 @@ class evoMPS_TDVP_Uniform:
             sqrtd = sp.sqrt(self.l.diagonal())
             self.l_sqrt = sp.diag(sqrtd)
             self.l_sqrt_i = sp.diag(1. / sqrtd)
+            #It would be nice to be able to do this...
+            #self.l_sqrt = sps.dia_matrix((sqrtd, 0), shape=(self.D, self.D))
+            #self.l_sqrt_i = sps.dia_matrix((1. / sqrtd, 0), shape=(self.D, self.D))
         else:
             #In RCF case we just know that l is hermitian and diagonalizable
             self.l_sqrt, evd = m.sqrtmh(self.l, ret_evd=True)
@@ -630,9 +651,9 @@ class evoMPS_TDVP_Uniform:
 
         return B
         
-    def TakeStep(self, dtau, B=None):
+    def TakeStep(self, dtau, B=None, assumeCF=False):
         if B is None:
-            B = self.Calc_B()
+            B = self.Calc_B(assumeCF=assumeCF)
         
         for s in xrange(self.q):
             self.A[s] += -dtau * B[s]
@@ -673,6 +694,7 @@ class evoMPS_TDVP_Uniform:
             self.r[:] = r_min
             
             self.Calc_lr()
+            self.Calc_AA()
             
             self.h = self.Expect_2S(self.h_nn)
             
@@ -719,6 +741,7 @@ class evoMPS_TDVP_Uniform:
                     self.A[s] = A0[s] - tau * B[s]
                 
                 self.Calc_lr()
+                self.Calc_AA()
                 
                 h = self.Expect_2S(self.h_nn)
                 
@@ -746,12 +769,14 @@ class evoMPS_TDVP_Uniform:
         try:
             tau_opt = op.brent(f, 
                                brack=brack, 
-                               tol=tol)
+                               tol=tol,
+                               maxiter=20)
         except ValueError:
             print "Bracketing attempt failed..."
             tau_opt = op.brent(f, 
                                brack=fb_brack, 
-                               tol=tol)            
+                               tol=tol,
+                               maxiter=20)
         
         self.A = A0
         
@@ -773,10 +798,6 @@ class evoMPS_TDVP_Uniform:
 
     def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False,
                  skipIfLower=False, brent=True, assumeCF=False):
-        #self.Calc_lr()
-        #self.Calc_C()
-        #self.Calc_K()
-        
         B = self.Calc_B(assumeCF=assumeCF)
         eta = self.eta
         x = self.x

@@ -131,7 +131,7 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-10
+tol_im = 1E-11
 total_steps = 10000
 
 s.itr_atol = 1E-12
@@ -165,8 +165,8 @@ if load_state:
        loaded = False
 else:
     loaded = False
-
-tol_im = 1E-11
+    
+step = 0.1
 
 """
 Prepare some loop variables and some vectors to hold data from each step.
@@ -197,6 +197,8 @@ col_heads = ["Step", "t", "eta", "Restore CF?", "energy: h/J",
 print "\t".join(col_heads)
 print
 
+s.symm_gauge = True
+
 for i in xrange(total_steps):
     T[i] = t
     
@@ -207,7 +209,7 @@ for i in xrange(total_steps):
     
     s.Calc_lr()
 
-    restoreCF = (i % 4 == 0) #Restore canonical form every 16 steps.
+    restoreCF = True#(i % 4 == 0) #Restore canonical form every 16 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.Restore_CF()
@@ -216,7 +218,7 @@ for i in xrange(total_steps):
         row.append("No")    
     
     #print "Manual h = " + str(s.Expect_2S(h_nn))
-    
+    s.Calc_AA()
     s.Calc_C()    
     s.Calc_K()    
         
@@ -266,6 +268,7 @@ for i in xrange(total_steps):
             s.Expand_D(D)
             s.Calc_lr()
             s.Restore_CF() #this helps a lot
+            s.Calc_AA()
             s.Calc_C()
             s.Calc_K()
         
@@ -291,11 +294,11 @@ for i in xrange(total_steps):
     """
     if not real_time:
         print "\t".join(row)
-        s.TakeStep(step)     
+        s.TakeStep(step, assumeCF=restoreCF)     
         imsteps += 1
     else:
         print "\t".join(row)
-        s.TakeStep(step)
+        s.TakeStep(step, assumeCF=restoreCF)
     
     t += 1.j * sp.conj(step)
 

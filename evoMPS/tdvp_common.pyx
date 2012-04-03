@@ -10,45 +10,46 @@ import scipy as sp
 import numpy as np
 cimport numpy as np
 cimport cpython.pycapsule as pc
-#from cython.parallel import *
+from cython.parallel import prange
 
 ctypedef np.complex128_t DTYPE_t
 
-ctypedef DTYPE_t (*h_nn_func)(int s, int t, int u, int v)
+ctypedef DTYPE_t (*h_nn_func)(int s, int t, int u, int v) nogil
 
 @cy.boundscheck(False)
-def calc_C(np.ndarray[DTYPE_t, ndim=3] A1 not None,
-             np.ndarray[DTYPE_t, ndim=3] A2 not None,
+def calc_C(np.ndarray[DTYPE_t, ndim=4] AA not None,
              h_nn_cptr, np.ndarray[DTYPE_t, ndim=4] out):
     
     assert pc.PyCapsule_CheckExact(h_nn_cptr)
     
     cdef h_nn_func h_nn = <h_nn_func>pc.PyCapsule_GetPointer(h_nn_cptr, 'h_nn')
     
-    cdef int q1 = A1.shape[0]
-    cdef int q2 = A2.shape[0]
+    cdef int q1 = AA.shape[0]
+    cdef int q2 = AA.shape[1]
+    
+    cdef int D1 = AA.shape[2]
+    cdef int D2 = AA.shape[3]
     
     if out is None:
-        out = np.empty([q1, q2, A1.shape[1], A2.shape[2]], dtype=A1.dtype)
+        out = np.empty([q1, q2, AA.shape[2], AA.shape[3]], dtype=AA.dtype)
     else:
         assert out.shape[0] == q1 and out.shape[1] == q2
-        assert out.shape[2] == A1.shape[1] and out.shape[3] == A2.shape[2]
+        assert out.shape[2] == D1 and out.shape[3] == D2
         
     out.fill(0)
     
     cdef int s, t, u, v
     
-    cdef np.ndarray[DTYPE_t, ndim=2] AA = np.empty_like(out[0, 0])
-    
     cdef DTYPE_t h
     
-    for u in range(q1): #can't prange-parallelize this, because we call dot(), which is python
-        for v in range(q2):
-            np.dot(A1[u], A2[v], out=AA)
-            for s in range(q1):
-                for t in range(q2):
+    for s in prange(q1, nogil=True):
+        for t in range(q2):
+            for u in range(q1):
+                for v in range(q2):
                     h = h_nn(s, t, u, v)
                     if h != 0:
-                        out[s, t] += h * AA
+                        for i in range(D1): #avoid slicing!
+                            for j in range(D2):
+                                out[s, t, D1, D2] = out[s, t, D1, D2] + h * AA[u, v, D1, D2]
     
     return out

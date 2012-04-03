@@ -7,6 +7,7 @@ Created on Fri Nov  4 13:05:59 2011
 
 import scipy as sp
 import scipy.linalg as la
+import scipy.sparse as spa
 
 gemm = None
 using_fblas = False
@@ -146,17 +147,26 @@ def sqrtmh(A, out=None, ret_evd=False, evd=None):
     
     ev = sp.sqrt(ev) #we don't require positive (semi) definiteness, so we need the scipy sqrt here
     
-    #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(V)
-    B = sp.empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
-    for i in xrange(EV.shape[0]):
-        B[:,i] = EV[i,:] * ev
-
-    sp.conjugate(B, B) #in-place conjugate
-    
+    #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(EV)
+    B = matmul_diag(ev, H(EV))
+        
     if ret_evd:
         return matmul(out, EV, B), (ev, EV)
     else:
         return matmul(out, EV, B)
+        
+def matmul_diag(Adiag, B):
+    assert B.shape[0] == Adiag.shape[0]
+    assert Adiag.ndim == 1
+    
+    dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
+    
+    #Since we get a column at a time, fortran ordering is more efficient.
+    C = sp.empty((Adiag.shape[0], Adiag.shape[0]), dtype=dtype, order='F')
+    for i in xrange(B.shape[0]):
+        C[:,i] = Adiag * B[:,i]
+        
+    return C
         
 def invmh(A, out=None, ret_evd=False, evd=None):
     if not evd is None:
@@ -165,13 +175,8 @@ def invmh(A, out=None, ret_evd=False, evd=None):
         ev, EV = la.eigh(A)
     
     ev = 1. / ev
-    
-    #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(V)
-    B = sp.empty_like(A, order='F') #Since we get a column at a time, fortran ordering is more efficient.
-    for i in xrange(EV.shape[0]):
-        B[:,i] = EV[i,:] * ev
-
-    sp.conjugate(B, B) #in-place conjugate
+        
+    B = matmul_diag(ev, H(EV))
     
     if ret_evd:
         return matmul(out, EV, B), (ev, EV)

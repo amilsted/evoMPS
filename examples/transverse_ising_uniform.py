@@ -181,6 +181,9 @@ col_heads = ["Step", "t", "eta", "Restore CF?", "H", "dH",
 print "\t".join(col_heads)
 print
 
+s.sanity_checks = False
+s.symm_gauge = True
+
 for i in xrange(total_steps):
     T[i] = t
     
@@ -191,7 +194,7 @@ for i in xrange(total_steps):
     
     s.Calc_lr()
 
-    restoreCF = (i % 4 == 3) #Restore canonical form every 16 steps.
+    restoreCF = True #(i % 4 == 3) #Restore canonical form every 16 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.Restore_CF()
@@ -200,7 +203,7 @@ for i in xrange(total_steps):
         row.append("No")    
     
     #print "Manual h = " + str(s.Expect_2S(h_nn))
-    
+    s.Calc_AA()
     s.Calc_C()    
     s.Calc_K()    
         
@@ -252,6 +255,7 @@ for i in xrange(total_steps):
         s.Expand_D(D)
         s.Calc_lr()
         s.Restore_CF() #this helps a lot
+        s.Calc_AA()
         s.Calc_C()
         s.Calc_K()
         
@@ -272,7 +276,7 @@ for i in xrange(total_steps):
     """
     if not real_time:
         print "\t".join(row)
-        s.TakeStep(step)     
+        s.TakeStep(step, assumeCF=restoreCF)     
         imsteps += 1
     elif False: #Midpoint method. Currently disabled. Change to True to test!
         itr, delta, delta_check = s.TakeStep_BEuler(step)
@@ -285,7 +289,7 @@ for i in xrange(total_steps):
         s.TakeStep_RK4(step)
     else:
         print "\t".join(row)
-        s.TakeStep(step)
+        s.TakeStep(step, assumeCF=restoreCF)
     
     t += 1.j * sp.conj(step)
 
