@@ -167,7 +167,7 @@ class evoMPS_TDVP_Uniform:
             The resulting matrix.
         """
         if out is None:
-            out = sp.zeros_like(self.r)
+            out = sp.zeros_like(self.A[0])
         else:
             out.fill(0.)
             
@@ -190,7 +190,7 @@ class evoMPS_TDVP_Uniform:
         
     def EpsL(self, x, out=None):
         if out is None:
-            out = sp.zeros_like(self.l)
+            out = sp.zeros_like(self.A[0])
         else:
             out.fill(0.)
             
@@ -205,7 +205,7 @@ class evoMPS_TDVP_Uniform:
                 m.matmul(self.AA[s, t], self.A[s], self.A[t])
         
     def EpsR_2(self, x, op, A1=None, A2=None, A3=None, A4=None):
-        res = sp.zeros_like(self.r)
+        res = sp.zeros_like(self.A[0])
         
         if A1 is None:
             A1 = self.A
@@ -219,7 +219,7 @@ class evoMPS_TDVP_Uniform:
         if (A1 is self.A) and (A2 is self.A) and (A3 is self.A) and (A4 is self.A):
             for u in xrange(self.q):
                 for v in xrange(self.q):
-                    subres = sp.zeros_like(self.r)
+                    subres = sp.zeros_like(self.A[0])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             opval = op(u, v, s, t)
@@ -232,7 +232,7 @@ class evoMPS_TDVP_Uniform:
                 for v in xrange(self.q):
                     m.matmul(AAuvH, A3[u], A4[v])
                     AAuvH = m.H(AAuvH, out=AAuvH)
-                    subres = sp.zeros_like(self.r)
+                    subres = sp.zeros_like(self.A[0])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             opval = op(u, v, s, t)
@@ -284,6 +284,19 @@ class evoMPS_TDVP_Uniform:
     
     def Calc_lr(self, renorm=True, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
+        
+        self.l_di = None
+        self.r_di = None
+        
+        if self.l.ndim == 1:
+            self.l = sp.empty_like(self.A[0])
+            self.l[:] = sp.diag(self.l)
+        
+        if sp.isscalar(self.r): #RCF
+            self.r = sp.eye(self.D, dtype=self.typ)
+        elif self.r.ndim == 1: #SCF
+            self.r = sp.empty_like(self.A[0])
+            self.r = sp.diag(self.r)
         
         self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
                                                 rtol=self.itr_rtol, 
@@ -361,6 +374,13 @@ class evoMPS_TDVP_Uniform:
         
         U, s, Vh = la.svd(sp.dot(Y, X))
         
+        self.l_di = s
+        self.r_di = s
+        
+        #s contains the Schmidt coefficients,
+        lam = s**2
+        self.S_hc = - sp.sum(lam * sp.log2(lam))
+        
         S = la.diagsvd(s, self.D, self.D)
         Srt = la.diagsvd(sp.sqrt(s), self.D, self.D)
         
@@ -428,25 +448,38 @@ class evoMPS_TDVP_Uniform:
         if self.symm_gauge and not force_r_CF:
             self.Restore_SCF()
         else:
-            M = sp.zeros_like(self.r)
+            #First get G such that r = eye
+            M = sp.zeros_like(self.A[0])
             for s in xrange(self.q):
                 M += m.matmul(None, self.A[s], m.H(self.A[s]))
             
             G = la.cholesky(self.r, lower=True)
             G_i = m.invtr(G, lower=True)
+
+            m.matmul(self.l, m.H(G), self.l, G)
+            
+            #Now bring l into diagonal form
+            ev, EV = la.eigh(self.l)
+            
+            G = sp.dot(G, EV)
+            G_i = sp.dot(m.H(EV), G_i)
             
             for s in xrange(self.q):
                 m.matmul(self.A[s], G_i, self.A[s], G)
-
-            m.matmul(self.l, m.H(G), self.l, G)
-            #self.r[:] = sp.eye(self.D)
-            m.matmul(self.r, G_i, self.r, m.H(G_i))
+                
+            #ev contains the squares of the Schmidt coefficients,
+            self.S_hc = - sp.sum(ev * sp.log2(ev))
             
+            self.l_di = ev
+            self.l[:] = sp.diag(ev)    
+
             if self.sanity_checks:
                 M.fill(0)
                 for s in xrange(self.q):
                     M += m.matmul(None, self.A[s], m.H(self.A[s]))            
-                    
+                
+                m.matmul(self.r, G_i, self.r, m.H(G_i))
+                
                 if not sp.allclose(M, self.r, 
                                    rtol=self.itr_rtol*self.check_fac,
                                    atol=self.itr_atol*self.check_fac):
@@ -473,9 +506,9 @@ class evoMPS_TDVP_Uniform:
                                    atol=self.itr_atol*self.check_fac):
                     print "Sanity check failed: Restore_RCF, bad l!"
                     print "Off by: " + str(la.norm(l - self.l))
-
-#        if self.symm_gauge and not force_r_CF:
-#            self.RCF_to_SCF()
+        
+            self.r[:] = sp.eye(self.D)
+            #self.r = 1.0
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
@@ -590,7 +623,7 @@ class evoMPS_TDVP_Uniform:
         
     def Calc_sqrts(self, assumeCF=False):
         #print "sqrts and inverses start"
-        if self.symm_gauge and assumeCF:
+        if assumeCF:
             #If we just did Restore_SCF, then l=r is diagonal, real
             sqrtd = sp.sqrt(self.l.diagonal())
             self.l_sqrt = sp.diag(sqrtd)
@@ -608,8 +641,10 @@ class evoMPS_TDVP_Uniform:
             self.r_sqrt = self.l_sqrt
             self.r_sqrt_i = self.l_sqrt_i
         elif assumeCF:
-            self.r_sqrt = sp.eye(self.D)
-            self.r_sqrt_i = self.r_sqrt
+            #self.r_sqrt = sp.eye(self.D)
+            #self.r_sqrt_i = self.r_sqrt
+            self.r_sqrt = self.r
+            self.r_sqrt_i = self.r
         else:
             self.r_sqrt, evd = m.sqrtmh(self.r, ret_evd=True)
             self.r_sqrt_i = m.invmh(self.r_sqrt, evd=evd)
@@ -643,7 +678,7 @@ class evoMPS_TDVP_Uniform:
         
         if self.sanity_checks:
             #Test gauge-fixing:
-            tst = sp.zeros_like(self.l)
+            tst = sp.zeros_like(self.A[0])
             for s in xrange(self.q):
                 tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
             if not sp.allclose(tst, 0):
