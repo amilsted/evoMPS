@@ -348,12 +348,12 @@ class evoMPS_TDVP_Generic:
         If an exception occurs here, it is probably because these matrices
         are not longer Hermitian (enough).
         """
-        l_sqrt = m.sqrtmh(self.l[n - 1])
-        #l_sqrt = la.sqrtm(self.l[n - 1])
-        r_sqrt =  m.sqrtmh(self.r[n])
-        #r_sqrt =  la.sqrtm(self.r[n])        
-        l_sqrt_inv = la.inv(l_sqrt) #matmul invpo() not yet working properly....
-        r_sqrt_inv = la.inv(r_sqrt)  
+        l_sqrt, evd = m.sqrtmh(self.l[n - 1], ret_evd=True)
+        l_sqrt_inv = m.invmh(l_sqrt, evd=evd)
+
+        r_sqrt, evd =  m.sqrtmh(self.r[n], ret_evd=True)
+        r_sqrt_inv = m.invmh(r_sqrt, evd)
+        
         return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
     
     def TakeStep(self, dtau): #simple, forward Euler integration     
