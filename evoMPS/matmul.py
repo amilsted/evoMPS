@@ -31,12 +31,11 @@ def _matmul_gemm(out, args):
     
 
 def _matmul_dot(out, args): #depending on the arguments, dot() may expect a matrix or an array as output... problems?
-    if len(args) < 3:
-        res = args[0]
-    else:
-        res = sp.dot(args[0], args[1])    
-        
-        for x in args[2:-1]:
+    res = args[0]
+    
+    for x in args[1:-1]:
+        if not (sp.isscalar(x) and x == 1) and not (sp.isscalar(res)
+                                                    and res == 1):
             res = sp.dot(res, x)
         
     if out is None:

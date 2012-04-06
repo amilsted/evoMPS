@@ -507,8 +507,8 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Restore_RCF, bad l!"
                     print "Off by: " + str(la.norm(l - self.l))
         
-            self.r[:] = sp.eye(self.D)
-            #self.r = 1.0
+            #self.r[:] = sp.eye(self.D)
+            self.r = 1.0 + 0.0j
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
@@ -557,7 +557,7 @@ class evoMPS_TDVP_Uniform:
         
         self.h = adot(self.l, Hr, tmp=self.tmp)
         
-        QHr = Hr - self.r * self.h
+        QHr = Hr - self.r * self.h * sp.eye(self.D) #r may be scalar = 1
         
         self.Calc_PPinv(QHr, out=self.K)
             
@@ -624,7 +624,6 @@ class evoMPS_TDVP_Uniform:
     def Calc_sqrts(self, assumeCF=False):
         #print "sqrts and inverses start"
         if assumeCF:
-            #If we just did Restore_SCF, then l=r is diagonal, real
             sqrtd = sp.sqrt(self.l.diagonal())
             self.l_sqrt = sp.diag(sqrtd)
             self.l_sqrt_i = sp.diag(1. / sqrtd)
@@ -632,7 +631,6 @@ class evoMPS_TDVP_Uniform:
             #self.l_sqrt = sps.dia_matrix((sqrtd, 0), shape=(self.D, self.D))
             #self.l_sqrt_i = sps.dia_matrix((1. / sqrtd, 0), shape=(self.D, self.D))
         else:
-            #In RCF case we just know that l is hermitian and diagonalizable
             self.l_sqrt, evd = m.sqrtmh(self.l, ret_evd=True)
             self.l_sqrt_i = m.invmh(self.l_sqrt, evd=evd)
             
@@ -657,7 +655,8 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: l_sqrt_i is bad!"
             if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt), self.r):
                 print "Sanity check failed: r_sqrt is bad!"
-            if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt_i), sp.eye(self.D)):
+            if (not sp.isscalar(self.r) :
+                and not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt_i), sp.eye(self.D))):
                 print "Sanity check failed: r_sqrt_i is bad!"
         
     def Calc_B(self, assumeCF=False):

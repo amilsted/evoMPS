@@ -81,7 +81,7 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-D = 32 #The bond dimension
+D = 10 #The bond dimension
 q = 2 #The site dimension
 
 """
@@ -181,8 +181,8 @@ col_heads = ["Step", "t", "eta", "Restore CF?", "H", "dH",
 print "\t".join(col_heads)
 print
 
-s.sanity_checks = False
-s.symm_gauge = True
+s.sanity_checks = True
+s.symm_gauge = False
 
 for i in xrange(total_steps):
     T[i] = t
