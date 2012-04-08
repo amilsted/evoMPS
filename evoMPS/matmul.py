@@ -7,7 +7,45 @@ Created on Fri Nov  4 13:05:59 2011
 
 import scipy as sp
 import scipy.linalg as la
-import scipy.sparse as spa
+#import scipy.sparse as spa
+
+class simple_diag_matrix:
+    diag = None
+    
+    def __init__(self, diag):
+        diag = sp.asanyarray(diag)
+        assert diag.ndim == 1
+        self.diag = diag
+        
+    def dot(self, b, out=None):
+        if isinstance(b, simple_diag_matrix):
+            return simple_diag_matrix(self.diag * b.diag)
+            
+        return matmul_diag(self.diag, b, out=out)
+        
+    def dot_left(self, a, out=None):
+        if isinstance(a, simple_diag_matrix):
+            return simple_diag_matrix(self.diag * a.diag)
+            
+        return matmul_diag(self.diag, a, out=out, act_right=False)
+        
+    def conj(self):
+        return simple_diag_matrix(self.diag.conj())
+        
+    def T(self):
+        return self
+        
+    def inv(self):
+        return simple_diag_matrix(1. / self.diag)
+        
+    def sqrt(self):
+        return simple_diag_matrix(sp.sqrt(self.diag))
+        
+    def full_matrix(self):
+        return sp.diag(self.diag)
+        
+    def ravel(self):
+        return sp.diag(self.diag).ravel()
 
 gemm = None
 using_fblas = False
@@ -28,24 +66,6 @@ def _matmul_gemm(out, args):
     else:
         out[...] = gemm(1., res, args[-1])
         return out
-    
-
-def _matmul_dot(out, args): #depending on the arguments, dot() may expect a matrix or an array as output... problems?
-    res = args[0]
-    
-    for x in args[1:-1]:
-        if not (sp.isscalar(x) and x == 1) and not (sp.isscalar(res)
-                                                    and res == 1):
-            res = sp.dot(res, x)
-        
-    if out is None:
-        return sp.dot(res, args[-1])
-    elif out.size == 1: #dot() seems to dislike this
-        out[...] = sp.dot(res, args[-1])
-        return out
-    else:
-        return sp.dot(res, args[-1], out=out)
-
 
 def matmul(out, *args):
     """Multiplies a chain of matrices (2-d ndarrays)
@@ -74,7 +94,40 @@ def matmul(out, *args):
     """
     if not out is None and (args.count == 2 and out in args or args[-1] is out):
         raise
-    return _matmul_dot(out, args)
+
+    res = args[0]
+    
+    for x in args[1:]:
+        if (sp.isscalar(res) and res == 1):
+            res = x
+        elif not (sp.isscalar(x) and x == 1):
+            if isinstance(x, simple_diag_matrix):
+                res = x.dot_left(res)
+            else:
+                res = res.dot(x)
+    
+    if not out is None:
+        out[...] = res
+        return out
+        
+    return res
+#    if isinstance(args[-1], simple_diag_matrix):
+#        if out is None:
+#            return args[-1].dot_left(res)
+#        elif out.size == 1: #dot() seems to dislike this
+#            out[...] = args[-1].dot_left(res)
+#            return out
+#        else:
+#            return args[-1].dot_left(res, out=out)
+#    else:
+#        if out is None:
+#            return res.dot(args[-1])
+#        elif out.size == 1: #dot() seems to dislike this
+#            out[...] = res.dot(args[-1])
+#            return out
+#        else:
+#            return sp.dot(res, args[-1], out=out)
+
     
 def matmul_init(dtype=sp.float64, order='C'):
     global gemm
@@ -154,18 +207,31 @@ def sqrtmh(A, out=None, ret_evd=False, evd=None):
     else:
         return matmul(out, EV, B)
         
-def matmul_diag(Adiag, B):
-    assert B.shape[0] == Adiag.shape[0]
-    assert Adiag.ndim == 1
-    
-    dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
-    
-    #Since we get a column at a time, fortran ordering is more efficient.
-    C = sp.empty((Adiag.shape[0], Adiag.shape[0]), dtype=dtype, order='F')
-    for i in xrange(B.shape[0]):
-        C[:,i] = Adiag * B[:,i]
+def matmul_diag(Adiag, B, out=None, act_right=True):
+    if act_right:
+        assert B.shape[0] == Adiag.shape[0]
+    else:
+        assert B.shape[1] == Adiag.shape[0]
         
-    return C
+    assert Adiag.ndim == 1
+    assert B.ndim == 2
+    
+    if out is None:
+        dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
+        if act_right:
+            #Since we get a column at a time, fortran ordering is more efficient.
+            out = sp.empty((Adiag.shape[0], B.shape[1]), dtype=dtype, order='F')
+        else:
+            out = sp.empty((B.shape[0], Adiag.shape[0]), dtype=dtype, order='C')
+        
+    if act_right:
+        for i in xrange(B.shape[1]):
+            out[:,i] = Adiag * B[:,i]
+    else:
+        for i in xrange(B.shape[0]):
+            out[i,:] = Adiag * B[i,:]
+        
+    return out
         
 def invmh(A, out=None, ret_evd=False, evd=None):
     if not evd is None:

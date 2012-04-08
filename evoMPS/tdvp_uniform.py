@@ -27,13 +27,22 @@ import matmul as m
 
 import pyximport; pyximport.install()
 import tdvp_common as tc
-
+    
 def adot(a, b, tmp=None):
     """
     Calculates the scalar product for the ancilla, expecting
     the arguments in matrix form.
     Equivalent to trace(dot(H(a), b))
     """
+    if sp.isscalar(a) and sp.isscalar(b):
+        return None #cover this later?
+        
+    if sp.isscalar(a) and a == 1:
+        return sp.trace(b)
+
+    if sp.isscalar(b) and b == 1:
+        return sp.trace(a)
+    
     if tmp is None:
         return sp.inner(a.ravel().conj(), b.ravel())
     else:
@@ -67,8 +76,16 @@ class PPInv_op:
         x = v.reshape((self.D, self.D))
         
         Ex = self.tdvp.EpsR(x)
+        
+        try:
+            r = self.r.full_matrix()
+        except:
+            r = self.r
             
-        QEQ = Ex - self.r * adot(self.l, x)
+        if sp.isscalar(r) and r == 1:
+            r = sp.eye(self.D)
+        
+        QEQ = Ex - r * adot(self.l, x)
         
         if not self.p == 0:
             QEQ *= sp.exp(1.j * self.p)
@@ -257,7 +274,7 @@ class evoMPS_TDVP_Uniform:
         self.l = eVL[:,i].reshape((self.D, self.D))
         self.r = eVR[:,i].reshape((self.D, self.D))
         
-        norm = adot(self.l, self.r, tmp=self.tmp)
+        norm = adot(self.l, self.r)
         self.l *= 1 / sp.sqrt(norm)
         self.r *= 1 / sp.sqrt(norm)        
         
@@ -287,6 +304,16 @@ class evoMPS_TDVP_Uniform:
         
         self.l_di = None
         self.r_di = None
+
+        try:
+            self.l = self.l.full_matrix()
+        except:
+            self.l = self.l
+
+        try:
+            self.r = self.r.full_matrix()
+        except:
+            self.r = self.r
         
         if self.l.ndim == 1:
             self.l = sp.empty_like(self.A[0])
@@ -308,13 +335,13 @@ class evoMPS_TDVP_Uniform:
         #normalize eigenvectors:
 
         if self.symm_gauge and not force_r_CF:
-            norm = adot(self.l, self.r, tmp=tmp).real
+            norm = adot(self.l, self.r).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
                 self.l *= 1. / sp.sqrt(norm)
                 self.r *= 1. / sp.sqrt(norm)
                 
-                norm = adot(self.l, self.r, tmp=tmp).real
+                norm = adot(self.l, self.r).real
                 
                 itr += 1
                 
@@ -325,11 +352,11 @@ class evoMPS_TDVP_Uniform:
             self.l *= 1 / fac
             self.r *= fac
 
-            norm = adot(self.l, self.r, tmp=tmp).real
+            norm = adot(self.l, self.r).real
             itr = 0 
             while not sp.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
                 self.l *= 1. / norm
-                norm = adot(self.l, self.r, tmp=tmp).real
+                norm = adot(self.l, self.r).real
                 itr += 1
                 
             if itr == 10:
@@ -364,7 +391,7 @@ class evoMPS_TDVP_Uniform:
             if not sp.all(la.eigvalsh(self.r) > 0):
                 print "Sanity check failed: r is not pos. def.!"
             
-            norm = adot(self.l, self.r, tmp=tmp)
+            norm = adot(self.l, self.r)
             if not sp.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
@@ -372,17 +399,15 @@ class evoMPS_TDVP_Uniform:
         X = la.cholesky(self.r, lower=True)
         Y = la.cholesky(self.l, lower=False)
         
-        U, s, Vh = la.svd(sp.dot(Y, X))
-        
-        self.l_di = s
-        self.r_di = s
+        U, sv, Vh = la.svd(Y.dot(X))
         
         #s contains the Schmidt coefficients,
-        lam = s**2
+        lam = sv**2
         self.S_hc = - sp.sum(lam * sp.log2(lam))
         
-        S = la.diagsvd(s, self.D, self.D)
-        Srt = la.diagsvd(sp.sqrt(s), self.D, self.D)
+        sv = sp.array(sv, dtype=self.typ)
+        S = m.simple_diag_matrix(sv)
+        Srt = S.sqrt()
         
         #TODO: Optimize mult. with diagonal matrix!
         
@@ -394,55 +419,33 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.A[s], g, self.A[s], g_i)
                 
         if self.sanity_checks:
-            if not sp.allclose(sp.dot(g, g_i), sp.eye(self.D)):
+            Sfull = S.full_matrix()
+            
+            if not sp.allclose(g.dot(g_i), sp.eye(self.D)):
                 print "Sanity check failed! Restore_SCF, bad GT!"
             
             l = m.matmul(None, m.H(g_i), self.l, g_i)
             r = m.matmul(None, g, self.r, m.H(g))
             
-            if not sp.allclose(S, l):
+            if not sp.allclose(Sfull, l):
                 print "Sanity check failed: Restorce_SCF, left failed!"
                 
-            if not sp.allclose(S, r):
+            if not sp.allclose(Sfull, r):
                 print "Sanity check failed: Restorce_SCF, right failed!"
                 
-            l = self.EpsL(S)
-            r = self.EpsR(S)
+            l = self.EpsL(Sfull)
+            r = self.EpsR(Sfull)
             
-            if not sp.allclose(S, l, rtol=self.itr_rtol*self.check_fac, 
+            if not sp.allclose(Sfull, l, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Restorce_SCF, left bad!"
                 
-            if not sp.allclose(S, r, rtol=self.itr_rtol*self.check_fac, 
+            if not sp.allclose(Sfull, r, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Restorce_SCF, right bad!"
 
-        self.l[:] = S
-        self.r[:] = S
-        
-        #self.Calc_lr()
-    
-    def RCF_to_SCF(self):
-        sqrt_l = m.sqrtmh(self.l)
-
-        G = m.sqrtmh(sqrt_l)
-        G_i = la.inv(G)
-        
-        if self.sanity_checks and not sp.allclose(
-            m.matmul(None, G_i, G_i, G_i, G_i, self.l), sp.eye(self.D)):
-                print "Sanity check failed: 4th root of l is bad!"
-        
-        for s in xrange(self.q):
-            m.matmul(self.A[s], G, self.A[s], G_i)
-            
-        self.l[:] = sqrt_l
-        self.r[:] = self.l
-        
-        self.Calc_lr()
-        
-        if self.sanity_checks:
-            if not sp.allclose(self.l, self.r):
-                print "Sanity check failed: Could not achieve S-CF."        
+        self.l = S
+        self.r = S
     
     def Restore_CF(self, force_r_CF=False):
         if self.symm_gauge and not force_r_CF:
@@ -461,8 +464,8 @@ class evoMPS_TDVP_Uniform:
             #Now bring l into diagonal form
             ev, EV = la.eigh(self.l)
             
-            G = sp.dot(G, EV)
-            G_i = sp.dot(m.H(EV), G_i)
+            G = G.dot(EV)
+            G_i = m.H(EV).dot(G_i)
             
             for s in xrange(self.q):
                 m.matmul(self.A[s], G_i, self.A[s], G)
@@ -470,8 +473,8 @@ class evoMPS_TDVP_Uniform:
             #ev contains the squares of the Schmidt coefficients,
             self.S_hc = - sp.sum(ev * sp.log2(ev))
             
-            self.l_di = ev
-            self.l[:] = sp.diag(ev)    
+            ev = sp.array(ev, dtype=self.typ)
+            self.l = m.simple_diag_matrix(ev)
 
             if self.sanity_checks:
                 M.fill(0)
@@ -501,13 +504,12 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Restore_RCF, bad r!"
                     print "Off by: " + str(la.norm(r - self.r))
 
-                if not sp.allclose(l, self.l,
+                if not sp.allclose(l, self.l.full_matrix(),
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     print "Sanity check failed: Restore_RCF, bad l!"
-                    print "Off by: " + str(la.norm(l - self.l))
+                    print "Off by: " + str(la.norm(l - self.l.full_matrix()))
         
-            #self.r[:] = sp.eye(self.D)
             self.r = 1.0 + 0.0j
     
     def Calc_C(self):
@@ -555,9 +557,17 @@ class evoMPS_TDVP_Uniform:
             for t in xrange(self.q):
                 Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.AA[s, t]))
         
-        self.h = adot(self.l, Hr, tmp=self.tmp)
+        self.h = adot(self.l, Hr)
         
-        QHr = Hr - self.r * self.h * sp.eye(self.D) #r may be scalar = 1
+        try:
+            r = self.r.full_matrix()
+        except:
+            r = self.r
+            
+        if sp.isscalar(r) and r == 1:
+            r = sp.eye(self.D)
+        
+        QHr = Hr - r * self.h
         
         self.Calc_PPinv(QHr, out=self.K)
             
@@ -600,7 +610,7 @@ class evoMPS_TDVP_Uniform:
                 tmp2 += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]))
             tmp += m.matmul(None, tmp2, r_sqrt_i, Vsh[s])
             
-        out += sp.dot(l_sqrt, tmp)
+        out += l_sqrt.dot(tmp)
         
         tmp.fill(0)
         for s in xrange(self.q):
@@ -608,7 +618,7 @@ class evoMPS_TDVP_Uniform:
             for t in xrange(self.q):
                 tmp2 += m.matmul(None, m.H(self.A[t]), self.l, self.C[t, s])
             tmp += m.matmul(None, tmp2, r_sqrt, Vsh[s])
-        out += sp.dot(l_sqrt_i, tmp)
+        out += l_sqrt_i.dot(tmp)
         
         return out
         
@@ -624,9 +634,8 @@ class evoMPS_TDVP_Uniform:
     def Calc_sqrts(self, assumeCF=False):
         #print "sqrts and inverses start"
         if assumeCF:
-            sqrtd = sp.sqrt(self.l.diagonal())
-            self.l_sqrt = sp.diag(sqrtd)
-            self.l_sqrt_i = sp.diag(1. / sqrtd)
+            self.l_sqrt = self.l.sqrt()
+            self.l_sqrt_i = self.l_sqrt.inv()
             #It would be nice to be able to do this...
             #self.l_sqrt = sps.dia_matrix((sqrtd, 0), shape=(self.D, self.D))
             #self.l_sqrt_i = sps.dia_matrix((1. / sqrtd, 0), shape=(self.D, self.D))
@@ -648,15 +657,15 @@ class evoMPS_TDVP_Uniform:
             self.r_sqrt_i = m.invmh(self.r_sqrt, evd=evd)
         #print "sqrts and inverses stop"
         
-        if self.sanity_checks:
-            if not sp.allclose(sp.dot(self.l_sqrt, self.l_sqrt), self.l):
+        if not assumeCF and self.sanity_checks:
+            if not sp.allclose(self.l_sqrt.dot(self.l_sqrt), self.l):
                 print "Sanity check failed: l_sqrt is bad!"
-            if not sp.allclose(sp.dot(self.l_sqrt, self.l_sqrt_i), sp.eye(self.D)):
+            if not sp.allclose(self.l_sqrt.dot(self.l_sqrt_i), sp.eye(self.D)):
                 print "Sanity check failed: l_sqrt_i is bad!"
-            if not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt), self.r):
+            if not sp.allclose(self.r_sqrt.dot(self.r_sqrt), self.r):
                 print "Sanity check failed: r_sqrt is bad!"
-            if (not sp.isscalar(self.r) :
-                and not sp.allclose(sp.dot(self.r_sqrt, self.r_sqrt_i), sp.eye(self.D))):
+            if (not sp.isscalar(self.r)
+                and not sp.allclose(self.r_sqrt.dot(self.r_sqrt_i), sp.eye(self.D))):
                 print "Sanity check failed: r_sqrt_i is bad!"
         
     def Calc_B(self, assumeCF=False):
@@ -697,10 +706,9 @@ class evoMPS_TDVP_Uniform:
         
         rVsh = self.Vsh.copy()
         for s in xrange(self.q):
-            rVsh[s] = sp.dot(self.r_sqrt_i, rVsh[s])
+            rVsh[s] = self.r_sqrt_i.dot(rVsh[s])
         
-        res = sp.dot(self.l_sqrt, 
-                     self.EpsR_2(self.r, op=self.h_nn, A1=B, A3=rVsh))
+        res = self.l_sqrt.dot(self.EpsR_2(self.r, op=self.h_nn, A1=B, A3=rVsh))
         
         return None
             

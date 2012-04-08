@@ -182,7 +182,7 @@ print "\t".join(col_heads)
 print
 
 s.sanity_checks = True
-s.symm_gauge = False
+s.symm_gauge = True
 
 for i in xrange(total_steps):
     T[i] = t
