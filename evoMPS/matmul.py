@@ -9,13 +9,104 @@ import scipy as sp
 import scipy.linalg as la
 #import scipy.sparse as spa
 
+class eyemat(object):
+    __array_priority__ = 10.1 #makes right-ops work, ala sparse
+    
+    def __init__(self, D, dtype=sp.float64):
+        self.shape = (D, D)
+        self.dtype = dtype
+        self.data = None
+    
+    def toarray(self):
+        return sp.eye(self.shape[0], dtype=self.dtype)
+    
+    def __mul__(self, other):
+        if sp.isscalar(other):
+            return simple_diag_matrix(sp.ones(self.shape[0], self.dtype) * other)
+        
+        try:
+            if other.shape == self.shape:
+                return simple_diag_matrix(other.diagonal())
+        except:
+            return NotImplemented
+        
+        return self.toarray() * other
+        
+    def __rmul__(self, other):
+        return self.__mul__(self, other)
+        
+    def __add__(self, other):
+        try:
+            return self.toarray() + other
+        except:
+            return NotImplemented
+            
+    def __radd__(self, other):
+        try:
+            return other + self.toarray()
+        except:
+            return NotImplemented
+            
+    def __sub__(self, other):
+        try:
+            return self.toarray() - other
+        except:
+            return NotImplemented
+            
+    def __rsub__(self, other):
+        try:
+            return other - self.toarray()
+        except:
+            return NotImplemented
+        
+    def __coerce__(self, other):
+        try:
+            other = sp.asanyarray(other)
+            if other.shape == self.shape or sp.isscalar(other):
+                return (self.toarray(), other)
+            else:
+                return NotImplemented
+        except:
+            return NotImplemented
+        
+    def dot(self, other):
+        if self.shape == other.shape:
+            return other
+        else:
+            return None
+            
+    def dot_left(self, other):
+        if self.shape == other.shape:
+            return other
+        else:
+            return None
+            
+    def conj(self):
+        return self
+        
+    def transpose(self):
+        return self
+        
+    def __getattr__(self, attr):
+        if attr == 'A':
+            return self.toarray()
+        elif attr == 'T':
+            return self.transpose()
+        else:
+            raise AttributeError(attr + " not found")
+    
+
 class simple_diag_matrix:
+    __array_priority__ = 10.1 #makes right-ops work, ala sparse
+    
     diag = None
+    shape = None
     
     def __init__(self, diag):
         diag = sp.asanyarray(diag)
         assert diag.ndim == 1
         self.diag = diag
+        self.shape = (diag.shape[0], diag.shape[0])
         
     def dot(self, b, out=None):
         if isinstance(b, simple_diag_matrix):
@@ -32,7 +123,7 @@ class simple_diag_matrix:
     def conj(self):
         return simple_diag_matrix(self.diag.conj())
         
-    def T(self):
+    def transpose(self):
         return self
         
     def inv(self):
@@ -41,11 +132,74 @@ class simple_diag_matrix:
     def sqrt(self):
         return simple_diag_matrix(sp.sqrt(self.diag))
         
-    def full_matrix(self):
-        return sp.diag(self.diag)
-        
     def ravel(self):
         return sp.diag(self.diag).ravel()
+        
+    def diagonal(self):
+        return self.diag
+        
+    def toarray(self):
+        return sp.diag(self.diag)
+        
+    def __mul__(self, other):
+        if sp.isscalar(other):
+            return simple_diag_matrix(self.diag * other)
+        
+        try:
+            other = sp.asanyarray(other)
+    
+            if other.shape == self.shape:
+                return simple_diag_matrix(self.diag * other.diagonal())
+            
+            return self.toarray() * other
+        except:
+            return NotImplemented
+        
+    def __rmul__(self, other):
+        return self.__mul__(self, other)
+        
+    def __add__(self, other):
+        try:
+            return self.toarray() + other
+        except:
+            return NotImplemented
+            
+    def __radd__(self, other):
+        try:
+            return other + self.toarray()
+        except:
+            return NotImplemented
+            
+    def __sub__(self, other):
+        try:
+            return self.toarray() - other
+        except:
+            return NotImplemented
+            
+    def __rsub__(self, other):
+        try:
+            return other - self.toarray()
+        except:
+            return NotImplemented
+    
+    def __coerce__(self, other):
+        try:
+            other = sp.asanyarray(other)
+            if other.shape == self.shape:
+                return (self.toarray(), other)
+            else:
+                return None
+        except:
+            return None
+            
+    def __getattr__(self, attr):
+        if attr == 'A':
+            return self.toarray()
+        elif attr == 'T':
+            return self.transpose()
+        else:
+            raise AttributeError(attr + " not found")
+            
 
 gemm = None
 using_fblas = False
@@ -98,13 +252,10 @@ def matmul(out, *args):
     res = args[0]
     
     for x in args[1:]:
-        if (sp.isscalar(res) and res == 1):
-            res = x
-        elif not (sp.isscalar(x) and x == 1):
-            if isinstance(x, simple_diag_matrix):
-                res = x.dot_left(res)
-            else:
-                res = res.dot(x)
+        try:
+            res = x.dot_left(res)
+        except:
+            res = res.dot(x)
     
     if not out is None:
         out[...] = res

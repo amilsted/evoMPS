@@ -78,7 +78,7 @@ class PPInv_op:
         Ex = self.tdvp.EpsR(x)
         
         try:
-            r = self.r.full_matrix()
+            r = self.r.toarray()
         except:
             r = self.r
             
@@ -306,24 +306,14 @@ class evoMPS_TDVP_Uniform:
         self.r_di = None
 
         try:
-            self.l = self.l.full_matrix()
+            self.l = self.l.toarray()
         except:
             self.l = self.l
 
         try:
-            self.r = self.r.full_matrix()
+            self.r = self.r.toarray()
         except:
             self.r = self.r
-        
-        if self.l.ndim == 1:
-            self.l = sp.empty_like(self.A[0])
-            self.l[:] = sp.diag(self.l)
-        
-        if sp.isscalar(self.r): #RCF
-            self.r = sp.eye(self.D, dtype=self.typ)
-        elif self.r.ndim == 1: #SCF
-            self.r = sp.empty_like(self.A[0])
-            self.r = sp.diag(self.r)
         
         self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
                                                 rtol=self.itr_rtol, 
@@ -419,7 +409,7 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.A[s], g, self.A[s], g_i)
                 
         if self.sanity_checks:
-            Sfull = S.full_matrix()
+            Sfull = S.toarray()
             
             if not sp.allclose(g.dot(g_i), sp.eye(self.D)):
                 print "Sanity check failed! Restore_SCF, bad GT!"
@@ -504,13 +494,13 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Restore_RCF, bad r!"
                     print "Off by: " + str(la.norm(r - self.r))
 
-                if not sp.allclose(l, self.l.full_matrix(),
+                if not sp.allclose(l, self.l.toarray(),
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     print "Sanity check failed: Restore_RCF, bad l!"
-                    print "Off by: " + str(la.norm(l - self.l.full_matrix()))
+                    print "Off by: " + str(la.norm(l - self.l.toarray()))
         
-            self.r = 1.0 + 0.0j
+            self.r = m.eyemat(self.D, dtype=self.typ)
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
@@ -559,15 +549,7 @@ class evoMPS_TDVP_Uniform:
         
         self.h = adot(self.l, Hr)
         
-        try:
-            r = self.r.full_matrix()
-        except:
-            r = self.r
-            
-        if sp.isscalar(r) and r == 1:
-            r = sp.eye(self.D)
-        
-        QHr = Hr - r * self.h
+        QHr = Hr - self.r * self.h
         
         self.Calc_PPinv(QHr, out=self.K)
             
@@ -664,8 +646,7 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: l_sqrt_i is bad!"
             if not sp.allclose(self.r_sqrt.dot(self.r_sqrt), self.r):
                 print "Sanity check failed: r_sqrt is bad!"
-            if (not sp.isscalar(self.r)
-                and not sp.allclose(self.r_sqrt.dot(self.r_sqrt_i), sp.eye(self.D))):
+            if (not sp.allclose(self.r_sqrt.dot(self.r_sqrt_i), sp.eye(self.D))):
                 print "Sanity check failed: r_sqrt_i is bad!"
         
     def Calc_B(self, assumeCF=False):
