@@ -87,6 +87,9 @@ class eyemat(object):
     def transpose(self):
         return self
         
+    def copy(self, order='C'):
+        return eyemat(self.shape[0], dtype=self.dtype)
+        
     def __getattr__(self, attr):
         if attr == 'A':
             return self.toarray()
@@ -140,6 +143,9 @@ class simple_diag_matrix:
         
     def toarray(self):
         return sp.diag(self.diag)
+        
+    def copy(self, order='C'):
+        return simple_diag_matrix(self.diag.copy())
         
     def __mul__(self, other):
         if sp.isscalar(other):
@@ -257,11 +263,13 @@ def matmul(out, *args):
         except:
             res = res.dot(x)
     
+    #Since, for some reason, the method version of dot() does not generally
+    #take an "out" argument, I ignored this (for now, minor) optimization.
     if not out is None:
         out[...] = res
         return out
-        
-    return res
+    else:
+        return res
 #    if isinstance(args[-1], simple_diag_matrix):
 #        if out is None:
 #            return args[-1].dot_left(res)

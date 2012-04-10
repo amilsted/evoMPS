@@ -352,7 +352,7 @@ class evoMPS_TDVP_Generic:
         l_sqrt_inv = m.invmh(l_sqrt, evd=evd)
 
         r_sqrt, evd =  m.sqrtmh(self.r[n], ret_evd=True)
-        r_sqrt_inv = m.invmh(r_sqrt, evd)
+        r_sqrt_inv = m.invmh(r_sqrt, evd=evd)
         
         return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
     
@@ -805,6 +805,8 @@ class evoMPS_TDVP_Generic:
         
         The fact that M should be positive definite is used to optimize this.
         
+        TODO: Bring l into diagonal form...
+        
         Parameters
         ----------
         n : int
@@ -824,25 +826,19 @@ class evoMPS_TDVP_Generic:
         #The following should be more efficient than eigh():
         try:
             tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
-            G_nm1 = m.H(m.invtr(tu, overwrite=True), out=tu) #G is now lower-triangular
-            is_tri = True
+            G_nm1 = m.H(m.invtr(tu)) #G is now lower-triangular
+            G_nm1_i = m.H(tu)
         except sp.linalg.LinAlgError:
             print "Restore_ON_R_n: Falling back to eigh()!"
             e,Gh = la.eigh(M)
             G_nm1 = m.H(m.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
-            is_tri = False
-            
+            G_nm1_i = la.inv(G_nm1)
         
         for s in xrange(self.q[n]):                
             m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
             #It's ok to use the same matrix as out and as an operand here
             #since there are > 2 matrices in the chain and it is not the last argument.
-        
-        if is_tri:
-            G_nm1_i = m.invtr(G_nm1, overwrite=True, lower=True)
-        else:
-            G_nm1_i = la.inv(G_nm1)        
-        
+
         return G_nm1_i
         
     

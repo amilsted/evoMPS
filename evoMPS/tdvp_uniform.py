@@ -704,8 +704,13 @@ class evoMPS_TDVP_Uniform:
         
         h_min = self.h
         A_min = self.A.copy()
-        l_min = self.l.copy()
-        r_min = self.r.copy()
+        
+        try:
+            l_min = self.l.toarray()
+            r_min = self.r.toarray()
+        except:
+            l_min = self.l.copy()
+            r_min = self.r.copy()            
         
         itr = 0
         while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
@@ -888,12 +893,21 @@ class evoMPS_TDVP_Uniform:
     def SaveState(self, file, userdata=None):
         if userdata is None:
             userdata = self.userdata
+
+        try:
+            l = self.l.toarray()
+            r = self.r.toarray()
+        except:
+            l = self.l
+            r = self.r
+            
         tosave = sp.empty((5), dtype=sp.ndarray)
         tosave[0] = self.A
-        tosave[1] = self.l
-        tosave[2] = self.r
+        tosave[1] = l
+        tosave[2] = r
         tosave[3] = self.K
         tosave[4] = sp.asarray(userdata)
+        
         sp.save(file, tosave)
         
     def LoadState(self, file, expand=False):
@@ -906,11 +920,10 @@ class evoMPS_TDVP_Uniform:
         if state.shape[0] > 4:
             self.userdata = state[4]
         
-        if (newA.shape == self.A.shape) and (newl.shape == self.l.shape) and (
-        newr.shape == self.r.shape) and (newK.shape == self.K.shape):
+        if (newA.shape == self.A.shape):
             self.A[:] = newA
-            self.l[:] = newl
-            self.r[:] = newr
+            self.l = newl
+            self.r = newr
             self.K[:] = newK
             return True
         elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
@@ -920,8 +933,8 @@ class evoMPS_TDVP_Uniform:
             savedD = newA.shape[1]
             self._init_arrays(savedD, self.q)
             self.A[:] = newA
-            self.l[:] = newl
-            self.r[:] = newr
+            self.l = newl
+            self.r = newr
             self.K[:] = newK
             self.Expand_D(newD)
             print "EXPANDED"
@@ -934,9 +947,14 @@ class evoMPS_TDVP_Uniform:
         
         oldD = self.D
         oldA = self.A
-        oldl = self.l
-        oldr = self.r
         oldK = self.K
+        
+        try:
+            oldl = self.l.toarray()
+            oldr = self.r.toarray()
+        except:
+            oldl = self.l
+            oldr = self.r
         
         self._init_arrays(newD, self.q)
         
