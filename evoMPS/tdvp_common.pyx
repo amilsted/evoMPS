@@ -31,7 +31,7 @@ def calc_C(np.ndarray[DTYPE_t, ndim=4] AA not None,
     cdef int D2 = AA.shape[3]
     
     if out is None:
-        out = np.empty([q1, q2, AA.shape[2], AA.shape[3]], dtype=AA.dtype)
+        out = np.empty([q1, q2, D1, D2], dtype=AA.dtype)
     else:
         assert out.shape[0] == q1 and out.shape[1] == q2
         assert out.shape[2] == D1 and out.shape[3] == D2
@@ -50,6 +50,6 @@ def calc_C(np.ndarray[DTYPE_t, ndim=4] AA not None,
                     if h != 0:
                         for i in range(D1): #avoid slicing!
                             for j in range(D2):
-                                out[s, t, D1, D2] = out[s, t, D1, D2] + h * AA[u, v, D1, D2]
+                                out[s, t, i, j] = out[s, t, i, j] + h * AA[u, v, i, j]
     
     return out
