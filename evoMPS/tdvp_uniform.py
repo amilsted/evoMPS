@@ -950,25 +950,30 @@ class evoMPS_TDVP_Uniform:
         oldK = self.K
         
         try:
-            oldl = self.l.toarray()
-            oldr = self.r.toarray()
+            oldl = self.l.A
         except:
             oldl = self.l
+
+        try:
+            oldr = self.r.A
+        except:
             oldr = self.r
         
         self._init_arrays(newD, self.q)
         
-        norm = la.norm(oldA)
-        fac = (norm / (self.q * oldD**2))
+        realnorm = la.norm(oldA.real)
+        imagnorm = la.norm(oldA.imag)
+        realfac = (realnorm / (self.q * oldD**2))
+        imagfac = (imagnorm / (self.q * oldD**2))
 #        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
-        m.randomize_cmplx(self.A[:, :oldD, oldD:], a=-fac, b=fac)
-        m.randomize_cmplx(self.A[:, oldD:, :oldD], a=-fac, b=fac)
+        m.randomize_cmplx(self.A[:, :oldD, oldD:], a=0, b=realfac, aj=0, bj=imagfac)
+        m.randomize_cmplx(self.A[:, oldD:, :oldD], a=0, b=realfac, aj=0, bj=imagfac)
         self.A[:, oldD:, oldD:] = 0 #for nearest-neighbour hamiltonian
 
 #        self.A[:, :oldD, oldD:] = oldA[:, :, :(newD - oldD)]
 #        self.A[:, oldD:, :oldD] = oldA[:, :(newD - oldD), :]
         self.A[:, :oldD, :oldD] = oldA
-        
+
         self.l[:oldD, :oldD] = oldl
         self.l[:oldD, oldD:].fill(la.norm(oldl) / oldD**2)
         self.l[oldD:, :oldD].fill(la.norm(oldl) / oldD**2)
