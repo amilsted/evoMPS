@@ -10,7 +10,7 @@ TODO:
         - The current choice gives us r_n = sp.eye() and l_n containing
           the Schmidt spectrum.
         - Maybe the l's could be better conditioned?
-    - Build more into TakeStep or add a new method that does Restore_ON_R etc. itself.
+    - Build more into TakeStep or add a new method that does Restore_RCF etc. itself.
     - Add an algorithm for expanding the bond dimension.
     - Adaptive step size.
 
@@ -34,6 +34,8 @@ class evoMPS_TDVP_Generic:
     h_ext = None
     
     eps = 0
+    
+    sanity_checks = True
     
     def SetupAs(self):
         """Initializes the state to full rank with norm 1.
@@ -75,7 +77,7 @@ class evoMPS_TDVP_Generic:
             self.A[n].real = (sp.rand(self.D[n - 1], self.D[n]) - 0.5) / sp.sqrt(self.q[n]) #/ sp.sqrt(self.N) #/ sp.sqrt(self.D[n])
             self.A[n].imag = (sp.rand(self.D[n - 1], self.D[n]) - 0.5) / sp.sqrt(self.q[n]) #/ sp.sqrt(self.N) #/ sp.sqrt(self.D[n])
                 
-        self.Restore_ON_R()
+        self.Restore_RCF()
             
     def __init__(self, numsites, D, q):
         """Creates a new TDVP_MPS object.
@@ -416,9 +418,9 @@ class evoMPS_TDVP_Generic:
         """        
         #---------------------------
         #Hard-coded params:
-        debug = False
+        debug = True
         dbg_bstep = False
-        safe_mode = False
+        safe_mode = True
         
         tol = sp.finfo(sp.complex128).eps * 3
         max_iter = 10
@@ -428,7 +430,7 @@ class evoMPS_TDVP_Generic:
         if midpoint:
             dtau = dtau / 2
         
-        self.Restore_ON_R()
+        self.Restore_RCF()
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
@@ -437,19 +439,20 @@ class evoMPS_TDVP_Generic:
         
         #Take initial forward-Euler step
         self.TakeStep(dtau)     
-        
+
         itr = 0
         delta = 1
         delta_prev = 0                
         final_check = False
 
         while delta > tol * (self.N - 1) and itr < max_iter or final_check:
+            print "OUTER"
             running_update = itr < itr_switch_mode
             
             A_np1 = A0[self.N]            
             
             #Prepare for next calculation of B from the new A
-            self.Restore_ON_R() #updates l and r
+            self.Restore_RCF() #updates l and r
             
             if running_update:
                 self.BuildC() #we really do need all of these, since B directly uses C[n-1]
@@ -460,7 +463,7 @@ class evoMPS_TDVP_Generic:
             #Loop through the chain, optimizing the individual A's
             delta = 0
             for n in reversed(xrange(1, self.N)): #We start at N - 1, since the right vector can't be altered here.
-                
+                print "SWEEP"
                 if not running_update: #save new A[n + 1] and replace with old version for building B
                     A_np1_new = self.A[n + 1].copy()
                     self.A[n + 1] = A_np1  
@@ -472,6 +475,7 @@ class evoMPS_TDVP_Generic:
                 delta_n = 1
                 itr_n = 0
                 while True:
+                    print "INNER"
                     #Find transformation to gauge-align A0 with the backwards-obtained A.. is this enough?
                     M = m.matmul(None, A0[n][0], g0_n, self.r[n], m.H(self.A[n][0]))
                     for s in xrange(1, self.q[n]):
@@ -510,11 +514,11 @@ class evoMPS_TDVP_Generic:
                     
                     if running_update: #Since we want to use the current A[n] and A[n + 1], we need this:
                         if safe_mode:
-                            self.Restore_ON_R()
+                            self.Restore_RCF()
                             self.BuildC()
                             self.CalcK()
                         else:
-                            self.Restore_ON_R(start=n) #will also renormalize
+                            self.Restore_RCF(start=n) #will also renormalize
                             self.BuildC(n_low=n-1, n_high=n)
                             self.CalcK(n_low=n, n_high=n+1)
                                         
@@ -557,11 +561,11 @@ class evoMPS_TDVP_Generic:
             
 #            self.Upd_l()
 #            self.Simple_renorm()
-#            self.Restore_ON_R()
+#            self.Restore_RCF()
             self.BuildC()
             self.CalcK()        
             self.TakeStep(-dtau)
-            self.Restore_ON_R()
+            self.Restore_RCF()
             
             delta2 = 0            
             for n in reversed(xrange(1, self.N + 1)):
@@ -589,7 +593,7 @@ class evoMPS_TDVP_Generic:
             
         if midpoint:
             #Take a final step from the midpoint
-            #self.Restore_ON_R() #updates l and r            
+            #self.Restore_RCF() #updates l and r            
             self.Upd_l()
             self.Simple_renorm()
             self.BuildC()
@@ -607,7 +611,7 @@ class evoMPS_TDVP_Generic:
         Euler method, since there is no need to iteratively solve an implicit
         equation.
         """
-        #self.Restore_ON_R()
+        #self.Restore_RCF()
         
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
@@ -629,7 +633,7 @@ class evoMPS_TDVP_Generic:
             
         self.Upd_l()
         self.Upd_r()
-        #self.Restore_ON_R()
+        #self.Restore_RCF()
         self.BuildC()
         self.CalcK()
         
@@ -646,7 +650,7 @@ class evoMPS_TDVP_Generic:
             
         self.Upd_l()
         self.Upd_r()
-        #self.Restore_ON_R()
+        #self.Restore_RCF()
         self.BuildC()
         self.CalcK()
             
@@ -663,7 +667,7 @@ class evoMPS_TDVP_Generic:
              
         self.Upd_l()
         self.Upd_r()
-        #self.Restore_ON_R()
+        #self.Restore_RCF()
         self.BuildC()
         self.CalcK()
         
@@ -732,22 +736,20 @@ class evoMPS_TDVP_Generic:
         upd_r : bool
             Whether to call Upd_r() after normalization (defaults to True).
         """
-        changed = False
-        itr = 0
-        while not sp.allclose(self.l[self.N], 1. + 0.j, atol=self.eps*3, rtol=0) and itr < 20:
-            G_N_I = sp.sqrt(self.l[self.N][0, 0])
-            
-            for s in xrange(self.q[self.N]):
-                self.A[self.N][s] /= G_N_I
-
-            self.Upd_l(start=self.N, finish=self.N)
-            
-            changed = True
-            itr += 1
+        norm = self.l[self.N][0, 0].real
+        G_N = 1 / sp.sqrt(norm)
+        
+        for s in xrange(self.q[self.N]):
+            self.A[self.N][s] *= G_N
+        
+        ##FIXME: No need to do Upd_l and Upd_r! Just multiply by factor!
+        #self.Upd_l(start=self.N, finish=self.N)
+        self.l[self.N][:] *= 1 / norm
         
         #We need to do this because we changed A[N]
-        if upd_r and changed:
-            self.Upd_r()
+        if upd_r:
+            for n in xrange(self.N):
+                self.r[n] *= 1 / norm
     
     def EpsR(self, res, n, x, o):
         """Implements the right epsilon map
@@ -771,9 +773,9 @@ class evoMPS_TDVP_Generic:
             The resulting matrix.
         """
         if res is None:
-            res = sp.zeros_like(self.r[n - 1])
+            res = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ)
         else:
-            res.fill(0.)
+            res.fill(0)
         tmp = sp.empty_like(res)
         if o is None:
             for s in xrange(self.q[n]):
@@ -786,6 +788,35 @@ class evoMPS_TDVP_Generic:
                         m.matmul(tmp, self.A[n][t], x, m.H(self.A[n][s]))
                         tmp *= o_st
                         res += tmp
+        return res
+        
+    def EpsL(self, res, n, x):
+        """Implements the left epsilon map
+        
+        FIXME: Ref.
+        
+        Parameters
+        ----------
+        res : ndarray
+            A matrix to hold the result (with the same dimensions as l[n]). May be None.
+        n : int
+            The site number.
+        x : ndarray
+            The argument matrix. For example, using l[n - 1] gives a result l[n]
+    
+        Returns
+        -------
+        res : ndarray
+            The resulting matrix.
+        """
+        if res is None:
+            res = sp.zeros_like(self.l[n])
+        else:
+            res.fill(0.)
+        tmp = sp.empty_like(res)
+
+        for s in xrange(self.q[n]):
+            res += m.matmul(tmp, m.H(self.A[n][s]), x, self.A[n][s])
         return res
     
     def Restore_ON_R_n(self, n, G_n_i):
@@ -804,8 +835,6 @@ class evoMPS_TDVP_Generic:
         Apparently, they can turn up during a run, but if they do we're screwed.    
         
         The fact that M should be positive definite is used to optimize this.
-        
-        TODO: Bring l into diagonal form...
         
         Parameters
         ----------
@@ -842,13 +871,13 @@ class evoMPS_TDVP_Generic:
         return G_nm1_i
         
     
-    def Restore_ON_R(self, start=-1, update_l=True, normalize=True):
-        """Use a gauge-transformation to restore right-orthonormalization.
+    def Restore_RCF(self, start=-1, update_l=True, normalize=True, diag_l=True):
+        """Use a gauge-transformation to restore right canonical form.
         
-        Implements the condition for right-orthonormalization from sub-section
+        Implements the conditions for right canonical form from sub-section
         3.1, theorem 1 of arXiv:quant-ph/0608197v2.
         
-        This performs an 'almost' gauge transformation, where the 'almost'
+        This performs two 'almost' gauge transformations, where the 'almost'
         means we allow the norm to vary (if "normalize" = True).
         
         The last step (A[1]) is done diffently to the others since G[0],
@@ -867,8 +896,12 @@ class evoMPS_TDVP_Generic:
         It is also possible to begin the process from a site n other than N,
         in case the sites > n are known to be in the desired form already.
         
-        By default, Upd_l() is called after completion, since the l's are
-        now out of date.
+        It is also possible to skip the diagonalization of the l's, such that
+        only the right orthonormalization condition (r_n = eye) is met.
+        
+        By default, the l's are updated even if diag_l=False.
+        
+        FIXME: Currently, "start" only affects the ON_R stage!
         
         Parameters
         ----------
@@ -878,7 +911,8 @@ class evoMPS_TDVP_Generic:
             Whether to call Upd_l() after completion (defaults to True)
         normalize : bool
             Whether to also attempt to enforce the condition for A[1], which normalizes the state.
-            
+        diag_l : bool
+            Whether to put l in diagonal form (defaults to True)
         """   
         if start < 1:
             start = self.N
@@ -886,26 +920,74 @@ class evoMPS_TDVP_Generic:
         G_n_i = sp.eye(self.D[start], dtype=self.typ) #This is actually just the number 1
         for n in reversed(xrange(2, start + 1)):
             G_n_i = self.Restore_ON_R_n(n, G_n_i)
-            self.EpsR(self.r[n - 1], n, self.r[n], None) #Update r[n - 1], which should, ideally, now equal 1
+            #self.EpsR(self.r[n - 1], n, self.r[n], None) #Update r[n - 1], which should, ideally, now equal 1
+            self.r[n - 1][:] = sp.eye(self.D[n - 1])
+            #self.r[n - 1] = m.eyemat(self.D[n - 1], dtype=self.typ)
+            #print self.r[n - 1]
+            if self.sanity_checks and not diag_l:
+                r_nm1 = self.EpsR(None, n, m.eyemat(self.D[n], self.typ), None)
+                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
+                    print "Sanity Fail in Restore_RCF!: r_%u is bad" % n
         
         #Now do A[1]...
         #Apply the remaining G[1]^-1 from the previous step.
         for s in xrange(self.q[1]):                
             self.A[1][s] = m.matmul(None, self.A[1][s], G_n_i)
+                    
+        #Now finish off
         self.EpsR(self.r[0], 1, self.r[1], None)
         
-        #Now finish off, demanding high accuracy.
-        if normalize:            
-            itr = 0
-            #print "r[0] = " + str(self.r[0])
-            while not sp.allclose(self.r[0], 1, atol=self.eps*2, rtol=0) and itr < 10:
-                G0 = 1. / sp.sqrt(self.r[0][0, 0])
-                self.A[1] *= G0
-                self.EpsR(self.r[0], 1, self.r[1], None)
-                #print "r[0] = " + str(self.r[0])
-                itr += 1
+        if normalize:
+            G0 = 1. / sp.sqrt(self.r[0].squeeze().real)
+            self.A[1] *= G0
+            self.r[0][:] = 1
             
-        if update_l:
+            if self.sanity_checks:
+                r0 = self.EpsR(None, 1, self.r[1], None)
+                if not sp.allclose(r0, 1, atol=1E-14, rtol=1E-14):
+                    print "Sanity Fail in Restore_RCF!: r_0 is bad / norm failure"
+                
+        if diag_l:
+            G_nm1 = sp.eye(self.D[0], dtype=self.typ)
+            for n in xrange(1, self.N):
+                x = m.matmul(None, m.H(G_nm1), self.l[n - 1], G_nm1)
+                M = self.EpsL(None, n, x)
+                ev, EV = la.eigh(M)
+                
+                G_n_i = EV
+                self.l[n][:] = sp.diag(ev)
+                #self.l[n] = m.simple_diag_matrix(sp.array(ev, dtype=self.typ))
+                
+                for s in xrange(self.q[n]):                
+                    m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
+                
+                if self.sanity_checks:
+                    l = self.EpsL(None, n, self.l[n - 1])
+                    if not sp.allclose(l, self.l[n]):
+                        print "Sanity Fail in Restore_RCF!: l_%u is bad" % n
+                
+                G_nm1 = m.H(EV)
+            
+            #Apply remaining G_Nm1 to A[N]
+            n = self.N
+            for s in xrange(self.q[n]):                
+                self.A[n][s] = m.matmul(None, G_nm1, self.A[n][s])
+                
+            #Deal with final, scalar l[N]
+            self.EpsL(self.l[n], n, self.l[n - 1])
+            
+            if self.sanity_checks:
+                if not sp.allclose(self.l[self.N].real, 1, atol=1E-14, rtol=1E-14):
+                    print "Sanity Fail in Restore_RCF!: l_N is bad / norm failure"
+                    print "l_N = " + str(self.l[self.N].squeeze().real)
+                
+                for n in xrange(1, self.N + 1):
+                    r_nm1 = self.EpsR(None, n, m.eyemat(self.D[n], self.typ), None)
+                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
+                        print "Sanity Fail in Restore_RCF!: r_%u is bad" % n
+                    
+            return True #FIXME: This OK?
+        elif update_l:
             res = self.Upd_l()
             return res
         else:
@@ -919,16 +1001,18 @@ class evoMPS_TDVP_Generic:
         ls_trOK = True
         ls_herm = True
         ls_pos = True
+        ls_diag = True
         
         for n in xrange(1, self.N + 1):
             rnsOK = rnsOK and sp.allclose(self.r[n], sp.eye(self.r[n].shape[0]), atol=self.eps*2, rtol=0)
             ls_herm = ls_herm and sp.allclose(self.l[n] - m.H(self.l[n]), 0, atol=self.eps*2)
             ls_trOK = ls_trOK and sp.allclose(sp.trace(self.l[n]), 1, atol=self.eps*2, rtol=0)
             ls_pos = ls_pos and all(la.eigvalsh(self.l[n]) > 0)
+            ls_diag = ls_diag and sp.allclose(self.l[n], sp.diag(self.l[n].diagonal()))
         
         normOK = sp.allclose(self.l[self.N], 1., atol=self.eps, rtol=0)
         
-        return (rnsOK, ls_trOK, ls_pos, normOK)
+        return (rnsOK, ls_trOK, ls_pos, ls_diag, normOK)
     
     def Expect_SS(self, o, n):
         """Computes the expectation value of a single-site operator.
