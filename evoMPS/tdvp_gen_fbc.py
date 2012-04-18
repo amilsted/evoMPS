@@ -21,6 +21,18 @@ import nullspace as ns
 import matmul as m
 import tdvp_uniform as uni
 
+def go(sfbc, tau, steps):
+    h_prev = 0
+    for i in xrange(steps):
+        sfbc.Restore_RCF()
+        h, eta = sfbc.TakeStep(tau)
+        norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
+        h_uni = sfbc.uGnd.h.real / norm_uni
+        print (eta.real, norm_uni, h_uni, h.real/(sfbc.N + 1.), (h - h_prev).real)
+        if i > 0 and (h - h_prev).real > 0:
+            break
+        h_prev = h
+
 class evoMPS_TDVP_Generic_FBC:
     odr = 'C'
     typ = sp.complex128
@@ -54,6 +66,7 @@ class evoMPS_TDVP_Generic_FBC:
                 self.D[n] = qacc
             
     def __init__(self, numsites, uGnd):
+        uGnd.Calc_lr()
         self.uGnd = uGnd
 
         self.eps = sp.finfo(self.typ).eps
@@ -68,7 +81,9 @@ class evoMPS_TDVP_Generic_FBC:
         self.A = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N
         
         self.r = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 0..N
-        self.l = sp.empty((self.N + 2), dtype=sp.ndarray)        
+        self.l = sp.empty((self.N + 2), dtype=sp.ndarray)
+        
+        self.eta = sp.zeros((numsites + 1), dtype=self.typ)
         
         if (self.D.ndim != 1) or (self.q.ndim != 1):
             raise NameError('D and q must be 1-dimensional!')
@@ -97,6 +112,7 @@ class evoMPS_TDVP_Generic_FBC:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
                 
         self.r[self.N] = uGnd.r
+        self.r[self.N + 1] = uGnd.r
         self.l[0] = uGnd.l
         
     def Randomize(self):
@@ -173,9 +189,8 @@ class evoMPS_TDVP_Generic_FBC:
                                           self.r[n + 1], m.H(self.A[n + 1][t]), 
                                           m.H(self.A[n][s]))
                 
-                if n < self.N:
-                    self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
-                                          m.H(self.A[n][s]))
+                self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
+                                      m.H(self.A[n][s]))
                                           
         return uni.adot(self.l[0], self.K[0])
     
@@ -198,6 +213,12 @@ class evoMPS_TDVP_Generic_FBC:
 
         R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
         V = m.H(ns.nullspace(m.H(R)))
+        
+        if self.sanity_checks:
+            if not sp.allclose(m.matmul(None, V, R), 0):
+                print "Sanity Fail in BuildVsh!: VR_%u != 0" % (n)
+            if not sp.allclose(m.matmul(None, V, m.H(V)), sp.eye(V.shape[0])):
+                print "Sanity Fail in BuildVsh!: V H(V)_%u != eye" % (n)
         #print (q[n]*D[n] - D[n-1], q[n]*D[n])
         #print V.shape
         #print sp.allclose(mat(V) * mat(V).H, sp.eye(q[n]*D[n] - D[n-1]))
@@ -208,6 +229,13 @@ class evoMPS_TDVP_Generic_FBC:
         Vsh = sp.empty((self.q[n], self.D[n], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
         for s in xrange(self.q[n]):
             Vsh[s] = m.H(V[:,:,s])
+        
+        if self.sanity_checks:
+            M = sp.zeros((self.q[n] * self.D[n] - self.D[n - 1], self.D[n]), dtype=self.typ)
+            for s in xrange(self.q[n]):
+                M += m.matmul(None, m.H(Vsh[s]), sqrt_r, m.H(self.A[n][s]))
+            if not sp.allclose(M, 0):
+                print "Sanity Fail in BuildVsh!: Bad Vsh_%u" % (n)
         
         return Vsh
         
@@ -241,12 +269,17 @@ class evoMPS_TDVP_Generic_FBC:
         for s in xrange(self.q[n]):
             x_subpart.fill(0)    
             
-            if n < self.N:
+            if n < self.N + 1:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
                     x_subsubpart += m.matmul(tmp, self.C[n][s,t], self.r[n + 1], m.H(self.A[n + 1][t])) #~1st line
-                    
-                x_subsubpart += m.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line               
+                
+                x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r_inv)
+        
+            if n < self.N + 1:
+                x_subsubpart.fill(0)
+
+                x_subsubpart += m.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line                
                 
                 x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r_inv)
             
@@ -254,7 +287,7 @@ class evoMPS_TDVP_Generic_FBC:
                 
         x += m.matmul(None, sqrt_l, x_part)
             
-        if n > 1:
+        if n > 0:
             x_part.fill(0)
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
@@ -279,26 +312,49 @@ class evoMPS_TDVP_Generic_FBC:
             Vsh = self.BuildVsh(n, r_sqrt)
             
             x = self.CalcOpt_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
-    
+            
+            self.eta[n] = sp.sqrt(uni.adot(x, x))
+            
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = m.matmul(B[s], l_sqrt_inv, x, m.H(Vsh[s]), r_sqrt_inv)
+                m.matmul(B[s], l_sqrt_inv, x, m.H(Vsh[s]), r_sqrt_inv)
+                
+            if self.sanity_checks:
+                M = sp.zeros_like(self.r[n - 1])
+                for s in xrange(self.q[n]):
+                    M += m.matmul(None, B[s], self.r[n], m.H(self.A[n][s]))
+                    
+                if not sp.allclose(M, 0):
+                    print "Sanity Fail in GetB!: B_%u does not satisfy GFC!" % n
+            
+            #print "eta_%u = %g" % (n, eta.real)
+            
             return B
         else:
-            return None
+            return None, 0
         
     def Get_l_r_roots(self, n):
         """Returns the matrix square roots (and inverses) needed to calculate B.
         
         Hermiticity of l[n] and r[n] is used to speed this up.
         If an exception occurs here, it is probably because these matrices
-        are not longer Hermitian (enough).
+        are no longer Hermitian (enough).
         """
         l_sqrt, evd = m.sqrtmh(self.l[n - 1], ret_evd=True)
         l_sqrt_inv = m.invmh(l_sqrt, evd=evd)
 
         r_sqrt, evd =  m.sqrtmh(self.r[n], ret_evd=True)
         r_sqrt_inv = m.invmh(r_sqrt, evd=evd)
+        
+        if self.sanity_checks:
+            if not sp.allclose(m.matmul(None, l_sqrt, l_sqrt), self.l[n - 1]):
+                print "Sanity Fail in Get_l_r_roots: Bad l_sqrt_%u" % (n - 1)
+            if not sp.allclose(m.matmul(None, r_sqrt, r_sqrt), self.r[n]):
+                print "Sanity Fail in Get_l_r_roots: Bad r_sqrt_%u" % (n)
+            if not sp.allclose(m.matmul(None, l_sqrt, l_sqrt_inv), sp.eye(l_sqrt.shape[0])):
+                print "Sanity Fail in Get_l_r_roots: Bad l_sqrt_inv_%u" % (n - 1)
+            if not sp.allclose(m.matmul(None, r_sqrt, r_sqrt_inv), sp.eye(r_sqrt.shape[0])):
+                print "Sanity Fail in Get_l_r_roots: Bad r_sqrt_inv_%u" % (n)
         
         return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
     
@@ -320,104 +376,45 @@ class evoMPS_TDVP_Generic_FBC:
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
+        self.BuildC()
+        
+        self.uGnd.Calc_AA()
+        self.uGnd.Calc_C()
+        self.uGnd.Calc_K()
+        self.K[self.N + 1] = self.uGnd.K
+        h = self.CalcK()
+        
+        eta_tot = 0
+        
         B_prev = None
         for n in xrange(1, self.N + 2):
             #V is not always defined (e.g. at the right boundary vector, and possibly before)
             if n <= self.N:
                 B = self.GetB(n)
+                eta_tot += self.eta[n]
             
             if n > 1 and not B_prev is None:
                 self.A[n - 1] += -dtau * B_prev
                 
             B_prev = B
         
-    def TakeStep_RK4(self, dtau):
-        """Take a step using the fourth-order explicit Runge-Kutta method.
-        
-        This requires more memory than a simple forward Euler step, and also
-        more than a backward Euler step. It is, however, far more accurate
-        and stable than forward Euler, and much faster than the backward
-        Euler method, since there is no need to iteratively solve an implicit
-        equation.
-        """
-        #self.Restore_RCF()
-        
-        #Take a copy of the current state
-        A0 = sp.empty_like(self.A)
-        for n in xrange(1, self.N):
-            A0[n] = self.A[n].copy()
+        return h, eta_tot
             
-        B_fin = sp.empty_like(self.A)
-
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.GetB(n) #k1
-                B_fin[n] = B
-                
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
-                
-            B_prev = B
-            
-        self.Upd_l()
-        self.Upd_r()
-        #self.Restore_RCF()
-        self.BuildC()
-        self.CalcK()
-        
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.GetB(n) #k2                
-                
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
-                B_fin[n - 1] += 2 * B_prev
-                
-            B_prev = B            
-            
-        self.Upd_l()
-        self.Upd_r()
-        #self.Restore_RCF()
-        self.BuildC()
-        self.CalcK()
-            
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.GetB(n) #k3                
-                
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau * B_prev
-                B_fin[n - 1] += 2 * B_prev
-                
-            B_prev = B
-             
-        self.Upd_l()
-        self.Upd_r()
-        #self.Restore_RCF()
-        self.BuildC()
-        self.CalcK()
-        
-        for n in xrange(1, self.N):
-            B = self.GetB(n) #k4
-            if not B is None:
-                B_fin[n] += B
-            
-        for n in xrange(1, self.N):
-            if not B_fin[n] is None:
-                self.A[n] = A0[n] - dtau /6 * B_fin[n]
-            
-    def AddNoise(self, fac):
+    def AddNoise(self, fac, n_i=-1, n_f=-1):
         """Adds some random noise of a given order to the state matrices A
         This can be used to determine the influence of numerical innaccuracies
         on quantities such as observables.
         """
-        for n in xrange(1, self.N + 1):
+        if n_i < 1:
+            n_i = 1
+        
+        if n_f > self.N:
+            n_f = self.N
+        
+        for n in xrange(n_i, n_f + 1):
             for s in xrange(self.q[n]):
                 self.A[n][s].real += (sp.rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
-                self.A[n][s].imag += (sp.rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
+                #self.A[n][s].imag += (sp.rand(self.D[n - 1], self.D[n]) - 0.5) * 2 * fac
                 
     
     def Upd_l(self, start=-1, finish=-1):
@@ -428,7 +425,7 @@ class evoMPS_TDVP_Generic_FBC:
         if start < 0:
             start = 1
         if finish < 0:
-            finish = self.N
+            finish = self.N + 1
         for n in xrange(start, finish + 1):
             self.l[n].fill(0)
             tmp = sp.empty_like(self.l[n])
@@ -570,7 +567,15 @@ class evoMPS_TDVP_Generic_FBC:
         return G_nm1_i, G_nm1
         
     
-    def Restore_RCF(self, update_l=True, normalize=True, diag_l=True):
+    def Restore_RCF(self, update_l=True, normalize=True, diag_l=True, dbg=False):
+        if dbg:
+            self.Upd_l()
+            self.Upd_r()        
+            for n in xrange(self.N + 1):
+                print (sp.trace(self.l[n]).real,sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+                
+            print uni.adot(self.uGnd.l, self.uGnd.r)        
+        
         #Begin with no GT for the right uMPS part.
         G_n_i = sp.eye(self.D[self.N], dtype=self.typ) 
         for n in reversed(xrange(1, self.N + 1)):
@@ -586,7 +591,7 @@ class evoMPS_TDVP_Generic_FBC:
                     
                 r_nm1 = self.EpsR(None, n, r_n, None)
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
-                    print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % n
+                    print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
         
         #Now G_n_i contains g_0_i
         for s in xrange(self.q[self.N]):
@@ -603,22 +608,30 @@ class evoMPS_TDVP_Generic_FBC:
         self.uGnd.l = m.matmul(None, m.H(G_n_i), self.uGnd.l, G_n_i)
         self.uGnd.Calc_lr()
         
-        if not sp.allclose(r / la.norm(r), self.uGnd.r / la.norm(self.uGnd.r)):
-            #print self.uGnd.r - r
-            print "balls.."
-        
-        self.r[self.N][:] = self.uGnd.r
-        self.l[0][:] = self.uGnd.l
-        
+#        #Applying g_0 to uGnd.A and then doing uGnd,Calc_lr() scales uGnd.r
+#        #Re-scale A[N] to fix this.
         r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
         fac = self.uGnd.D / sp.trace(r_nm1).real
-        print fac
-        self.A[self.N] *= sp.sqrt(fac)
+        if dbg:
+            print fac
+        #self.A[self.N] *= sp.sqrt(fac)
+        self.uGnd.r *= fac
+        
+        l1 = self.EpsL(None, 1, self.uGnd.l)
+        fac = 1 / sp.trace(l1).real
+        if dbg:
+            print fac
+        #self.A[1] *= sp.sqrt(fac)
+        self.uGnd.l *= fac
+
+        self.r[self.N][:] = self.uGnd.r
+        self.r[self.N + 1][:] = self.uGnd.r
+        self.l[0][:] = self.uGnd.l
         
         if self.sanity_checks: #and not diag_l:
             r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
             if not sp.allclose(r_nm1, self.r[self.N - 1], atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % self.N
+                print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (self.N - 1)
                 print la.norm(r_nm1 - self.r[self.N - 1])
 
         #self.Upd_l()
@@ -631,8 +644,8 @@ class evoMPS_TDVP_Generic_FBC:
                 M = self.EpsL(None, n, x)
                 ev, EV = la.eigh(M)
                 
-                G_n_i = EV
                 self.l[n][:] = sp.diag(ev)
+                G_n_i = EV
                 
                 for s in xrange(self.q[n]):                
                     m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
@@ -657,9 +670,12 @@ class evoMPS_TDVP_Generic_FBC:
                 
             self.uGnd.r = m.matmul(None, G_nm1, self.uGnd.r, m.H(G_nm1))
             self.uGnd.l = m.matmul(None, m.H(G_nm1_i), self.uGnd.l, G_nm1_i)
-            self.uGnd.Calc_lr()
+            #self.uGnd.Calc_lr()
             self.r[self.N][:] = self.uGnd.r
+            self.r[self.N + 1][:] = self.uGnd.r
             self.l[0][:] = self.uGnd.l
+            
+            #self.K[self.N + 1] = self.uGnd.r
             
             #The l step should not alter the norm, since the g's are unitary..
 #            r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
@@ -670,14 +686,25 @@ class evoMPS_TDVP_Generic_FBC:
             #self.Upd_l()
             #self.Upd_r()
             
+            self.l[self.N + 1] = self.EpsL(None, self.N + 1, self.l[self.N])
+            
             if self.sanity_checks:
+                l_n = self.l[0]
                 for n in xrange(1, self.N + 1):
-                    l_n = self.EpsL(None, n, self.l[n - 1])
+                    l_n = self.EpsL(None, n, l_n)
                     if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in Restore_RCF! p2: l_%u is bad" % n
-                    r_nm1 = self.EpsR(None, n, self.r[n], None)
+                        
+                r_nm1 = self.r[self.N + 1]
+                for n in reversed(xrange(1, self.N + 2)):
+                    r_nm1 = self.EpsR(None, n, r_nm1, None)
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in Restore_RCF! p2: r_%u is bad" % n
+                        print "Sanity Fail in Restore_RCF! p2: r_%u is bad" % (n - 1)
+            if dbg:
+                for n in xrange(self.N + 2):
+                    print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+                    
+                print uni.adot(self.uGnd.l, self.uGnd.r)
                     
             return True #FIXME: This OK?
         elif update_l:
@@ -696,8 +723,9 @@ class evoMPS_TDVP_Generic_FBC:
         ls_pos = True
         ls_diag = True
         
-        for n in xrange(1, self.N + 1):
+        for n in xrange(1, self.N):
             rnsOK = rnsOK and sp.allclose(self.r[n], sp.eye(self.r[n].shape[0]), atol=self.eps*2, rtol=0)
+        for n in xrange(2, self.N + 1):
             ls_herm = ls_herm and sp.allclose(self.l[n] - m.H(self.l[n]), 0, atol=self.eps*2)
             ls_trOK = ls_trOK and sp.allclose(sp.trace(self.l[n]), 1, atol=self.eps*2, rtol=0)
             ls_pos = ls_pos and all(la.eigvalsh(self.l[n]) > 0)
