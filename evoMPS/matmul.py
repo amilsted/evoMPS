@@ -70,16 +70,16 @@ class eyemat(object):
             return NotImplemented
         
     def dot(self, other):
-        if self.shape == other.shape:
+        if self.shape[1] == other.shape[0]:
             return other
         else:
-            return None
+            raise BaseException
             
     def dot_left(self, other):
-        if self.shape == other.shape:
+        if self.shape[0] == other.shape[1]:
             return other
         else:
-            return None
+            raise BaseException
             
     def conj(self):
         return self
