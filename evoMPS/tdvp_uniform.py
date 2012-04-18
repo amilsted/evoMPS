@@ -21,7 +21,7 @@ import scipy as sp
 import scipy.sparse as sps
 import scipy.linalg as la
 import scipy.sparse.linalg as las
-import scipy.optimize as op
+import scipy.optimize as opti
 import nullspace as ns
 import matmul as m
 
@@ -299,7 +299,7 @@ class evoMPS_TDVP_Uniform:
         
         return i < max_itr - 1, i
     
-    def Calc_lr(self, renorm=True, force_r_CF=False):        
+    def Calc_lr(self, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
         
         self.l_di = None
@@ -396,10 +396,9 @@ class evoMPS_TDVP_Uniform:
         self.S_hc = - sp.sum(lam * sp.log2(lam))
         
         sv = sp.array(sv, dtype=self.typ)
+        
         S = m.simple_diag_matrix(sv)
         Srt = S.sqrt()
-        
-        #TODO: Optimize mult. with diagonal matrix!
         
         g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
         
@@ -451,7 +450,7 @@ class evoMPS_TDVP_Uniform:
 
             m.matmul(self.l, m.H(G), self.l, G)
             
-            #Now bring l into diagonal form
+            #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
             ev, EV = la.eigh(self.l)
             
             G = G.dot(EV)
@@ -795,13 +794,13 @@ class evoMPS_TDVP_Uniform:
             brack = fb_brack
                 
         try:
-            tau_opt = op.brent(f, 
+            tau_opt = opti.brent(f, 
                                brack=brack, 
                                tol=tol,
                                maxiter=20)
         except ValueError:
             print "Bracketing attempt failed..."
-            tau_opt = op.brent(f, 
+            tau_opt = opti.brent(f, 
                                brack=fb_brack, 
                                tol=tol,
                                maxiter=20)
@@ -922,9 +921,17 @@ class evoMPS_TDVP_Uniform:
         
         if (newA.shape == self.A.shape):
             self.A[:] = newA
-            self.l = newl
-            self.r = newr
             self.K[:] = newK
+            try:
+                self.l = newl.A
+                self.r = newr.A
+            except:
+                self.l = newl
+                self.r = newr
+                
+            if sp.isscalar(self.r):
+                self.r = self.r * sp.eye(self.D, dtype=self.typ)
+                
             return True
         elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
