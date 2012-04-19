@@ -133,7 +133,7 @@ grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
 
 expand = False
 
-if False:
+if True:
     try:
        a_file = open(grnd_fname, 'rb')
        s.LoadState(a_file)
@@ -149,182 +149,183 @@ else:
     loaded = False
     real_time = False
 
-"""
-Prepare some loop variables and some vectors to hold data from each step.
-"""
-t = 0. + 0.j
-imsteps = 0
-
-reCF = []
-reNorm = []
-
-T = sp.zeros((total_steps), dtype=sp.complex128)
-E = sp.zeros((total_steps), dtype=sp.complex128)
-lN = sp.zeros((total_steps), dtype=sp.complex128)
-
-Sx = sp.zeros((total_steps), dtype=sp.complex128)
-Sy = sp.zeros((total_steps), dtype=sp.complex128)
-Sz = sp.zeros((total_steps), dtype=sp.complex128)
-
-Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
-   
-   
-"""
-Print a table header.
-"""
-print "Bond dimensions: " + str(s.D)
-print
-col_heads = ["Step", "t", "eta", "Restore CF?", "H", "dH", 
-             "sig_x", "sig_y", "sig_z",
-             "M_x", "Next step",
-             "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
-print "\t".join(col_heads)
-print
-
-s.sanity_checks = True
-s.symm_gauge = True
-
-for i in xrange(total_steps):
-    T[i] = t
-    
-    row = [str(i)]
-    row.append(str(t))
-    
-    row.append("%.4g" % s.eta.real)
-    
-    s.Calc_lr()
-
-    restoreCF = True #(i % 4 == 3) #Restore canonical form every 16 steps.
-    reCF.append(restoreCF)
-    if restoreCF:
-        s.Restore_CF()
-        row.append("Yes")
-    else:
-        row.append("No")    
-    
-    #print "Manual h = " + str(s.Expect_2S(h_nn))
-    s.Calc_AA()
-    s.Calc_C()    
-    s.Calc_K()    
-        
-    E[i] = s.h
-    row.append("%.15g" % E[i].real)
-    
-    if i > 0:        
-        dE = E[i].real - E[i - 1].real
-    else:
-        dE = E[i]
-    
-    row.append("%.2e" % (dE.real))
-        
+if __name__ == "__main__":
     """
-    Compute obserables!
+    Prepare some loop variables and some vectors to hold data from each step.
     """
+    t = 0. + 0.j
+    imsteps = 0
     
-    Sx[i] = s.Expect_SS(x_ss) #Spin observables for site 3.
-    Sy[i] = s.Expect_SS(y_ss)
-    Sz[i] = s.Expect_SS(z_ss)
-    row.append("%.3g" % Sx[i].real)
-    row.append("%.3g" % Sy[i].real)
-    row.append("%.3g" % Sz[i].real)
+    reCF = []
+    reNorm = []
     
-#    rho_34 = s.DensityMatrix_2S(3, 4) #Reduced density matrix for sites 3 and 4.
-#    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
-#    
-#    row.append("%.9g" % E_v.real)
+    T = sp.zeros((total_steps), dtype=sp.complex128)
+    E = sp.zeros((total_steps), dtype=sp.complex128)
+    lN = sp.zeros((total_steps), dtype=sp.complex128)
     
-    #x-Magnetization
-    m = Sx[i]
-        
-    row.append("%.9g" % m.real)
-    Mx[i] = m    
+    Sx = sp.zeros((total_steps), dtype=sp.complex128)
+    Sy = sp.zeros((total_steps), dtype=sp.complex128)
+    Sz = sp.zeros((total_steps), dtype=sp.complex128)
     
+    Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
+       
+       
     """
-    Switch to real time evolution if we have the ground state.
+    Print a table header.
     """
-    if expand and (loaded or (not real_time and abs(dE) < tol_im)):
-        grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)        
+    print "Bond dimensions: " + str(s.D)
+    print
+    col_heads = ["Step", "t", "eta", "Restore CF?", "H", "dH", 
+                 "sig_x", "sig_y", "sig_z",
+                 "M_x", "Next step",
+                 "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
+    print "\t".join(col_heads)
+    print
+    
+    s.sanity_checks = True
+    s.symm_gauge = False
+    
+    for i in xrange(total_steps):
+        T[i] = t
         
-        if not loaded:
-            if not restoreCF:
-                s.Restore_CF()
-            s.SaveState(grnd_fname)
+        row = [str(i)]
+        row.append(str(t))
         
-        D = D * 2
-        print "***MOVING TO D = " + str(D) + "***"
-        s.Expand_D(D)
+        row.append("%.4g" % s.eta.real)
+        
         s.Calc_lr()
-        s.Restore_CF() #this helps a lot
+    
+        restoreCF = True #(i % 4 == 3) #Restore canonical form every 16 steps.
+        reCF.append(restoreCF)
+        if restoreCF:
+            s.Restore_CF()
+            row.append("Yes")
+        else:
+            row.append("No")    
+        
+        #print "Manual h = " + str(s.Expect_2S(h_nn))
         s.Calc_AA()
-        s.Calc_C()
-        s.Calc_K()
+        s.Calc_C()    
+        s.Calc_K()    
+            
+        E[i] = s.h
+        row.append("%.15g" % E[i].real)
         
-        loaded = False
-    elif loaded or (not real_time and abs(dE) < tol_im):
-        real_time = True
+        if i > 0:        
+            dE = E[i].real - E[i - 1].real
+        else:
+            dE = E[i]
         
-        s.SaveState(grnd_fname)
-        J = J_real
-        step = realstep * 1.j
-        loaded = False
-        print 'Starting real time evolution!'
-    
-    row.append(str(1.j * sp.conj(step)))
+        row.append("%.2e" % (dE.real))
+            
+        """
+        Compute obserables!
+        """
+        
+        Sx[i] = s.Expect_SS(x_ss) #Spin observables for site 3.
+        Sy[i] = s.Expect_SS(y_ss)
+        Sz[i] = s.Expect_SS(z_ss)
+        row.append("%.3g" % Sx[i].real)
+        row.append("%.3g" % Sy[i].real)
+        row.append("%.3g" % Sz[i].real)
+        
+    #    rho_34 = s.DensityMatrix_2S(3, 4) #Reduced density matrix for sites 3 and 4.
+    #    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
+    #    
+    #    row.append("%.9g" % E_v.real)
+        
+        #x-Magnetization
+        m = Sx[i]
+            
+        row.append("%.9g" % m.real)
+        Mx[i] = m    
+        
+        """
+        Switch to real time evolution if we have the ground state.
+        """
+        if expand and (loaded or (not real_time and abs(dE) < tol_im)):
+            grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)        
+            
+            if not loaded:
+                if not restoreCF:
+                    s.Restore_CF()
+                s.SaveState(grnd_fname)
+            
+            D = D * 2
+            print "***MOVING TO D = " + str(D) + "***"
+            s.Expand_D(D)
+            s.Calc_lr()
+            s.Restore_CF() #this helps a lot
+            s.Calc_AA()
+            s.Calc_C()
+            s.Calc_K()
+            
+            loaded = False
+        elif loaded or (not real_time and abs(dE) < tol_im):
+            real_time = True
+            
+            s.SaveState(grnd_fname)
+            J = J_real
+            step = realstep * 1.j
+            loaded = False
+            print 'Starting real time evolution!'
+        
+        row.append(str(1.j * sp.conj(step)))
+        
+        """
+        Carry out next step!
+        """
+        if not real_time:
+            print "\t".join(row)
+            s.TakeStep(step, assumeCF=restoreCF)     
+            imsteps += 1
+        elif False: #Midpoint method. Currently disabled. Change to True to test!
+            itr, delta, delta_check = s.TakeStep_BEuler(step)
+            row.append(str(itr))
+            row.append("%.3g" % delta.real)
+            row.append("%.3g" % delta_check.real)
+            print "\t".join(row)
+        elif False:
+            print "\t".join(row)
+            s.TakeStep_RK4(step)
+        else:
+            print "\t".join(row)
+            s.TakeStep(step, assumeCF=restoreCF)
+        
+        t += 1.j * sp.conj(step)
     
     """
-    Carry out next step!
+    Simple plots of the results.
     """
-    if not real_time:
-        print "\t".join(row)
-        s.TakeStep(step, assumeCF=restoreCF)     
-        imsteps += 1
-    elif False: #Midpoint method. Currently disabled. Change to True to test!
-        itr, delta, delta_check = s.TakeStep_BEuler(step)
-        row.append(str(itr))
-        row.append("%.3g" % delta.real)
-        row.append("%.3g" % delta_check.real)
-        print "\t".join(row)
-    elif False:
-        print "\t".join(row)
-        s.TakeStep_RK4(step)
-    else:
-        print "\t".join(row)
-        s.TakeStep(step, assumeCF=restoreCF)
     
-    t += 1.j * sp.conj(step)
-
-"""
-Simple plots of the results.
-"""
-
-if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-    tau = T.imag[0:imsteps]
+    if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
+        tau = T.imag[0:imsteps]
+        
+        fig1 = plt.figure(1)
+        fig2 = plt.figure(2) 
+        K1_tau = fig1.add_subplot(111)
+        K1_tau.set_xlabel('tau')
+        K1_tau.set_ylabel('H')
+        M_tau = fig2.add_subplot(111)
+        M_tau.set_xlabel('tau')
+        M_tau.set_ylabel('M_x')    
+        
+        K1_tau.plot(tau, E.real[0:imsteps])
+        M_tau.plot(tau, Mx.real[0:imsteps])
     
-    fig1 = plt.figure(1)
-    fig2 = plt.figure(2) 
-    K1_tau = fig1.add_subplot(111)
-    K1_tau.set_xlabel('tau')
-    K1_tau.set_ylabel('H')
-    M_tau = fig2.add_subplot(111)
-    M_tau.set_xlabel('tau')
-    M_tau.set_ylabel('M_x')    
+    #Now plot the real time evolution of K1 and Mx
+    t = T.real[imsteps + 1:]
+    fig3 = plt.figure(3)
+    fig4 = plt.figure(4)
     
-    K1_tau.plot(tau, E.real[0:imsteps])
-    M_tau.plot(tau, Mx.real[0:imsteps])
-
-#Now plot the real time evolution of K1 and Mx
-t = T.real[imsteps + 1:]
-fig3 = plt.figure(3)
-fig4 = plt.figure(4)
-
-K1_t = fig3.add_subplot(111)
-K1_t.set_xlabel('t')
-K1_t.set_ylabel('H')
-M_t = fig4.add_subplot(111)
-M_t.set_xlabel('t')
-M_t.set_ylabel('M_x')
-
-K1_t.plot(t, E.real[imsteps + 1:])
-M_t.plot(t, Mx.real[imsteps + 1:])
-
-plt.show()
+    K1_t = fig3.add_subplot(111)
+    K1_t.set_xlabel('t')
+    K1_t.set_ylabel('H')
+    M_t = fig4.add_subplot(111)
+    M_t.set_xlabel('t')
+    M_t.set_ylabel('M_x')
+    
+    K1_t.plot(t, E.real[imsteps + 1:])
+    M_t.plot(t, Mx.real[imsteps + 1:])
+    
+    plt.show()

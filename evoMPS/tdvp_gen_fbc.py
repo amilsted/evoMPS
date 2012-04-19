@@ -25,10 +25,13 @@ def go(sfbc, tau, steps):
     h_prev = 0
     for i in xrange(steps):
         sfbc.Restore_RCF()
+        sfbc.Upd_l()
+        sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print "\t".join(map(str, (eta.real, norm_uni, h_uni, h.real/(sfbc.N), (h - h_prev).real)))
+        print "\t".join(map(str, (eta.real, h.real/(sfbc.N) - h_uni, (h - h_prev).real)))
+        print sfbc.eta.real
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
         h_prev = h
@@ -66,6 +69,9 @@ class evoMPS_TDVP_Generic_FBC:
                 self.D[n] = qacc
             
     def __init__(self, numsites, uGnd):
+        uGnd.symm_gauge = False
+        uGnd.Calc_lr()
+        uGnd.Restore_CF()
         uGnd.Calc_lr()
         self.uGnd = uGnd
 
@@ -625,8 +631,9 @@ class evoMPS_TDVP_Generic_FBC:
                 r_n = m.eyemat(self.D[n], self.typ)
                     
                 r_nm1 = self.EpsR(None, n, r_n, None)
-                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
+                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-13, rtol=1E-13):
                     print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
+                    print la.norm(r_nm1 - self.r[n-1])
                     
         self.r[self.N + 1] = self.r[self.N]
         
