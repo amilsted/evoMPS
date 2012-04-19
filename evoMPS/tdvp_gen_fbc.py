@@ -29,8 +29,8 @@ def go(sfbc, tau, steps):
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
         print (eta.real, norm_uni, h_uni, h.real/(sfbc.N), (h - h_prev).real)
-        if i > 0 and (h - h_prev).real > 0:
-            break
+#        if i > 0 and (h - h_prev).real > 0:
+#            break
         h_prev = h
 
 class evoMPS_TDVP_Generic_FBC:
@@ -111,9 +111,13 @@ class evoMPS_TDVP_Generic_FBC:
             if n < self.N + 1:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
                 
-        self.r[self.N] = uGnd.r
-        self.r[self.N + 1] = uGnd.r
-        self.l[0] = uGnd.l
+        self.A[0] = uGnd.A.copy()
+        self.r[self.N] = uGnd.r.copy()
+        self.r[self.N + 1] = self.r[self.N]
+        self.l[0] = uGnd.l.copy()
+        
+        self.l_r = uGnd.l.copy()
+        self.r_l = uGnd.r.copy()
         
     def Randomize(self):
         """Set A's randomly, trying to keep the norm reasonable.
@@ -378,10 +382,13 @@ class evoMPS_TDVP_Generic_FBC:
         """
         self.BuildC()
         
+        self.uGnd.A = self.A[self.N + 1]
+        self.uGnd.r = self.r[self.N]
+        self.uGnd.l = self.l_r
         self.uGnd.Calc_AA()
         self.uGnd.Calc_C()
         self.uGnd.Calc_K()
-        self.K[self.N + 1] = self.uGnd.K
+        self.K[self.N + 1][:] = self.uGnd.K
         h = self.CalcK()
         
         eta_tot = 0
@@ -568,12 +575,11 @@ class evoMPS_TDVP_Generic_FBC:
         G_n_m1_i : ndarray
             The inverse gauge transformation matrix for the site n - 1.
         """
-        if n == self.N:
-            GGh_n_i = m.matmul(None, G_n_i, self.uGnd.r, m.H(G_n_i))
+        if G_n_i is None:
+            M = self.EpsR(None, n, m.eyemat(self.D[n], dtype=self.typ), None)
         else:
             GGh_n_i = m.matmul(None, G_n_i, m.H(G_n_i))
-        
-        M = self.EpsR(None, n, GGh_n_i, None)
+            M = self.EpsR(None, n, GGh_n_i, None)            
                     
         #The following should be more efficient than eigh():
         try:
@@ -586,6 +592,9 @@ class evoMPS_TDVP_Generic_FBC:
             G_nm1 = m.H(m.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
             G_nm1_i = la.inv(G_nm1)
         
+        if G_n_i is None:
+            G_n_i = G_nm1_i
+        
         for s in xrange(self.q[n]):                
             m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
             #It's ok to use the same matrix as out and as an operand here
@@ -597,132 +606,105 @@ class evoMPS_TDVP_Generic_FBC:
     def Restore_RCF(self, update_l=True, normalize=True, diag_l=True, dbg=False):
         if dbg:
             self.Upd_l()
-            self.Upd_r()        
-            for n in xrange(self.N + 1):
-                print (sp.trace(self.l[n]).real,sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+            self.Upd_r()
+            for n in xrange(self.N + 2):
+                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
                 
-            print uni.adot(self.uGnd.l, self.uGnd.r)        
+            print uni.adot(self.l_r, self.r[self.N])
+            print uni.adot(self.l[0], self.r_l)     
         
         #Begin with no GT for the right uMPS part.
-        G_n_i = sp.eye(self.D[self.N], dtype=self.typ) 
-        for n in reversed(xrange(1, self.N + 1)):
+        G_n_i = None        
+        for n in reversed(xrange(1, self.N + 2)):
             G_n_i, G_n = self.Restore_ON_R_n(n, G_n_i)
 
             self.r[n - 1][:] = sp.eye(self.D[n - 1])
 
             if self.sanity_checks: #and not diag_l:
-                if n == self.N:
-                    r_n = self.uGnd.r
-                else:
-                    r_n = m.eyemat(self.D[n], self.typ)
+                r_n = m.eyemat(self.D[n], self.typ)
                     
                 r_nm1 = self.EpsR(None, n, r_n, None)
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
                     print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
+                    
+        self.r[self.N + 1] = self.r[self.N]
         
         #Now G_n_i contains g_0_i
-        for s in xrange(self.q[self.N]):
-            self.A[self.N][s] = m.matmul(None, self.A[self.N][s], G_n_i)
-                
-        for s in xrange(self.uGnd.q):
-            self.uGnd.A[s] = m.matmul(None, G_n, self.uGnd.A[s], G_n_i)
+        for s in xrange(self.q[0]):
+            self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)
             
-        self.A[self.N + 1] = self.uGnd.A
-        self.A[0] = self.uGnd.A
-        
-        r = m.matmul(None, G_n, self.uGnd.r, m.H(G_n))
-        self.uGnd.r = r
-        self.uGnd.l = m.matmul(None, m.H(G_n_i), self.uGnd.l, G_n_i)
+        self.r_l[:] = m.matmul(None, G_n, self.r_l, m.H(G_n))
+        self.l[0][:] = m.matmul(None, m.H(G_n_i), self.l[0], G_n_i)
+        self.uGnd.A = self.A[0]
+        self.uGnd.r = self.r_l
+        self.uGnd.l = self.l[0]
         self.uGnd.Calc_lr() #Ensures largest ev of E=1
+        self.A[0][:] = self.uGnd.A #redundant?
+        self.l[0][:] = self.uGnd.l
+        self.r_l[:] = self.uGnd.r
         
-#        #Applying g_0 to uGnd.A and then doing uGnd,Calc_lr() scales uGnd.r
-#        #Re-scale A[N] to fix this.
-        r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
-        fac = self.uGnd.D / sp.trace(r_nm1).real
+        fac = 1 / sp.trace(self.l[0]).real
         if dbg:
             print fac
-        self.A[self.N] *= sp.sqrt(fac) #this causes problems for l_N, l_(N+1)
-        #self.uGnd.r *= fac
-        
-#        l1 = self.EpsL(None, 1, self.uGnd.l)
-#        fac = 1 / sp.trace(l1).real
-#        if dbg:
-#            print fac
-#        #self.A[1] *= sp.sqrt(fac)
-#        self.uGnd.l *= fac
-
-        self.r[self.N][:] = self.uGnd.r
-        self.r[self.N + 1][:] = self.uGnd.r
-        self.l[0][:] = self.uGnd.l
-        
-        if self.sanity_checks: #and not diag_l:
-            r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
-            if not sp.allclose(r_nm1, self.r[self.N - 1], atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (self.N - 1)
-                print la.norm(r_nm1 - self.r[self.N - 1])
-
-        #self.Upd_l()
-        #self.Upd_r()
-                
+        self.l[0] *= fac
+        self.r_l *= 1/fac
+                        
         if diag_l:
-            G_nm1 = sp.eye(self.D[0], dtype=self.typ)
-            for n in xrange(1, self.N + 1):
-                x = m.matmul(None, m.H(G_nm1), self.l[n - 1], G_nm1)
+            G_nm1 = None
+            l_nm1 = self.l[0]
+            for n in xrange(self.N + 1):
+                if G_nm1 is None:
+                    x = l_nm1
+                else:
+                    x = m.matmul(None, m.H(G_nm1), l_nm1, G_nm1)
                 M = self.EpsL(None, n, x)
                 ev, EV = la.eigh(M)
                 
                 self.l[n][:] = sp.diag(ev)
                 G_n_i = EV
                 
+                if G_nm1 is None:
+                    G_nm1 = m.H(EV) #for left uniform case
+                    
                 for s in xrange(self.q[n]):                
                     m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
                 
                 if self.sanity_checks:
-                    l = self.EpsL(None, n, self.l[n - 1])
-                    if not sp.allclose(l, self.l[n]):
+                    l = self.EpsL(None, n, l_nm1)
+                    if not sp.allclose(l, self.l[n], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in Restore_RCF!: l_%u is bad" % n
                 
                 G_nm1 = m.H(EV)
+                l_nm1 = self.l[n]
             
             #Now G_nm1 = G_N
-            for s in xrange(self.q[1]):                
-                self.A[1][s] = m.matmul(None, G_nm1, self.A[1][s])
-                
             G_nm1_i = m.H(G_nm1)
-            for s in xrange(self.uGnd.q):
-                self.uGnd.A[s] = m.matmul(None, G_nm1, self.uGnd.A[s], G_nm1_i)
+            for s in xrange(self.q[self.N + 1]):
+                self.A[self.N + 1][s] = m.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
                 
-            self.A[self.N + 1] = self.uGnd.A
-            self.A[0] = self.uGnd.A
-                
-            self.uGnd.r = m.matmul(None, G_nm1, self.uGnd.r, m.H(G_nm1))
-            self.uGnd.l = m.matmul(None, m.H(G_nm1_i), self.uGnd.l, G_nm1_i)
-#            self.uGnd.Calc_lr()
-#            
-#    #        #Applying g_0 to uGnd.A and then doing uGnd,Calc_lr() scales uGnd.r
-#            r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
-#            fac = self.uGnd.D / sp.trace(r_nm1).real
-#            if dbg:
-#                print fac
-#            #self.A[self.N] *= sp.sqrt(fac)
-#            self.uGnd.r *= fac
-#            
-#            l1 = self.EpsL(None, 1, self.uGnd.l)
-#            fac = 1 / sp.trace(l1).real
-#            if dbg:
-#                print fac
-#            #self.A[1] *= sp.sqrt(fac)
-#            self.uGnd.l *= fac
+            self.r[self.N][:] = m.matmul(None, G_nm1, self.r[self.N], m.H(G_nm1))            
+            self.l_r[:] = m.matmul(None, m.H(G_nm1_i), self.l_r, G_nm1_i)
             
+            self.uGnd.A = self.A[self.N + 1]
+            self.uGnd.r = self.r[self.N]
+            self.uGnd.l = self.l_r
+            self.uGnd.Calc_lr() #Ensures largest ev of E=1
+            self.A[self.N + 1][:] = self.uGnd.A #redundant?
+            self.l_r[:] = self.uGnd.l
             self.r[self.N][:] = self.uGnd.r
-            self.r[self.N + 1][:] = self.uGnd.r
-            self.l[0][:] = self.uGnd.l
-        
-            self.l[self.N + 1] = self.EpsL(None, self.N + 1, self.l[self.N])
+            
+            fac = self.D[self.N] / sp.trace(self.r[self.N]).real
+            if dbg:
+                print fac
+            self.r[self.N] *= fac
+            self.l_r *= 1/fac
+            
+            self.r[self.N + 1][:] = self.r[self.N] #redundant?            
+            self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
             if self.sanity_checks:
                 l_n = self.l[0]
-                for n in xrange(1, self.N + 1):
+                for n in xrange(0, self.N + 1):
                     l_n = self.EpsL(None, n, l_n)
                     if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in Restore_RCF! p2: l_%u is bad" % n
@@ -736,9 +718,10 @@ class evoMPS_TDVP_Generic_FBC:
                 for n in xrange(self.N + 2):
                     print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
                     
-                print uni.adot(self.uGnd.l, self.uGnd.r)
+                print uni.adot(self.l_r, self.r[self.N])
+                print uni.adot(self.l[0], self.r_l)
                     
-            return True #FIXME: This OK?
+            return True
         elif update_l:
             res = self.Upd_l()
             return res
