@@ -28,7 +28,7 @@ def go(sfbc, tau, steps):
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print (eta.real, norm_uni, h_uni, h.real/(sfbc.N), (h - h_prev).real)
+        print "\t".join(map(str, (eta.real, norm_uni, h_uni, h.real/(sfbc.N), (h - h_prev).real)))
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
         h_prev = h
@@ -277,15 +277,16 @@ class evoMPS_TDVP_Generic_FBC:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
                     x_subsubpart += m.matmul(tmp, self.C[n][s,t], self.r[n + 1], m.H(self.A[n + 1][t])) #~1st line
+                    
+                x_subsubpart += m.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line               
                 
                 x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r_inv)
-        
-            if n < self.N + 1:
+            
+            if not self.h_ext is None:
                 x_subsubpart.fill(0)
-
-                x_subsubpart += m.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line                
-                
-                x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r_inv)
+                for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
+                    x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
+                x_subpart += m.matmul(tmp, x_subsubpart, sqrt_r)
             
             x_part += m.matmul(None, x_subpart, Vsh[s])
                 
