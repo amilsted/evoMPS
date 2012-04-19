@@ -28,7 +28,7 @@ def go(sfbc, tau, steps):
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print (eta.real, norm_uni, h_uni, h.real/(sfbc.N + 1.), (h - h_prev).real)
+        print (eta.real, norm_uni, h_uni, h.real/(sfbc.N), (h - h_prev).real)
         if i > 0 and (h - h_prev).real > 0:
             break
         h_prev = h
@@ -192,7 +192,7 @@ class evoMPS_TDVP_Generic_FBC:
                 self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
                                       m.H(self.A[n][s]))
                                           
-        return uni.adot(self.l[0], self.K[0])
+        return uni.adot(self.l[1], self.K[1])
     
     def BuildVsh(self, n, sqrt_r):
         """Generates m.H(V[n][s]) for a given n, used for generating B[n][s]
@@ -483,6 +483,33 @@ class evoMPS_TDVP_Generic_FBC:
                         res += tmp
         return res
         
+    def EpsR_2(self, n, x, op, A1=None, A2=None, A3=None, A4=None):
+        res = sp.zeros_like(self.r[n - 1])
+        
+        if A1 is None:
+            A1 = self.A[n]
+        if A2 is None:
+            A2 = self.A[n + 1]
+        if A3 is None:
+            A3 = self.A[n]
+        if A4 is None:
+            A4 = self.A[n + 1]
+            
+        AAuvH = sp.empty_like(A3[0])
+        for u in xrange(self.q[n]):
+            for v in xrange(self.q[n + 1]):
+                m.matmul(AAuvH, A3[u], A4[v])
+                AAuvH = m.H(AAuvH, out=AAuvH)
+                subres = sp.zeros_like(A1[0])
+                for s in xrange(self.q[n]):
+                    for t in xrange(self.q[n + 1]):
+                        opval = op(n, u, v, s, t)
+                        if opval != 0:
+                            subres += opval * sp.dot(A1[s], A2[t])
+                res += m.matmul(subres, subres, x, AAuvH)
+        
+        return res
+        
     def EpsL(self, res, n, x):
         """Implements the left epsilon map
         
@@ -606,7 +633,7 @@ class evoMPS_TDVP_Generic_FBC:
         r = m.matmul(None, G_n, self.uGnd.r, m.H(G_n))
         self.uGnd.r = r
         self.uGnd.l = m.matmul(None, m.H(G_n_i), self.uGnd.l, G_n_i)
-        self.uGnd.Calc_lr()
+        self.uGnd.Calc_lr() #Ensures largest ev of E=1
         
 #        #Applying g_0 to uGnd.A and then doing uGnd,Calc_lr() scales uGnd.r
 #        #Re-scale A[N] to fix this.
@@ -614,15 +641,15 @@ class evoMPS_TDVP_Generic_FBC:
         fac = self.uGnd.D / sp.trace(r_nm1).real
         if dbg:
             print fac
-        #self.A[self.N] *= sp.sqrt(fac)
-        self.uGnd.r *= fac
+        self.A[self.N] *= sp.sqrt(fac) #this causes problems for l_N, l_(N+1)
+        #self.uGnd.r *= fac
         
-        l1 = self.EpsL(None, 1, self.uGnd.l)
-        fac = 1 / sp.trace(l1).real
-        if dbg:
-            print fac
-        #self.A[1] *= sp.sqrt(fac)
-        self.uGnd.l *= fac
+#        l1 = self.EpsL(None, 1, self.uGnd.l)
+#        fac = 1 / sp.trace(l1).real
+#        if dbg:
+#            print fac
+#        #self.A[1] *= sp.sqrt(fac)
+#        self.uGnd.l *= fac
 
         self.r[self.N][:] = self.uGnd.r
         self.r[self.N + 1][:] = self.uGnd.r
@@ -670,22 +697,27 @@ class evoMPS_TDVP_Generic_FBC:
                 
             self.uGnd.r = m.matmul(None, G_nm1, self.uGnd.r, m.H(G_nm1))
             self.uGnd.l = m.matmul(None, m.H(G_nm1_i), self.uGnd.l, G_nm1_i)
-            #self.uGnd.Calc_lr()
+#            self.uGnd.Calc_lr()
+#            
+#    #        #Applying g_0 to uGnd.A and then doing uGnd,Calc_lr() scales uGnd.r
+#            r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
+#            fac = self.uGnd.D / sp.trace(r_nm1).real
+#            if dbg:
+#                print fac
+#            #self.A[self.N] *= sp.sqrt(fac)
+#            self.uGnd.r *= fac
+#            
+#            l1 = self.EpsL(None, 1, self.uGnd.l)
+#            fac = 1 / sp.trace(l1).real
+#            if dbg:
+#                print fac
+#            #self.A[1] *= sp.sqrt(fac)
+#            self.uGnd.l *= fac
+            
             self.r[self.N][:] = self.uGnd.r
             self.r[self.N + 1][:] = self.uGnd.r
             self.l[0][:] = self.uGnd.l
-            
-            #self.K[self.N + 1] = self.uGnd.r
-            
-            #The l step should not alter the norm, since the g's are unitary..
-#            r_nm1 = self.EpsR(None, self.N, self.uGnd.r, None)
-#            fac = self.uGnd.D / sp.trace(r_nm1)
-#            print fac
-#            self.A[self.N] *= sp.sqrt(fac)
-            
-            #self.Upd_l()
-            #self.Upd_r()
-            
+        
             self.l[self.N + 1] = self.EpsL(None, self.N + 1, self.l[self.N])
             
             if self.sanity_checks:
@@ -754,6 +786,10 @@ class evoMPS_TDVP_Generic_FBC:
         res = self.EpsR(None, n, self.r[n], o)
         res = m.matmul(None, self.l[n - 1], res)
         return res.trace()
+        
+    def Expect_2S(self, o, n):
+        res = self.EpsR_2(n, self.r[n + 1], o)
+        return uni.adot(self.l[n - 1], res)
         
     def Expect_SS_Cor(self, o1, o2, n1, n2):
         """Computes the correlation of two single site operators acting on two different sites.
