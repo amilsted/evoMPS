@@ -21,12 +21,14 @@ import nullspace as ns
 import matmul as m
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps):
+def go(sfbc, tau, steps, restore_CF=True):
     h_prev = 0
     for i in xrange(steps):
-        sfbc.Restore_RCF()
-        sfbc.Upd_l()
-        sfbc.Upd_r()
+        if restore_CF:
+            sfbc.Restore_RCF()
+        else:
+            sfbc.Upd_l()
+            sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
@@ -620,9 +622,8 @@ class evoMPS_TDVP_Generic_FBC:
             print uni.adot(self.l_r, self.r[self.N])
             print uni.adot(self.l[0], self.r_l)     
         
-        #Begin with no GT for the right uMPS part.
-        G_n_i = None        
-        for n in reversed(xrange(1, self.N + 2)):
+        G_n_i = sp.eye(self.D[self.N + 1], dtype=self.typ)        
+        for n in reversed(xrange(2, self.N + 1)):
             G_n_i, G_n = self.Restore_ON_R_n(n, G_n_i)
 
             self.r[n - 1][:] = sp.eye(self.D[n - 1])
@@ -635,32 +636,41 @@ class evoMPS_TDVP_Generic_FBC:
                     print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
                     print la.norm(r_nm1 - self.r[n-1])
                     
-        self.r[self.N + 1] = self.r[self.N]
+        #self.r[self.N + 1] = self.r[self.N]
         
-        #Now G_n_i contains g_0_i
-        for s in xrange(self.q[0]):
-            self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)
+#        #Now G_n_i contains g_0_i
+#        for s in xrange(self.q[0]):
+#            self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)
+
+        #Now G_n_i contains g_1_i
+        for s in xrange(self.q[1]):
+            self.A[1][s] = m.matmul(None, self.A[1][s], G_n_i)
             
-        self.r_l[:] = m.matmul(None, G_n, self.r_l, m.H(G_n))
-        self.l[0][:] = m.matmul(None, m.H(G_n_i), self.l[0], G_n_i)
-        self.uGnd.A = self.A[0]
-        self.uGnd.r = self.r_l
-        self.uGnd.l = self.l[0]
-        self.uGnd.Calc_lr() #Ensures largest ev of E=1
-        self.A[0][:] = self.uGnd.A #redundant?
-        self.l[0][:] = self.uGnd.l
-        self.r_l[:] = self.uGnd.r
+#        self.r_l[:] = m.matmul(None, G_n, self.r_l, m.H(G_n))
+#        self.l[0][:] = m.matmul(None, m.H(G_n_i), self.l[0], G_n_i)
+#        self.uGnd.A = self.A[0]
+#        self.uGnd.r = self.r_l
+#        self.uGnd.l = self.l[0]
+#        self.uGnd.Calc_lr() #Ensures largest ev of E=1
+#        self.A[0][:] = self.uGnd.A #redundant?
+#        self.l[0][:] = self.uGnd.l
+#        self.r_l[:] = self.uGnd.r
+#        
+#        fac = 1 / sp.trace(self.l[0]).real
+#        if dbg:
+#            print fac
+#        self.l[0] *= fac
+#        self.r_l *= 1/fac
         
-        fac = 1 / sp.trace(self.l[0]).real
-        if dbg:
-            print fac
-        self.l[0] *= fac
-        self.r_l *= 1/fac
+        self.r[0] = self.EpsR(None, 1, self.r[1], None)
+        fac = 1 / uni.adot(self.l[0], self.r[0]).real
+        self.A[1] *= sp.sqrt(fac)
+        self.r[0] = self.EpsR(None, 1, self.r[1], None)
                         
         if diag_l:
-            G_nm1 = None
+            G_nm1 = sp.eye(self.D[0], dtype=self.typ)
             l_nm1 = self.l[0]
-            for n in xrange(self.N + 1):
+            for n in xrange(1, self.N):
                 if G_nm1 is None:
                     x = l_nm1
                 else:
@@ -685,30 +695,36 @@ class evoMPS_TDVP_Generic_FBC:
                 G_nm1 = m.H(EV)
                 l_nm1 = self.l[n]
             
-            #Now G_nm1 = G_N
-            G_nm1_i = m.H(G_nm1)
-            for s in xrange(self.q[self.N + 1]):
-                self.A[self.N + 1][s] = m.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
-                
-            self.r[self.N][:] = m.matmul(None, G_nm1, self.r[self.N], m.H(G_nm1))            
-            self.l_r[:] = m.matmul(None, m.H(G_nm1_i), self.l_r, G_nm1_i)
-            
-            self.uGnd.A = self.A[self.N + 1]
-            self.uGnd.r = self.r[self.N]
-            self.uGnd.l = self.l_r
-            self.uGnd.Calc_lr() #Ensures largest ev of E=1
-            self.A[self.N + 1][:] = self.uGnd.A #redundant?
-            self.l_r[:] = self.uGnd.l
-            self.r[self.N][:] = self.uGnd.r
-            
-            fac = self.D[self.N] / sp.trace(self.r[self.N]).real
-            if dbg:
-                print fac
-            self.r[self.N] *= fac
-            self.l_r *= 1/fac
-            
-            self.r[self.N + 1][:] = self.r[self.N] #redundant?            
-            self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
+#            #Now G_nm1 = G_N
+#            G_nm1_i = m.H(G_nm1)
+#            for s in xrange(self.q[self.N + 1]):
+#                self.A[self.N + 1][s] = m.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
+
+            #Now G_nm1 = G_N-1
+            for s in xrange(self.q[self.N]):
+                self.A[self.N][s] = m.matmul(None, G_nm1, self.A[self.N][s])
+
+            self.l[self.N] = self.EpsL(None, self.N, self.l[self.N - 1])
+            self.l[self.N + 1] = self.EpsL(None, self.N + 1, self.l[self.N])
+#            self.r[self.N][:] = m.matmul(None, G_nm1, self.r[self.N], m.H(G_nm1))            
+#            self.l_r[:] = m.matmul(None, m.H(G_nm1_i), self.l_r, G_nm1_i)
+#            
+#            self.uGnd.A = self.A[self.N + 1]
+#            self.uGnd.r = self.r[self.N]
+#            self.uGnd.l = self.l_r
+#            self.uGnd.Calc_lr() #Ensures largest ev of E=1
+#            self.A[self.N + 1][:] = self.uGnd.A #redundant?
+#            self.l_r[:] = self.uGnd.l
+#            self.r[self.N][:] = self.uGnd.r
+#            
+#            fac = self.D[self.N] / sp.trace(self.r[self.N]).real
+#            if dbg:
+#                print fac
+#            self.r[self.N] *= fac
+#            self.l_r *= 1/fac
+#            
+#            self.r[self.N + 1][:] = self.r[self.N] #redundant?            
+#            self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
             if self.sanity_checks:
                 l_n = self.l[0]
