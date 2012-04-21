@@ -32,7 +32,7 @@ def go(sfbc, tau, steps, restore_CF=True):
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print "\t".join(map(str, (eta.real, h.real/(sfbc.N) - h_uni, (h - h_prev).real)))
+        print "\t".join(map(str, (eta.real, h.real/(sfbc.N + 1) - h_uni, (h - h_prev).real)))
         print sfbc.eta.real
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
@@ -204,7 +204,7 @@ class evoMPS_TDVP_Generic_FBC:
                 self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
                                       m.H(self.A[n][s]))
                                           
-        return uni.adot(self.l[1], self.K[1])
+        return uni.adot(self.l[0], self.K[0]) #l_-1 = l_0
     
     def BuildVsh(self, n, sqrt_r):
         """Generates m.H(V[n][s]) for a given n, used for generating B[n][s]
@@ -663,9 +663,17 @@ class evoMPS_TDVP_Generic_FBC:
 #        self.r_l *= 1/fac
         
         self.r[0] = self.EpsR(None, 1, self.r[1], None)
-        fac = 1 / uni.adot(self.l[0], self.r[0]).real
+        fac = sp.sqrt(self.D[0]) / la.norm(self.r[0]).real
+        if dbg:
+            print fac
         self.A[1] *= sp.sqrt(fac)
         self.r[0] = self.EpsR(None, 1, self.r[1], None)
+        
+        fac = 1 / uni.adot(self.l[0], self.r[0]).real
+        if dbg:
+            print fac
+        self.l[0] *= fac
+        self.r_l *= 1 / fac
                         
         if diag_l:
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
