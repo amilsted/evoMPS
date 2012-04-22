@@ -26,9 +26,10 @@ def go(sfbc, tau, steps, restore_CF=True):
     for i in xrange(steps):
         if restore_CF:
             sfbc.Restore_RCF()
-        else:
             sfbc.Upd_l()
-            sfbc.Upd_r()
+        else:
+            sfbc.Renorm()
+        
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
@@ -71,9 +72,13 @@ class evoMPS_TDVP_Generic_FBC:
                 self.D[n] = qacc
             
     def __init__(self, numsites, uGnd):
-        uGnd.symm_gauge = False
+        #uGnd.symm_gauge = False
         uGnd.Calc_lr()
         uGnd.Restore_CF()
+        uGnd.Calc_sqrts(assumeCF=True)
+        uGnd.Calc_AA()
+        uGnd.Calc_C()
+        uGnd.Calc_K()
         uGnd.Calc_lr()
         self.uGnd = uGnd
 
@@ -123,6 +128,8 @@ class evoMPS_TDVP_Generic_FBC:
         self.r[self.N] = uGnd.r.copy()
         self.r[self.N + 1] = self.r[self.N]
         self.l[0] = uGnd.l.copy()
+        
+        self.K[self.N + 1][:] = self.uGnd.K
         
         self.l_r = uGnd.l.copy()
         self.r_l = uGnd.r.copy()
@@ -353,8 +360,12 @@ class evoMPS_TDVP_Generic_FBC:
         If an exception occurs here, it is probably because these matrices
         are no longer Hermitian (enough).
         """
-        l_sqrt, evd = m.sqrtmh(self.l[n - 1], ret_evd=True)
-        l_sqrt_inv = m.invmh(l_sqrt, evd=evd)
+        if n == 1:
+            l_sqrt = self.uGnd.l_sqrt.A
+            l_sqrt_inv = self.uGnd.l_sqrt_i.A
+        else:
+            l_sqrt, evd = m.sqrtmh(self.l[n - 1], ret_evd=True)
+            l_sqrt_inv = m.invmh(l_sqrt, evd=evd)
 
         r_sqrt, evd =  m.sqrtmh(self.r[n], ret_evd=True)
         r_sqrt_inv = m.invmh(r_sqrt, evd=evd)
@@ -391,13 +402,13 @@ class evoMPS_TDVP_Generic_FBC:
         """
         self.BuildC()
         
-        self.uGnd.A = self.A[self.N + 1]
-        self.uGnd.r = self.r[self.N]
-        self.uGnd.l = self.l_r
-        self.uGnd.Calc_AA()
-        self.uGnd.Calc_C()
-        self.uGnd.Calc_K()
-        self.K[self.N + 1][:] = self.uGnd.K
+#        self.uGnd.A[:] = self.A[self.N + 1]
+#        self.uGnd.r[:] = self.r[self.N + 1]
+#        self.uGnd.l[:] = self.l_r
+#        self.uGnd.Calc_AA()
+#        self.uGnd.Calc_C()
+#        self.uGnd.Calc_K()
+#        self.K[self.N + 1][:] = self.uGnd.K
         h = self.CalcK()
         
         eta_tot = 0
@@ -587,7 +598,7 @@ class evoMPS_TDVP_Generic_FBC:
         if G_n_i is None:
             M = self.EpsR(None, n, m.eyemat(self.D[n], dtype=self.typ), None)
         else:
-            GGh_n_i = m.matmul(None, G_n_i, m.H(G_n_i))
+            GGh_n_i = m.matmul(None, G_n_i, self.r[n + 1], m.H(G_n_i))
             M = self.EpsR(None, n, GGh_n_i, None)            
                     
         #The following should be more efficient than eigh():
@@ -611,6 +622,18 @@ class evoMPS_TDVP_Generic_FBC:
 
         return G_nm1_i, G_nm1
         
+    
+    def Renorm(self, dbg=True):
+        self.Upd_l()
+        self.Upd_r()
+        fac = 1 / uni.adot(self.l[0], self.r[0]).real
+        fac = fac**(1/(2.0*self.N))
+        if dbg:
+            print fac
+        for n in xrange(1, self.N + 1):
+            self.A[n] *= fac
+        self.Upd_r()
+        self.Upd_l()
     
     def Restore_RCF(self, update_l=True, normalize=True, diag_l=True, dbg=False):
         if dbg:
@@ -662,18 +685,28 @@ class evoMPS_TDVP_Generic_FBC:
 #        self.l[0] *= fac
 #        self.r_l *= 1/fac
         
-        self.r[0] = self.EpsR(None, 1, self.r[1], None)
-        fac = sp.sqrt(self.D[0]) / la.norm(self.r[0]).real
-        if dbg:
-            print fac
-        self.A[1] *= sp.sqrt(fac)
-        self.r[0] = self.EpsR(None, 1, self.r[1], None)
+        self.r[0][:] = self.EpsR(None, 1, self.r[1], None)
         
+        if False:
+            fac = sp.sqrt(self.D[0]) / la.norm(self.r[0])
+            if dbg:
+                print fac
+            self.A[1] *= sp.sqrt(fac)
+            self.r[0] = self.EpsR(None, 1, self.r[1], None)
+            
+            fac = 1 / uni.adot(self.l[0], self.r[0]).real
+            if dbg:
+                print fac
+            self.l[0] *= fac
+            self.r_l *= 1 / fac
+
         fac = 1 / uni.adot(self.l[0], self.r[0]).real
+        fac = fac**(1/(2.0*self.N))
         if dbg:
             print fac
-        self.l[0] *= fac
-        self.r_l *= 1 / fac
+        for n in xrange(1, self.N + 1):
+            self.A[n] *= fac
+        self.Upd_r()
                         
         if diag_l:
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
@@ -736,7 +769,7 @@ class evoMPS_TDVP_Generic_FBC:
             
             if self.sanity_checks:
                 l_n = self.l[0]
-                for n in xrange(0, self.N + 1):
+                for n in xrange(1, self.N + 1):
                     l_n = self.EpsL(None, n, l_n)
                     if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in Restore_RCF! p2: l_%u is bad" % n
