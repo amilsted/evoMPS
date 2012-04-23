@@ -82,12 +82,13 @@ class evoMPS_TDVP_Generic_FBC:
         self.q = sp.repeat(uGnd.q, numsites + 2)
         
         #Make indicies correspond to the thesis
-        self.K = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N
-        self.C = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N-1
-        self.A = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N
+        #Deliberately add a None to the end to catch [-1] indexing!
+        self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
+        self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
+        self.A = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
         
-        self.r = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 0..N
-        self.l = sp.empty((self.N + 2), dtype=sp.ndarray)
+        self.r = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 0..N
+        self.l = sp.empty((self.N + 3), dtype=sp.ndarray)
         
         self.eta = sp.zeros((numsites + 1), dtype=self.typ)
         
@@ -299,11 +300,15 @@ class evoMPS_TDVP_Generic_FBC:
         x += m.matmul(None, sqrt_l, x_part)
             
         if n > 0:
+            if n > 1:
+                l_nm2 = self.l[n - 2]
+            else:
+                l_nm2 = self.l[0]
             x_part.fill(0)
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += m.matmul(tmp, m.H(self.A[n - 1][t]), self.l[n - 2], self.C[n - 1][t, s])
+                    x_subsubpart += m.matmul(tmp, m.H(self.A[n - 1][t]), l_nm2, self.C[n - 1][t, s])
                 x_part += m.matmul(None, x_subsubpart, sqrt_r, Vsh[s])
             x += m.matmul(None, sqrt_l_inv, x_part)
                 
@@ -497,9 +502,7 @@ class evoMPS_TDVP_Generic_FBC:
                         res += tmp
         return res
         
-    def EpsR_2(self, n, x, op, A1=None, A2=None, A3=None, A4=None):
-        res = sp.zeros_like(self.r[n - 1])
-        
+    def EpsR_2(self, n, x, op, A1=None, A2=None, A3=None, A4=None):        
         if A1 is None:
             A1 = self.A[n]
         if A2 is None:
@@ -509,6 +512,8 @@ class evoMPS_TDVP_Generic_FBC:
         if A4 is None:
             A4 = self.A[n + 1]
             
+        res = sp.zeros((A1.shape[1], A1.shape[1]), dtype=self.typ)
+        
         AAuvH = sp.empty_like(A3[0])
         for u in xrange(self.q[n]):
             for v in xrange(self.q[n + 1]):
@@ -602,6 +607,10 @@ class evoMPS_TDVP_Generic_FBC:
         
         if G_n_i is None:
             G_n_i = G_nm1_i
+            
+        if self.sanity_checks:
+            if not sp.allclose(sp.dot(G_nm1, G_nm1_i), sp.eye(G_nm1.shape[0]), atol=1E-13, rtol=1E-13):
+                print "Sanity Fail in Restore_ON_R_n!: Bad GT at n=%u" % n
         
         for s in xrange(self.q[n]):                
             m.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
@@ -620,9 +629,17 @@ class evoMPS_TDVP_Generic_FBC:
                 
             print uni.adot(self.l_r, self.r[self.N])
             print uni.adot(self.l[0], self.r_l)     
+            
+            norm = uni.adot(self.l[0], self.r[0]).real
+            
+            h_before = sp.empty((self.N + 1), dtype=self.typ)
+            for n in xrange(self.N + 1):
+                h_before[n] = self.Expect_2S(self.h_nn, n)
+            h_before *= 1/norm
+                
+            print h_before
         
-        #Begin with no GT for the right uMPS part.
-        G_n_i = None        
+        G_n_i = None
         for n in reversed(xrange(1, self.N + 2)):
             G_n_i, G_n = self.Restore_ON_R_n(n, G_n_i)
 
@@ -634,16 +651,37 @@ class evoMPS_TDVP_Generic_FBC:
                 r_nm1 = self.EpsR(None, n, r_n, None)
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-13, rtol=1E-13):
                     print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
-                    print la.norm(r_nm1 - self.r[n-1])
+                    print la.norm(r_nm1 - self.r[n - 1])
                     
         self.r[self.N + 1] = self.r[self.N]
         
         #Now G_n_i contains g_0_i
+        if self.sanity_checks:
+            if not sp.allclose(sp.dot(G_n, G_n_i), sp.eye(G_n.shape[0]), atol=1E-13, rtol=1E-13):
+                print "Sanity Fail in Restore_RCF!: Bad GT at n=0"
+                
         for s in xrange(self.q[0]):
-            self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)
+            self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)            
             
         self.r_l[:] = m.matmul(None, G_n, self.r_l, m.H(G_n))
         self.l[0][:] = m.matmul(None, m.H(G_n_i), self.l[0], G_n_i)
+        
+        if dbg:
+            self.Upd_l()
+            r_m1 = self.EpsR(None, 0, self.r[0], None)
+            print uni.adot(self.l[0], r_m1).real
+            for n in xrange(self.N + 2):
+                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+            norm = uni.adot(self.l[0], self.r[0]).real
+            print norm
+            
+            h_mid = sp.empty((self.N + 1), dtype=self.typ)
+            for n in xrange(self.N + 1):
+                h_mid[n] = self.Expect_2S(self.h_nn, n)
+            h_mid *= 1/norm
+                
+            print h_mid        
+        
         self.uGnd.A = self.A[0]
         self.uGnd.r = self.r_l
         self.uGnd.l = self.l[0]
@@ -655,7 +693,9 @@ class evoMPS_TDVP_Generic_FBC:
         self.l[0] *= fac
         self.r_l *= 1/fac
                         
-        if diag_l:
+        if not diag_l:
+            self.Upd_l()
+        else:
             G_nm1 = None
             l_nm1 = self.l[0]
             for n in xrange(self.N + 1):
@@ -705,31 +745,33 @@ class evoMPS_TDVP_Generic_FBC:
             #self.r[self.N + 1][:] = self.r[self.N] #redundant?            
             self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
-            if self.sanity_checks:
-                l_n = self.l[0]
-                for n in xrange(0, self.N + 1):
-                    l_n = self.EpsL(None, n, l_n)
-                    if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in Restore_RCF! p2: l_%u is bad" % n
-                        
-                r_nm1 = self.r[self.N + 1]
-                for n in reversed(xrange(1, self.N + 2)):
-                    r_nm1 = self.EpsR(None, n, r_nm1, None)
-                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in Restore_RCF! p2: r_%u is bad" % (n - 1)
-            if dbg:
-                for n in xrange(self.N + 2):
-                    print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+        if self.sanity_checks:
+            l_n = self.l[0]
+            for n in xrange(0, self.N + 1):
+                l_n = self.EpsL(None, n, l_n)
+                if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
+                    print "Sanity Fail in Restore_RCF! p2: l_%u is bad" % n
                     
-                print uni.adot(self.l_r, self.r[self.N])
-                print uni.adot(self.l[0], self.r_l)
-                    
-            return True
-        elif update_l:
-            res = self.Upd_l()
-            return res
-        else:
-            return True
+            r_nm1 = self.r[self.N + 1]
+            for n in reversed(xrange(1, self.N + 2)):
+                r_nm1 = self.EpsR(None, n, r_nm1, None)
+                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
+                    print "Sanity Fail in Restore_RCF! p2: r_%u is bad" % (n - 1)
+        if dbg:
+            for n in xrange(self.N + 2):
+                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+                
+            print uni.adot(self.l_r, self.r[self.N])
+            print uni.adot(self.l[0], self.r_l)
+            
+            h_after = sp.empty((self.N + 1), dtype=self.typ)
+            for n in xrange(self.N + 1):
+                h_after[n] = self.Expect_2S(self.h_nn, n)
+            print h_after
+            
+            print h_after - h_before
+                
+            print h_after.sum() - h_before.sum()
     
     def CheckCanonical_R(self):
         """Tests for right canonical form.
@@ -775,7 +817,11 @@ class evoMPS_TDVP_Generic_FBC:
         
     def Expect_2S(self, o, n):
         res = self.EpsR_2(n, self.r[n + 1], o)
-        return uni.adot(self.l[n - 1], res)
+        if n > 0:
+            l_nm1 = self.l[n - 1]
+        else:
+            l_nm1 = self.l[0]
+        return uni.adot(l_nm1, res)
         
     def Expect_SS_Cor(self, o1, o2, n1, n2):
         """Computes the correlation of two single site operators acting on two different sites.
