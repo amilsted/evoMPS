@@ -436,15 +436,11 @@ class evoMPS_TDVP_Uniform:
         self.l = S
         self.r = S
     
-    def Restore_CF(self, force_r_CF=False):
+    def Restore_CF(self, force_r_CF=False, ret_g=False):
         if self.symm_gauge and not force_r_CF:
             self.Restore_SCF()
         else:
             #First get G such that r = eye
-            M = sp.zeros_like(self.A[0])
-            for s in xrange(self.q):
-                M += m.matmul(None, self.A[s], m.H(self.A[s]))
-            
             G = la.cholesky(self.r, lower=True)
             G_i = m.invtr(G, lower=True)
 
@@ -500,6 +496,11 @@ class evoMPS_TDVP_Uniform:
                     print "Off by: " + str(la.norm(l - self.l.toarray()))
         
             self.r = m.eyemat(self.D, dtype=self.typ)
+        
+        if ret_g:
+            return G, G_i
+        else:
+            return
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
