@@ -30,7 +30,7 @@ def go(sfbc, tau, steps):
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print "\t".join(map(str, (eta.real, h.real/(sfbc.N) - h_uni, (h - h_prev).real)))
+        print "\t".join(map(str, (eta.real, h.real/(sfbc.N + 1) - h_uni, (h - h_prev).real)))
         print sfbc.eta.real
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
@@ -202,7 +202,7 @@ class evoMPS_TDVP_Generic_FBC:
                 self.K[n] += m.matmul(tmp, self.A[n][s], self.K[n + 1], 
                                       m.H(self.A[n][s]))
                                           
-        return uni.adot(self.l[1], self.K[1])
+        return uni.adot(self.l[0], self.K[0])
     
     def BuildVsh(self, n, sqrt_r):
         """Generates m.H(V[n][s]) for a given n, used for generating B[n][s]
@@ -583,10 +583,11 @@ class evoMPS_TDVP_Generic_FBC:
             The inverse gauge transformation matrix for the site n - 1.
         """
         if G_n_i is None:
-            M = self.EpsR(None, n, m.eyemat(self.D[n], dtype=self.typ), None)
+            GGh_n_i = self.r[n]
         else:
-            GGh_n_i = m.matmul(None, G_n_i, m.H(G_n_i))
-            M = self.EpsR(None, n, GGh_n_i, None)            
+            GGh_n_i = m.matmul(None, G_n_i, self.r[n], m.H(G_n_i))
+        
+        M = self.EpsR(None, n, GGh_n_i, None)            
                     
         #The following should be more efficient than eigh():
         try:
@@ -647,9 +648,6 @@ class evoMPS_TDVP_Generic_FBC:
         self.uGnd.r = self.r_l
         self.uGnd.l = self.l[0]
         self.uGnd.Calc_lr() #Ensures largest ev of E=1
-        self.A[0][:] = self.uGnd.A #redundant?
-        self.l[0][:] = self.uGnd.l
-        self.r_l[:] = self.uGnd.r
         
         fac = 1 / sp.trace(self.l[0]).real
         if dbg:
@@ -697,9 +695,6 @@ class evoMPS_TDVP_Generic_FBC:
             self.uGnd.r = self.r[self.N]
             self.uGnd.l = self.l_r
             self.uGnd.Calc_lr() #Ensures largest ev of E=1
-            self.A[self.N + 1][:] = self.uGnd.A #redundant?
-            self.l_r[:] = self.uGnd.l
-            self.r[self.N][:] = self.uGnd.r
             
             fac = self.D[self.N] / sp.trace(self.r[self.N]).real
             if dbg:
@@ -707,7 +702,7 @@ class evoMPS_TDVP_Generic_FBC:
             self.r[self.N] *= fac
             self.l_r *= 1/fac
             
-            self.r[self.N + 1][:] = self.r[self.N] #redundant?            
+            #self.r[self.N + 1][:] = self.r[self.N] #redundant?            
             self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
             if self.sanity_checks:
