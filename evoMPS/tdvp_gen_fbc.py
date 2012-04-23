@@ -89,12 +89,12 @@ class evoMPS_TDVP_Generic_FBC:
         self.q = sp.repeat(uGnd.q, numsites + 2)
         
         #Make indicies correspond to the thesis
-        self.K = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N
-        self.C = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N-1
-        self.A = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N
+        self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
+        self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
+        self.A = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
         
-        self.r = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 0..N
-        self.l = sp.empty((self.N + 2), dtype=sp.ndarray)
+        self.r = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 0..N
+        self.l = sp.empty((self.N + 3), dtype=sp.ndarray)
         
         self.eta = sp.zeros((numsites + 1), dtype=self.typ)
         
@@ -308,11 +308,15 @@ class evoMPS_TDVP_Generic_FBC:
         x += m.matmul(None, sqrt_l, x_part)
             
         if n > 0:
+            if n > 1:
+                l_nm2 = self.l[n - 2]
+            else:
+                l_nm2 = self.l[0]
             x_part.fill(0)
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += m.matmul(tmp, m.H(self.A[n - 1][t]), self.l[n - 2], self.C[n - 1][t, s])
+                    x_subsubpart += m.matmul(tmp, m.H(self.A[n - 1][t]), l_nm2, self.C[n - 1][t, s])
                 x_part += m.matmul(None, x_subsubpart, sqrt_r, Vsh[s])
             x += m.matmul(None, sqrt_l_inv, x_part)
                 
