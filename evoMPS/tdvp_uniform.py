@@ -33,16 +33,7 @@ def adot(a, b, tmp=None):
     Calculates the scalar product for the ancilla, expecting
     the arguments in matrix form.
     Equivalent to trace(dot(H(a), b))
-    """
-    if sp.isscalar(a) and sp.isscalar(b):
-        return None #cover this later?
-        
-    if sp.isscalar(a) and a == 1:
-        return sp.trace(b)
-
-    if sp.isscalar(b) and b == 1:
-        return sp.trace(a)
-    
+    """    
     if tmp is None:
         return sp.inner(a.ravel().conj(), b.ravel())
     else:
@@ -60,11 +51,14 @@ class PPInv_op:
     
     dtype = None
     
-    def __init__(self, tdvp, p=0):
+    left = False
+    
+    def __init__(self, tdvp, p=0, left=False):
         self.tdvp = tdvp
         self.l = tdvp.l
         self.r = tdvp.r
         self.p = 0
+        self.left = left
         
         self.D = tdvp.D
         
@@ -73,26 +67,25 @@ class PPInv_op:
         self.dtype = tdvp.typ
     
     def matvec(self, v):
-        x = v.reshape((self.D, self.D))
+        if self.left:
+            x = v.conj().reshape((self.D, self.D))
+            xE = self.tdvp.EpsL(x)
+            QEQ = xE - self.l * adot(x, self.r)
+        else:
+            x = v.reshape((self.D, self.D))
+            Ex = self.tdvp.EpsR(x)
+            QEQ = Ex - self.r * adot(self.l, x)        
         
-        Ex = self.tdvp.EpsR(x)
-        
-        try:
-            r = self.r.toarray()
-        except:
-            r = self.r
-            
-        if sp.isscalar(r) and r == 1:
-            r = sp.eye(self.D)
-        
-        QEQ = Ex - r * adot(self.l, x)
         
         if not self.p == 0:
             QEQ *= sp.exp(1.j * self.p)
         
         res = x - QEQ
-            
-        return res.reshape((self.D**2))
+        
+        if self.left:
+            return res.conj().reshape((self.D**2))
+        else:
+            return res.reshape((self.D**2))
 
 class H_tangeant_op:
     tdvp = None
@@ -156,6 +149,7 @@ class evoMPS_TDVP_Uniform:
         self.C = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
         self.K = sp.ones_like(self.A[0])
+        self.K_left = None
         
         self.l = sp.ones_like(self.A[0])
         self.r = sp.ones_like(self.A[0])
@@ -516,14 +510,21 @@ class evoMPS_TDVP_Uniform:
                             if h != 0:
                                 self.C[s, t] += h * self.AA[u, v]
     
-    def Calc_PPinv(self, x, p=0, out=None):
-        op = PPInv_op(self, p)
+    def Calc_PPinv(self, x, p=0, out=None, left=False):
+        if out is None:
+            out = sp.ones_like(self.A[0])
         
+        op = PPInv_op(self, p, left)
+       
         res = out.reshape((self.D**2))
         x = x.reshape((self.D**2))
         
+        if left:
+            res = res.conj()
+            x = x.conj()
+        
         res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
-                                    tol=self.itr_rtol)
+                                 tol=self.itr_rtol)
         
         if info > 0:
             print "Warning: Did not converge on solution for ppinv!"
@@ -535,6 +536,9 @@ class evoMPS_TDVP_Uniform:
                                 atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Bad ppinv solution! Off by: " + str(
                         la.norm(RHS_test - x))
+        
+        if left:
+            res = res.conj()
         
         out[:] = res.reshape((self.D, self.D))
         
@@ -552,6 +556,22 @@ class evoMPS_TDVP_Uniform:
         QHr = Hr - self.r * self.h
         
         self.Calc_PPinv(QHr, out=self.K)
+        
+    def Calc_K_left(self):
+        lH = sp.zeros_like(self.A[0])
+        
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                lH += m.matmul(None, m.H(self.AA[s, t]), self.l, self.C[s, t])
+        
+        h = adot(lH, self.r)
+        
+        lHQ = lH - self.l * h
+        
+        #FIXME: Something here is not right.
+        self.K_left = self.Calc_PPinv(lHQ, left=True, out=None)
+        
+        return self.K_left, h
             
     def Calc_Vsh(self, r_sqrt):
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
