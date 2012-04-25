@@ -4,15 +4,9 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
-TODO:
-    - Implement evaluation of the error due to restriction to bond dim.
-    - Investigate whether a different gauge choice would reduce numerical inaccuracies.
-        - The current choice gives us r_n = sp.eye() and l_n containing
-          the Schmidt spectrum.
-        - Maybe the l's could be better conditioned?
-    - Build more into TakeStep or add a new method that does Restore_RCF etc. itself.
-    - Add an algorithm for expanding the bond dimension.
-    - Adaptive step size.
+Issues:
+    - Getting stuck: Especially transverse Ising. More noise -> higher "residual energy"
+    - Dropping below the uniform solution's energy: phi^4 with low noise
 
 """
 import scipy as sp
@@ -21,12 +15,12 @@ import nullspace as ns
 import matmul as m
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps):
+def go(sfbc, tau, steps, dbg=False):
     h_prev = 0
     for i in xrange(steps):
-        sfbc.Restore_RCF()
-        sfbc.Upd_l()
-        sfbc.Upd_r()
+        sfbc.Restore_RCF(dbg=dbg)
+        #sfbc.Upd_l()
+        #sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
@@ -620,24 +614,47 @@ class evoMPS_TDVP_Generic_FBC:
         return G_nm1_i, G_nm1
         
     
+    def Restore_RCF_dbg(self):
+            for n in xrange(self.N + 2):
+                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+                
+            norm_r = uni.adot(self.l_r, self.r[self.N])
+            norm_l = uni.adot(self.l[0], self.r_l)
+            print norm_r
+            print norm_l
+            
+            #r_m1 = self.EpsR(None, 0, self.r[0], None)
+            #print uni.adot(self.l[0], r_m1).real            
+            
+            norm = uni.adot(self.l[0], self.r[0]).real
+            
+            h = sp.empty((self.N + 1), dtype=self.typ)
+            for n in xrange(self.N + 1):
+                h[n] = self.Expect_2S(self.h_nn, n)
+            h *= 1/norm
+            
+            self.uGnd.A = self.A[0].copy()
+            self.uGnd.l = self.l[0].copy()
+            self.uGnd.r = self.r_l.copy()
+            self.uGnd.Calc_AA()
+            h_left = self.uGnd.Expect_2S(self.uGnd.h_nn) / norm_l
+
+            self.uGnd.A = self.A[self.N + 1].copy()
+            self.uGnd.l = self.l_r.copy()
+            self.uGnd.r = self.r[self.N].copy()
+            self.uGnd.Calc_AA()
+            h_right = self.uGnd.Expect_2S(self.uGnd.h_nn) / norm_r
+                
+            return h, h_left, h_right
+    
     def Restore_RCF(self, update_l=True, normalize=True, diag_l=True, dbg=False):
         if dbg:
             self.Upd_l()
             self.Upd_r()
-            for n in xrange(self.N + 2):
-                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+            print "BEFORE..."
+            h_before, h_left_before, h_right_before = self.Restore_RCF_dbg()
                 
-            print uni.adot(self.l_r, self.r[self.N])
-            print uni.adot(self.l[0], self.r_l)     
-            
-            norm = uni.adot(self.l[0], self.r[0]).real
-            
-            h_before = sp.empty((self.N + 1), dtype=self.typ)
-            for n in xrange(self.N + 1):
-                h_before[n] = self.Expect_2S(self.h_nn, n)
-            h_before *= 1/norm
-                
-            print h_before
+            print (h_left_before, h_before, h_right_before)
         
         G_n_i = None
         for n in reversed(xrange(1, self.N + 2)):
@@ -660,7 +677,7 @@ class evoMPS_TDVP_Generic_FBC:
             if not sp.allclose(sp.dot(G_n, G_n_i), sp.eye(G_n.shape[0]), atol=1E-13, rtol=1E-13):
                 print "Sanity Fail in Restore_RCF!: Bad GT at n=0"
                 
-        for s in xrange(self.q[0]):
+        for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
             self.A[0][s] = m.matmul(None, G_n, self.A[0][s], G_n_i)            
             
         self.r_l[:] = m.matmul(None, G_n, self.r_l, m.H(G_n))
@@ -668,28 +685,14 @@ class evoMPS_TDVP_Generic_FBC:
         
         if dbg:
             self.Upd_l()
-            r_m1 = self.EpsR(None, 0, self.r[0], None)
-            print uni.adot(self.l[0], r_m1).real
-            for n in xrange(self.N + 2):
-                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
-            norm = uni.adot(self.l[0], self.r[0]).real
-            print norm
-            
-            h_mid = sp.empty((self.N + 1), dtype=self.typ)
-            for n in xrange(self.N + 1):
-                h_mid[n] = self.Expect_2S(self.h_nn, n)
-            h_mid *= 1/norm
+            print "MIDDLE..."
+            h_mid, h_left_mid, h_right_mid = self.Restore_RCF_dbg()
                 
-            print h_mid        
-        
-        self.uGnd.A = self.A[0]
-        self.uGnd.r = self.r_l
-        self.uGnd.l = self.l[0]
-        self.uGnd.Calc_lr() #Ensures largest ev of E=1
+            print (h_left_mid, h_mid, h_right_mid)     
         
         fac = 1 / sp.trace(self.l[0]).real
         if dbg:
-            print fac
+            print "Scale l[0]: %g" % fac
         self.l[0] *= fac
         self.r_l *= 1/fac
                         
@@ -722,6 +725,10 @@ class evoMPS_TDVP_Generic_FBC:
                 
                 G_nm1 = m.H(EV)
                 l_nm1 = self.l[n]
+                
+                if self.sanity_checks:
+                    if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]), atol=1E-12, rtol=1E-12):
+                        print "Sanity Fail in Restore_RCF!: Bad GT for l_%u" % n
             
             #Now G_nm1 = G_N
             G_nm1_i = m.H(G_nm1)
@@ -731,18 +738,23 @@ class evoMPS_TDVP_Generic_FBC:
             self.r[self.N][:] = m.matmul(None, G_nm1, self.r[self.N], m.H(G_nm1))            
             self.l_r[:] = m.matmul(None, m.H(G_nm1_i), self.l_r, G_nm1_i)
             
+            self.uGnd.A = self.A[0]
+            self.uGnd.r = self.r_l
+            self.uGnd.l = self.l[0]
+            self.uGnd.Calc_lr() #Ensures largest ev of E=1
+            fac = 1 / sp.trace(self.l[0]).real
+            if dbg:
+                print "Scale l[0]: %g" % fac
+            self.l[0] *= fac
+            self.r_l *= 1/fac
+            
             self.uGnd.A = self.A[self.N + 1]
             self.uGnd.r = self.r[self.N]
             self.uGnd.l = self.l_r
             self.uGnd.Calc_lr() #Ensures largest ev of E=1
             
-            fac = self.D[self.N] / sp.trace(self.r[self.N]).real
-            if dbg:
-                print fac
-            self.r[self.N] *= fac
-            self.l_r *= 1/fac
-            
-            #self.r[self.N + 1][:] = self.r[self.N] #redundant?            
+            #Calc_lr() enforces trace(r) == 1, so we don't need to re-scale r[N]
+                       
             self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
         if self.sanity_checks:
@@ -758,16 +770,10 @@ class evoMPS_TDVP_Generic_FBC:
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in Restore_RCF! p2: r_%u is bad" % (n - 1)
         if dbg:
-            for n in xrange(self.N + 2):
-                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+            print "AFTER..."
+            h_after, h_left_after, h_right_after = self.Restore_RCF_dbg()
                 
-            print uni.adot(self.l_r, self.r[self.N])
-            print uni.adot(self.l[0], self.r_l)
-            
-            h_after = sp.empty((self.N + 1), dtype=self.typ)
-            for n in xrange(self.N + 1):
-                h_after[n] = self.Expect_2S(self.h_nn, n)
-            print h_after
+            print (h_left_after, h_after, h_right_after)  
             
             print h_after - h_before
                 
@@ -811,9 +817,9 @@ class evoMPS_TDVP_Generic_FBC:
         n : int
             The site number.
         """
+        l_nm1 = self.l[n - 1] if n > 0 else self.l[0]
         res = self.EpsR(None, n, self.r[n], o)
-        res = m.matmul(None, self.l[n - 1], res)
-        return res.trace()
+        return uni.adot(l_nm1, res)
         
     def Expect_2S(self, o, n):
         res = self.EpsR_2(n, self.r[n + 1], o)
