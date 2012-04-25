@@ -462,7 +462,7 @@ class evoMPS_TDVP_Uniform:
             self.l = m.simple_diag_matrix(ev)
 
             if self.sanity_checks:
-                M.fill(0)
+                M = sp.zeros_like(self.r)
                 for s in xrange(self.q):
                     M += m.matmul(None, self.A[s], m.H(self.A[s]))            
                 
