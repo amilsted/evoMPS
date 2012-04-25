@@ -97,8 +97,8 @@ s.h_nn = h_nn
 """
 Set the initial Hamiltonian parameters.
 """
-h = 1.0
-J = 0.25
+h = 0.25
+J = 1.00
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -133,7 +133,7 @@ grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
 
 expand = False
 
-if True:
+if False:
     try:
        a_file = open(grnd_fname, 'rb')
        s.LoadState(a_file)
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     print
     
     s.sanity_checks = True
-    s.symm_gauge = False
+    s.symm_gauge = True
     
     for i in xrange(total_steps):
         T[i] = t
@@ -206,8 +206,12 @@ if __name__ == "__main__":
         #print "Manual h = " + str(s.Expect_2S(h_nn))
         s.Calc_AA()
         s.Calc_C()    
-        s.Calc_K()    
-            
+        s.Calc_K()
+        Kl, h_l = s.Calc_K_left()
+        
+        print tdvp.adot(s.K_left, s.r)
+        print tdvp.adot(s.l, s.K)
+
         E[i] = s.h
         row.append("%.15g" % E[i].real)
         
