@@ -67,12 +67,12 @@ class PPInv_op:
         self.dtype = tdvp.typ
     
     def matvec(self, v):
+        x = v.reshape((self.D, self.D))
+        
         if self.left:
-            x = v.conj().reshape((self.D, self.D))
             xE = self.tdvp.EpsL(x)
-            QEQ = xE - self.l * adot(x, self.r)
+            QEQ = xE - m.H(self.l) * adot(self.r, x)
         else:
-            x = v.reshape((self.D, self.D))
             Ex = self.tdvp.EpsR(x)
             QEQ = Ex - self.r * adot(self.l, x)        
         
@@ -82,10 +82,7 @@ class PPInv_op:
         
         res = x - QEQ
         
-        if self.left:
-            return res.conj().reshape((self.D**2))
-        else:
-            return res.reshape((self.D**2))
+        return res.reshape((self.D**2))
 
 class H_tangeant_op:
     tdvp = None
@@ -515,13 +512,13 @@ class evoMPS_TDVP_Uniform:
             out = sp.ones_like(self.A[0])
         
         op = PPInv_op(self, p, left)
-       
-        res = out.reshape((self.D**2))
-        x = x.reshape((self.D**2))
         
         if left:
-            res = res.conj()
-            x = x.conj()
+            res = m.H(out).ravel()
+            x = m.H(x).ravel()
+        else:
+            res = out.reshape((self.D**2))
+            x = x.reshape((self.D**2))
         
         res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
                                  tol=self.itr_rtol)
@@ -537,10 +534,12 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: Bad ppinv solution! Off by: " + str(
                         la.norm(RHS_test - x))
         
-        if left:
-            res = res.conj()
+        res = res.reshape((self.D, self.D))
         
-        out[:] = res.reshape((self.D, self.D))
+        if left:
+            res = m.H(res)
+        
+        out[:] = res
         
         return out
         
@@ -557,6 +556,14 @@ class evoMPS_TDVP_Uniform:
         
         self.Calc_PPinv(QHr, out=self.K)
         
+        if self.sanity_checks:
+            Ex = self.EpsR(self.K)
+            QEQ = Ex - self.r * adot(self.l, self.K)
+            res = self.K - QEQ
+            if not sp.allclose(res, QHr):
+                print "Sanity check failed: Bad K!"
+                print "Off by: " + str(la.norm(res - QHr))
+        
     def Calc_K_left(self):
         lH = sp.zeros_like(self.A[0])
         
@@ -568,8 +575,16 @@ class evoMPS_TDVP_Uniform:
         
         lHQ = lH - self.l * h
         
-        #FIXME: Something here is not right.
-        self.K_left = self.Calc_PPinv(lHQ, left=True, out=None)
+        self.K_left = self.Calc_PPinv(lHQ, left=True, out=self.K_left)
+        
+        if self.sanity_checks:
+            xE = self.EpsL(self.K_left)
+            QEQ = xE - self.l * adot(self.K_left, self.r)
+            res = self.K_left - QEQ
+            if not sp.allclose(res, lHQ):
+                print "Sanity check failed: Bad K_left!"
+                print "Off by: " + str(la.norm(res - lHQ))
+        
         
         return self.K_left, h
             

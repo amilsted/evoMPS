@@ -87,6 +87,9 @@ class eyemat(object):
     def transpose(self):
         return self
         
+    def ravel(self):
+        return self.toarray().ravel()
+        
     def copy(self, order='C'):
         return eyemat(self.shape[0], dtype=self.dtype)
         
@@ -315,7 +318,7 @@ def H(m, out=None):
         The result.    
     """
     if out is None:
-        return m.T.conjugate()
+        return m.T.conj()
     else:
         out = sp.conjugate(m.T, out)
         return out
