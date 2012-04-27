@@ -29,7 +29,7 @@ def go(sfbc, tau, steps, dbg=False):
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
-        print "\t".join(map(str, (eta.real, h.real/(sfbc.N + 1) - h_uni, (h - h_prev).real)))
+        print "\t".join(map(str, (eta.real, h.real - h_uni, (h - h_prev).real)))
         print sfbc.eta.real
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
@@ -451,7 +451,9 @@ class evoMPS_TDVP_Generic_FBC:
         self.uGnd.l = self.l[0]
         self.uGnd.Calc_AA()
         self.uGnd.Calc_C()
-        h = self.Calc_K_luni(self.uGnd.C)
+        K_left, h_left_uni = self.uGnd.Calc_K_left()
+        
+        h = uni.adot(K_left, self.r[0]) + uni.adot(self.l[0], self.K[0]) / (self.N + 1)
         
         eta_tot = 0
         

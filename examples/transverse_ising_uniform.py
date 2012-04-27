@@ -207,10 +207,9 @@ if __name__ == "__main__":
         s.Calc_AA()
         s.Calc_C()    
         s.Calc_K()
-        Kl, h_l = s.Calc_K_left()
-        
-        print tdvp.adot(s.K_left, s.r)
-        print tdvp.adot(s.l, s.K)
+        #Kl, h_l = s.Calc_K_left()
+        #print tdvp.adot(s.K_left, s.r)
+        #print tdvp.adot(s.l, s.K)
 
         E[i] = s.h
         row.append("%.15g" % E[i].real)
