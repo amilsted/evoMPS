@@ -24,8 +24,8 @@ def go(sfbc, tau, steps, dbg=False):
     h_prev = 0
     for i in xrange(steps):
         sfbc.Restore_RCF(dbg=dbg)
-        #sfbc.Upd_l()
-        #sfbc.Upd_r()
+        sfbc.Upd_l()
+        sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
@@ -207,20 +207,21 @@ class evoMPS_TDVP_Generic_FBC:
                 self.K[n] += mm.matmul(tmp, self.A[n][s], self.K[n + 1], 
                                       mm.H(self.A[n][s]))
         
-    def Calc_K_luni(self, C):
+    def Calc_K_luni(self, C, h_l):
         K_np1 = self.K[0]
         K_n = sp.empty_like(K_np1)
         r_np1 = None
         
-        h_prev = uni.adot(self.l[0], K_np1) / (self.N + 1)
+        print (uni.adot(self.l[0], K_np1) / (self.N + 1)).real
         
         for n in reversed(xrange(-10000, 0)):
             K_n.fill(0)
             
-            if not r_np1 is None and not r_np1 is self.r_l and sp.allclose(r_np1, self.r_l, atol=1E-10, rtol=1E-10):
-                print "SWITCHING r"
-                r_np1 = self.r_l
-            elif not r_np1 is self.r_l:
+            if not r_np1 is None and sp.allclose(r_np1/la.norm(r_np1),
+                                                 self.r_l/la.norm(self.r_l),
+                                                 atol=1E-10, rtol=1E-10):
+                break
+            else:
                 r_np1 = self.Get_r(n + 1, r_np1)
             
             for s in xrange(self.q[0]): 
@@ -230,20 +231,21 @@ class evoMPS_TDVP_Generic_FBC:
                 
                 K_n += mm.matmul(None, self.A[0][s], K_np1, mm.H(self.A[0][s]))
             
-            h = uni.adot(self.l[0], K_np1) / (abs(n) + self.N + 1.0)
+            h = (uni.adot(self.l[0], K_n) - h_l * abs(n)) / (self.N + 1.0)
+            #Note: This becomes ever more inaccurate due to numerical error!!
             
-            if n < -1 and sp.allclose(h, h_prev, atol=1E-12, rtol=1E-12):
-                break
+            h_is_stable = sp.allclose(uni.adot(self.l[0], K_n), uni.adot(self.l[0], K_np1) + h_l,
+                                      atol=1E-14, rtol=1E-14)
             
-            if n < -1 and sp.allclose(K_n/la.norm(K_n), K_np1/la.norm(K_np1), atol=1E-12, rtol=1E-12):
-                break
-            else:
-                print (n, h.real, h.real - h_prev.real, 
+            if n < -1:
+                print (n, h.real, uni.adot(self.l[0], K_n).real, 
+                       (uni.adot(self.l[0], K_np1) + h_l).real, h_is_stable, 
                        la.norm(K_n/la.norm(K_n) - K_np1/la.norm(K_np1)), 
-                       la.norm(r_np1 - self.r_l))
+                       la.norm(r_np1/la.norm(r_np1) - self.r_l/la.norm(self.r_l)))
+                if h_is_stable:
+                    break
             
             K_np1 = K_n.copy()
-            h_prev = h
             
         return h
     
@@ -416,24 +418,7 @@ class evoMPS_TDVP_Generic_FBC:
         
         return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
     
-    def TakeStep(self, dtau): #simple, forward Euler integration     
-        """Performs a complete forward-Euler step of imaginary time dtau.
-        
-        If dtau is itself imaginary, real-time evolution results.
-        
-        Here, the A's are updated as the sites are visited. Since we want all
-        tangent vectors to be generated using the old state, we must delay
-        updating each A[n] until we are *two* steps away (due to the direct
-        dependency on A[n - 1] in CalcOpt_x).
-        
-        The dependencies on l, r, C and K are not a problem because we store
-        all these matrices separately and do not update them at all during TakeStep().
-        
-        Parameters
-        ----------
-        dtau : complex
-            The (imaginary or real) amount of imaginary time (tau) to step.
-        """
+    def Update(self):
         self.BuildC()
         
         self.uGnd.A = self.A[self.N + 1]
@@ -453,7 +438,29 @@ class evoMPS_TDVP_Generic_FBC:
         self.uGnd.Calc_C()
         K_left, h_left_uni = self.uGnd.Calc_K_left()
         
-        h = uni.adot(K_left, self.r[0]) + uni.adot(self.l[0], self.K[0]) / (self.N + 1)
+        h = (uni.adot(K_left, self.r[0]) + uni.adot(self.l[0], self.K[0])) / (self.N + 1)
+
+        return h        
+    
+    def TakeStep(self, dtau): #simple, forward Euler integration     
+        """Performs a complete forward-Euler step of imaginary time dtau.
+        
+        If dtau is itself imaginary, real-time evolution results.
+        
+        Here, the A's are updated as the sites are visited. Since we want all
+        tangent vectors to be generated using the old state, we must delay
+        updating each A[n] until we are *two* steps away (due to the direct
+        dependency on A[n - 1] in CalcOpt_x).
+        
+        The dependencies on l, r, C and K are not a problem because we store
+        all these matrices separately and do not update them at all during TakeStep().
+        
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        """
+        h = self.Update()
         
         eta_tot = 0
         
