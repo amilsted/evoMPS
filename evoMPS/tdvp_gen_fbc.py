@@ -67,6 +67,48 @@ class evoMPS_TDVP_Generic_FBC:
             if self.D[n] > qacc:
                 self.D[n] = qacc
             
+    def _init_arrays(self):
+        self.D = sp.repeat(self.uGnd.D, self.N + 2)
+        self.q = sp.repeat(self.uGnd.q, self.N + 2)
+        
+        #Make indicies correspond to the thesis
+        #Deliberately add a None to the end to catch [-1] indexing!
+        self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
+        self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
+        self.A = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
+        
+        self.r = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 0..N
+        self.l = sp.empty((self.N + 3), dtype=sp.ndarray)
+        
+        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+        
+        if (self.D.ndim != 1) or (self.q.ndim != 1):
+            raise NameError('D and q must be 1-dimensional!')
+            
+        
+        #Don't do anything pointless
+        self.D[0] = self.uGnd.D
+        self.D[self.N + 1] = self.uGnd.D
+        
+        #self.TrimD()
+        
+        print self.D
+        
+        self.l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
+        self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
+        self.K[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr) 
+        self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
+        self.A[0] = sp.empty((self.q[0], self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
+        for n in xrange(1, self.N + 2):
+            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
+            self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+            self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+            self.A[n] = sp.empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
+            if n < self.N + 1:
+                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
+                
+        self.r[self.N + 1] = self.r[self.N]
+            
     def __init__(self, numsites, uGnd):
         uGnd.symm_gauge = False
         uGnd.Calc_lr()
@@ -79,50 +121,16 @@ class evoMPS_TDVP_Generic_FBC:
         self.eps = sp.finfo(self.typ).eps
         
         self.N = numsites
-        self.D = sp.repeat(uGnd.D, numsites + 2)
-        self.q = sp.repeat(uGnd.q, numsites + 2)
         
-        #Make indicies correspond to the thesis
-        #Deliberately add a None to the end to catch [-1] indexing!
-        self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
-        self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
-        self.A = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
-        
-        self.r = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 0..N
-        self.l = sp.empty((self.N + 3), dtype=sp.ndarray)
-        
-        self.eta = sp.zeros((numsites + 1), dtype=self.typ)
-        
-        if (self.D.ndim != 1) or (self.q.ndim != 1):
-            raise NameError('D and q must be 1-dimensional!')
-            
-        
-        #Don't do anything pointless
-        self.D[0] = uGnd.D
-        self.D[self.N + 1] = uGnd.D
-        
-        #self.TrimD()
-        
-        print self.D
-        
+        self._init_arrays()
+
         mm.matmul_init(dtype=self.typ, order=self.odr)
-        
-        self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
-        self.K[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr) 
-        self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
-        for n in xrange(1, self.N + 2):
-            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
-            self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-            self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-            self.A[n] = sp.empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
-            self.A[n][:] = uGnd.A
-            if n < self.N + 1:
-                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
                 
-        self.A[0] = uGnd.A.copy()
-        self.r[self.N] = uGnd.r.copy()
-        self.r[self.N + 1] = self.r[self.N]
-        self.l[0] = uGnd.l.copy()
+        for n in xrange(self.N + 2):
+            self.A[n][:] = uGnd.A
+            
+        self.r[self.N][:] = uGnd.r
+        self.l[0][:] = uGnd.l
         
         self.l_r = uGnd.l.copy()
         self.r_l = uGnd.r.copy()
@@ -344,10 +352,7 @@ class evoMPS_TDVP_Generic_FBC:
         x += mm.matmul(None, sqrt_l, x_part)
             
         if n > 0:
-            if n > 1:
-                l_nm2 = self.l[n - 2]
-            else:
-                l_nm2 = self.l[0]
+            l_nm2 = self.Get_l(n - 2)
             x_part.fill(0)
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
@@ -885,6 +890,22 @@ class evoMPS_TDVP_Generic_FBC:
         
         return (rnsOK, ls_trOK, ls_pos, ls_diag, normOK)
     
+    def Grow_left(self, m):
+        oldA = self.A
+        oldl_0 = self.l[0]
+        oldr_N = self.r[self.N]
+            
+        self.N = self.N + m
+        self._init_arrays()
+        
+        for n in xrange(m + 1):
+            self.A[n][:] = oldA[0]
+            
+        for n in xrange(m + 1, self.N + 2):
+            self.A[n][:] = oldA[n - m]
+            
+        self.l[0][:] = oldl_0
+        self.r[self.N][:] = oldr_N
     
     def Get_l(self, n):
         if 0 <= n <= self.N + 1:
