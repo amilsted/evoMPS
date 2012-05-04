@@ -273,7 +273,8 @@ class evoMPS_TDVP_Uniform:
         print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
-    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):        
+    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):
+        x = x/la.norm(x)
         for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
@@ -286,25 +287,19 @@ class evoMPS_TDVP_Uniform:
         #re-scale
         if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
             self.A *= 1 / sp.sqrt(ev)
-            ev = la.norm(e(x, out=tmp))
+            if self.sanity_checks:
+                ev = la.norm(e(x, out=tmp))
+                if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
+                    print "Sanity check failed: Largest ev after re-scale = %g" % ev
         
         return i < max_itr - 1, i
     
     def Calc_lr(self, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
-        
-        self.l_di = None
-        self.r_di = None
 
-        try:
-            self.l = self.l.toarray()
-        except:
-            self.l = self.l
+        self.l = sp.asarray(self.l)
 
-        try:
-            self.r = self.r.toarray()
-        except:
-            self.r = self.r
+        self.r = sp.asarray(self.r)
         
         self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
                                                 rtol=self.itr_rtol, 
@@ -329,7 +324,7 @@ class evoMPS_TDVP_Uniform:
             if itr == 10:
                 print "Warning: Max. iterations reached during normalization!"
         else:
-            fac = self.D / sp.trace(self.r)
+            fac = self.D / sp.trace(self.r).real
             self.l *= 1 / fac
             self.r *= fac
 
