@@ -274,7 +274,12 @@ class evoMPS_TDVP_Uniform:
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
     def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):
-        x = x/la.norm(x)
+        """Power iteration to obtain eigenvector corresponding to largest
+           eigenvalue.
+           
+           The contents of the starting vector x is modifed.
+        """
+        x *= 1/la.norm(x)
         for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
@@ -292,7 +297,7 @@ class evoMPS_TDVP_Uniform:
                 if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
                     print "Sanity check failed: Largest ev after re-scale = %g" % ev
         
-        return i < max_itr - 1, i
+        return x, i < max_itr - 1, i
     
     def Calc_lr(self, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
@@ -301,13 +306,13 @@ class evoMPS_TDVP_Uniform:
 
         self.r = sp.asarray(self.r)
         
-        self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
-                                                rtol=self.itr_rtol, 
-                                                atol=self.itr_atol)
+        self.l, self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
         
-        self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
-                                                rtol=self.itr_rtol, 
-                                                atol=self.itr_atol)
+        self.r, self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
         #normalize eigenvectors:
 
         if self.symm_gauge and not force_r_CF:
@@ -381,9 +386,7 @@ class evoMPS_TDVP_Uniform:
         lam = sv**2
         self.S_hc = - sp.sum(lam * sp.log2(lam))
         
-        sv = sp.array(sv, dtype=self.typ)
-        
-        S = m.simple_diag_matrix(sv)
+        S = m.simple_diag_matrix(sv, dtype=self.typ)
         Srt = S.sqrt()
         
         g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
@@ -394,7 +397,7 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.A[s], g, self.A[s], g_i)
                 
         if self.sanity_checks:
-            Sfull = S.toarray()
+            Sfull = sp.asarray(S)
             
             if not sp.allclose(g.dot(g_i), sp.eye(self.D)):
                 print "Sanity check failed! Restore_SCF, bad GT!"
@@ -444,8 +447,7 @@ class evoMPS_TDVP_Uniform:
             #ev contains the squares of the Schmidt coefficients,
             self.S_hc = - sp.sum(ev * sp.log2(ev))
             
-            ev = sp.array(ev, dtype=self.typ)
-            self.l = m.simple_diag_matrix(ev)
+            self.l = m.simple_diag_matrix(ev, dtype=self.typ)
 
             if self.sanity_checks:
                 M = sp.zeros_like(self.r)
@@ -475,11 +477,11 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Restore_RCF, bad r!"
                     print "Off by: " + str(la.norm(r - self.r))
 
-                if not sp.allclose(l, self.l.toarray(),
+                if not sp.allclose(l, self.l,
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     print "Sanity check failed: Restore_RCF, bad l!"
-                    print "Off by: " + str(la.norm(l - self.l.toarray()))
+                    print "Off by: " + str(la.norm(l - self.l))
         
             self.r = m.eyemat(self.D, dtype=self.typ)
         
@@ -735,12 +737,8 @@ class evoMPS_TDVP_Uniform:
         h_min = self.h
         A_min = self.A.copy()
         
-        try:
-            l_min = self.l.toarray()
-            r_min = self.r.toarray()
-        except:
-            l_min = self.l.copy()
-            r_min = self.r.copy()            
+        l_min = sp.array(self.l, copy=True)
+        r_min = sp.array(self.r, copy=True)
         
         itr = 0
         while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
@@ -924,12 +922,8 @@ class evoMPS_TDVP_Uniform:
         if userdata is None:
             userdata = self.userdata
 
-        try:
-            l = self.l.toarray()
-            r = self.r.toarray()
-        except:
-            l = self.l
-            r = self.r
+        l = sp.asarray(self.l)
+        r = sp.asarray(self.r)
             
         tosave = sp.empty((5), dtype=sp.ndarray)
         tosave[0] = self.A
@@ -953,15 +947,9 @@ class evoMPS_TDVP_Uniform:
         if (newA.shape == self.A.shape):
             self.A[:] = newA
             self.K[:] = newK
-            try:
-                self.l = newl.A
-                self.r = newr.A
-            except:
-                self.l = newl
-                self.r = newr
-                
-            if sp.isscalar(self.r):
-                self.r = self.r * sp.eye(self.D, dtype=self.typ)
+
+            self.l = sp.asarray(newl)
+            self.r = sp.asarray(newr)
                 
             return True
         elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
@@ -987,15 +975,8 @@ class evoMPS_TDVP_Uniform:
         oldA = self.A
         oldK = self.K
         
-        try:
-            oldl = self.l.A
-        except:
-            oldl = self.l
-
-        try:
-            oldr = self.r.A
-        except:
-            oldr = self.r
+        oldl = sp.asarray(self.l)
+        oldr = sp.asarray(self.r)
         
         self._init_arrays(newD, self.q)
         
