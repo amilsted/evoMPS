@@ -6,12 +6,14 @@ Created on Thu Oct 13 17:29:27 2011
 
 Issues:
     - Getting stuck: Especially transverse Ising. More noise -> higher "residual energy"
-    - Dropping below the uniform solution's energy: phi^4 with low noise
-    - Wild energy fluctuations after that don't seem to go away after a fuzz
-    - Expectation value discontinuities at the joins
-    - We currently ignore contributions to the total energy when getting it from K[0]
-      - We should probably be calculating further K's into the left region until K
-        stops changing...
+      - Tends to involve a problem at the left boundary
+      - Expanding to the left allows the 'excitation' to dissipate
+      - Always on the left! Due to choice of canonical form? But how?
+        - Is the Restore_RCF GT pushing info to the left after all?
+        - Or is this a result of the right gauge-fixing choice?
+        
+TODO:
+    - Use diagonal matrices where possible
 
 """
 import scipy as sp
@@ -20,12 +22,13 @@ import nullspace as ns
 import matmul as mm
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps, dbg=False):
+def go(sfbc, tau, steps, dbg=False, force_upd_lr=False):
     h_prev = 0
     for i in xrange(steps):
         sfbc.Restore_RCF(dbg=dbg)
-        sfbc.Upd_l()
-        sfbc.Upd_r()
+        if force_upd_lr:
+            sfbc.Upd_l()
+            sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
         h_uni = sfbc.uGnd.h.real / norm_uni
@@ -405,11 +408,25 @@ class evoMPS_TDVP_Generic_FBC:
         If an exception occurs here, it is probably because these matrices
         are no longer Hermitian (enough).
         """
-        l_sqrt, evd = mm.sqrtmh(self.l[n - 1], ret_evd=True)
-        l_sqrt_inv = mm.invmh(l_sqrt, evd=evd)
-
-        r_sqrt, evd =  mm.sqrtmh(self.r[n], ret_evd=True)
-        r_sqrt_inv = mm.invmh(r_sqrt, evd=evd)
+        try:
+            l_sqrt = self.l[n - 1].sqrt()
+        except:
+            l_sqrt, evd = mm.sqrtmh(self.l[n - 1], ret_evd=True)
+            
+        try:
+            l_sqrt_inv = l_sqrt.inv()
+        except:
+            l_sqrt_inv = mm.invmh(l_sqrt, evd=evd)
+            
+        try:
+            r_sqrt = self.r[n].sqrt()
+        except:
+            r_sqrt, evd =  mm.sqrtmh(self.r[n], ret_evd=True)
+            
+        try:
+            r_sqrt_inv = r_sqrt.inv()
+        except:
+            r_sqrt_inv = mm.invmh(r_sqrt, evd=evd)
         
         if self.sanity_checks:
             if not sp.allclose(mm.matmul(None, l_sqrt, l_sqrt), self.l[n - 1]):
@@ -510,6 +527,10 @@ class evoMPS_TDVP_Generic_FBC:
         if finish < 0:
             finish = self.N + 1
         for n in xrange(start, finish + 1):
+            try:
+                self.l[n] = self.l[n].A
+            except:
+                pass
             self.l[n].fill(0)
             tmp = sp.empty_like(self.l[n])
             for s in xrange(self.q[n]):
@@ -525,6 +546,10 @@ class evoMPS_TDVP_Generic_FBC:
         if n_high < 0:
             n_high = self.N - 1
         for n in reversed(xrange(n_low, n_high + 1)):
+            try:
+                self.r[n] = self.r[n].A
+            except:
+                pass
             self.EpsR(self.r[n], n + 1, self.r[n + 1], None)
     
     def EpsR(self, res, n, x, o):
@@ -705,7 +730,8 @@ class evoMPS_TDVP_Generic_FBC:
     
     def Restore_RCF_dbg(self):
             for n in xrange(self.N + 2):
-                print (n, sp.trace(self.l[n]).real, sp.trace(self.r[n]).real, uni.adot(self.l[n], self.r[n]).real)
+                print (n, self.l[n].trace().real, self.r[n].trace().real, 
+                       uni.adot(self.l[n], self.r[n]).real)
                 
             norm_r = uni.adot(self.l_r, self.r[self.N])
             norm_l = uni.adot(self.l[0], self.r_l)
@@ -736,7 +762,7 @@ class evoMPS_TDVP_Generic_FBC:
                 
             return h, h_left, h_right
     
-    def Restore_RCF(self, update_l=True, normalize=True, diag_l=True, dbg=False):
+    def Restore_RCF(self, update_l=True, normalize=True, dbg=False):
         if dbg:
             self.Upd_l()
             self.Upd_r()
@@ -749,13 +775,13 @@ class evoMPS_TDVP_Generic_FBC:
         for n in reversed(xrange(1, self.N + 2)):
             G_n_i, G_n = self.Restore_ON_R_n(n, G_n_i)
 
-            self.r[n - 1][:] = sp.eye(self.D[n - 1])
+            self.r[n - 1] = mm.eyemat(self.D[n - 1], self.typ)
 
             if self.sanity_checks: #and not diag_l:
                 r_n = mm.eyemat(self.D[n], self.typ)
                     
                 r_nm1 = self.EpsR(None, n, r_n, None)
-                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-13, rtol=1E-13):
+                if not sp.allclose(r_nm1, self.r[n - 1].A, atol=1E-13, rtol=1E-13):
                     print "Sanity Fail in Restore_RCF! p1: r_%u is bad" % (n - 1)
                     print la.norm(r_nm1 - self.r[n - 1])
                     
@@ -769,8 +795,13 @@ class evoMPS_TDVP_Generic_FBC:
         for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
             self.A[0][s] = mm.matmul(None, G_n, self.A[0][s], G_n_i)            
             
-        self.r_l[:] = mm.matmul(None, G_n, self.r_l, mm.H(G_n))
-        self.l[0][:] = mm.matmul(None, mm.H(G_n_i), self.l[0], G_n_i)
+        self.r_l = mm.matmul(None, G_n, self.r_l, mm.H(G_n))
+        self.l[0] = mm.matmul(None, mm.H(G_n_i), self.l[0], G_n_i)
+        
+        self.uGnd.A = self.A[0]
+        self.uGnd.r = self.r_l
+        self.uGnd.l = self.l[0]
+        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
         
         if dbg:
             self.Upd_l()
@@ -779,72 +810,87 @@ class evoMPS_TDVP_Generic_FBC:
                 
             print (h_left_mid, h_mid, h_right_mid)     
         
-        fac = 1 / sp.trace(self.l[0]).real
+        fac = 1 / self.l[0].trace().real
         if dbg:
             print "Scale l[0]: %g" % fac
         self.l[0] *= fac
         self.r_l *= 1/fac
                         
-        if not diag_l:
-            self.Upd_l()
-        else:
-            G_nm1 = None
-            l_nm1 = self.l[0]
-            for n in xrange(self.N + 1):
-                if G_nm1 is None:
-                    x = l_nm1
-                else:
-                    x = mm.matmul(None, mm.H(G_nm1), l_nm1, G_nm1)
-                M = self.EpsL(None, n, x)
-                ev, EV = la.eigh(M)
-                
-                self.l[n][:] = sp.diag(ev)
-                G_n_i = EV
-                
-                if G_nm1 is None:
-                    G_nm1 = mm.H(EV) #for left uniform case
-                    
-                for s in xrange(self.q[n]):                
-                    mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
-                
-                if self.sanity_checks:
-                    l = self.EpsL(None, n, l_nm1)
-                    if not sp.allclose(l, self.l[n], atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in Restore_RCF!: l_%u is bad" % n
-                
-                G_nm1 = mm.H(EV)
-                l_nm1 = self.l[n]
-                
-                if self.sanity_checks:
-                    if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]), atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in Restore_RCF!: Bad GT for l_%u" % n
+        G_nm1 = None
+        l_nm1 = self.l[0]
+        for n in xrange(self.N + 1):
+            if G_nm1 is None:
+                x = l_nm1
+            else:
+                x = mm.matmul(None, mm.H(G_nm1), l_nm1, G_nm1)
+            M = self.EpsL(None, n, x)
+            ev, EV = la.eigh(M)
             
-            #Now G_nm1 = G_N
-            G_nm1_i = mm.H(G_nm1)
-            for s in xrange(self.q[self.N + 1]):
-                self.A[self.N + 1][s] = mm.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
+            self.l[n] = mm.simple_diag_matrix(ev)
+            G_n_i = EV
+            
+            if G_nm1 is None:
+                G_nm1 = mm.H(EV) #for left uniform case
                 
-            self.r[self.N][:] = mm.matmul(None, G_nm1, self.r[self.N], mm.H(G_nm1))            
-            self.l_r[:] = mm.matmul(None, mm.H(G_nm1_i), self.l_r, G_nm1_i)
+            for s in xrange(self.q[n]):                
+                mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
             
-            self.uGnd.A = self.A[0]
-            self.uGnd.r = self.r_l
-            self.uGnd.l = self.l[0]
-            self.uGnd.Calc_lr() #Ensures largest ev of E=1
-            fac = 1 / sp.trace(self.l[0]).real
-            if dbg:
-                print "Scale l[0]: %g" % fac
-            self.l[0] *= fac
-            self.r_l *= 1/fac
+            if self.sanity_checks:
+                l = self.EpsL(None, n, l_nm1)
+                if not sp.allclose(l, self.l[n], atol=1E-12, rtol=1E-12):
+                    print "Sanity Fail in Restore_RCF!: l_%u is bad" % n
+                    print la.norm(l - self.l[n])
             
-            self.uGnd.A = self.A[self.N + 1]
-            self.uGnd.r = self.r[self.N]
-            self.uGnd.l = self.l_r
-            self.uGnd.Calc_lr() #Ensures largest ev of E=1
+            G_nm1 = mm.H(EV)
+            l_nm1 = self.l[n]
             
-            #Calc_lr() enforces trace(r) == 1, so we don't need to re-scale r[N]
-                       
-            self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
+            if self.sanity_checks:
+                if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]), atol=1E-12, rtol=1E-12):
+                    print "Sanity Fail in Restore_RCF!: Bad GT for l_%u" % n
+        
+        #Now G_nm1 = G_N
+        G_nm1_i = mm.H(G_nm1)
+        for s in xrange(self.q[self.N + 1]):
+            self.A[self.N + 1][s] = mm.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
+            
+        #This should not be necessary if G_N is really unitary
+        self.r[self.N] = mm.matmul(None, G_nm1, self.r[self.N], mm.H(G_nm1))
+        self.r[self.N + 1] = self.r[self.N]
+        self.l_r[:] = mm.matmul(None, mm.H(G_nm1_i), self.l_r, G_nm1_i)
+        
+        self.uGnd.A = self.A[0]
+        self.uGnd.r = self.r_l
+        self.uGnd.l = self.l[0]
+        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
+        self.l[0] = self.uGnd.l #No longer diagonal!
+        self.r_l = self.uGnd.r #No longer eyemat!
+        if self.sanity_checks:
+            if not sp.allclose(self.l[0], sp.diag(sp.diag(self.l[0])), atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in Restore_RCF!: True l[0] not diagonal!"
+        self.l[0] = mm.simple_diag_matrix(sp.diag(self.l[0]))
+        
+        fac = 1 / sp.trace(self.l[0]).real
+        if dbg:
+            print "Scale l[0]: %g" % fac
+        self.l[0] *= fac
+        self.r_l *= 1/fac
+        
+        self.uGnd.A = self.A[self.N + 1]
+        self.uGnd.r = self.r[self.N]
+        self.uGnd.l = self.l_r
+        self.uGnd.Calc_lr() #Ensures largest ev of E=1
+        self.l_r = self.uGnd.l
+        self.r[self.N] = self.uGnd.r
+        if self.sanity_checks:
+            if not sp.allclose(self.r[self.N], sp.eye(self.D[self.N]), atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in Restore_RCF!: True r[N] not eye!"
+        self.r[self.N] = mm.eyemat(self.D[self.N], dtype=self.typ)
+        
+        self.r[self.N + 1] = self.r[self.N]
+        
+        #Calc_lr() enforces trace(r) == 1, so we don't need to re-scale r[N]
+                   
+        self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
         if self.sanity_checks:
             l_n = self.l[0]
