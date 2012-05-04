@@ -55,7 +55,7 @@ class evoMPS_TDVP_Generic_FBC:
     
     sanity_checks = True
     
-    uGnd = uni.evoMPS_TDVP_Uniform(10, 2)
+    uGnd = None
     
     def TrimD(self):
         qacc = 1
@@ -109,15 +109,20 @@ class evoMPS_TDVP_Generic_FBC:
             self.A[n] = sp.empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
             if n < self.N + 1:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
-                
-        self.r[self.N + 1] = self.r[self.N]
             
     def __init__(self, numsites, uGnd):
-        uGnd.symm_gauge = False
-        uGnd.Calc_lr()
-        uGnd.Restore_CF()
-        uGnd.Calc_lr()
-        self.uGnd = uGnd
+        self.uGnd = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
+        self.uGnd.sanity_checks = True
+        self.uGnd.h_nn = uGnd.h_nn
+        self.uGnd.h_nn_cptr = uGnd.h_nn_cptr
+        self.uGnd.A = uGnd.A.copy()
+        self.uGnd.l = uGnd.l.copy()
+        self.uGnd.r = uGnd.r.copy()
+        
+        self.uGnd.symm_gauge = False
+        self.uGnd.Calc_lr()
+        self.uGnd.Restore_CF()
+        self.uGnd.Calc_lr()
         
         self.h_nn = self.Wrap_h
 
@@ -130,13 +135,14 @@ class evoMPS_TDVP_Generic_FBC:
         mm.matmul_init(dtype=self.typ, order=self.odr)
                 
         for n in xrange(self.N + 2):
-            self.A[n][:] = uGnd.A
+            self.A[n][:] = self.uGnd.A
             
-        self.r[self.N][:] = uGnd.r
-        self.l[0][:] = uGnd.l
+        self.r[self.N] = self.uGnd.r.copy()
+        self.r[self.N + 1] = self.r[self.N]
+        self.l[0] = self.uGnd.l.copy()
         
-        self.l_r = uGnd.l.copy()
-        self.r_l = uGnd.r.copy()
+        self.l_r = self.uGnd.l.copy()
+        self.r_l = self.uGnd.r.copy()
         
     def Randomize(self):
         """Set A's randomly, trying to keep the norm reasonable.
@@ -708,7 +714,7 @@ class evoMPS_TDVP_Generic_FBC:
             G_nm1 = mm.H(mm.invtr(tu)) #G is now lower-triangular
             G_nm1_i = mm.H(tu)
         except sp.linalg.LinAlgError:
-            print "Restore_ON_R_n: Falling back to eigh()!"
+            print "Restore_ON_R_%u: Falling back to eigh()!" % n
             e,Gh = la.eigh(M)
             G_nm1 = mm.H(mm.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
             G_nm1_i = la.inv(G_nm1)
@@ -718,7 +724,7 @@ class evoMPS_TDVP_Generic_FBC:
             
         if self.sanity_checks:
             if not sp.allclose(sp.dot(G_nm1, G_nm1_i), sp.eye(G_nm1.shape[0]), atol=1E-13, rtol=1E-13):
-                print "Sanity Fail in Restore_ON_R_n!: Bad GT at n=%u" % n
+                print "Sanity Fail in Restore_ON_R_%u!: Bad GT at n=%u" % (n, n)
         
         for s in xrange(self.q[n]):                
             mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
@@ -788,20 +794,19 @@ class evoMPS_TDVP_Generic_FBC:
         self.r[self.N + 1] = self.r[self.N]
         
         #Now G_n_i contains g_0_i
-        if self.sanity_checks:
-            if not sp.allclose(sp.dot(G_n, G_n_i), sp.eye(G_n.shape[0]), atol=1E-13, rtol=1E-13):
-                print "Sanity Fail in Restore_RCF!: Bad GT at n=0"
-                
         for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
             self.A[0][s] = mm.matmul(None, G_n, self.A[0][s], G_n_i)            
             
         self.r_l = mm.matmul(None, G_n, self.r_l, mm.H(G_n))
         self.l[0] = mm.matmul(None, mm.H(G_n_i), self.l[0], G_n_i)
         
-        self.uGnd.A = self.A[0]
-        self.uGnd.r = self.r_l
-        self.uGnd.l = self.l[0]
-        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
+#        self.uGnd.A = self.A[0]
+#        self.uGnd.r = self.r_l
+#        self.uGnd.l = self.l[0]
+#        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
+#        self.r_l = self.uGnd.r
+#        self.l[0] = self.uGnd.l
+#        self.A[0] = self.uGnd.A
         
         if dbg:
             self.Upd_l()
@@ -826,7 +831,7 @@ class evoMPS_TDVP_Generic_FBC:
             M = self.EpsL(None, n, x)
             ev, EV = la.eigh(M)
             
-            self.l[n] = mm.simple_diag_matrix(ev)
+            self.l[n] = mm.simple_diag_matrix(ev, dtype=self.typ)
             G_n_i = EV
             
             if G_nm1 is None:
@@ -834,6 +839,23 @@ class evoMPS_TDVP_Generic_FBC:
                 
             for s in xrange(self.q[n]):                
                 mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
+            
+            if n == 0:
+                l_nm1 = self.l[n]
+                self.r_l = mm.matmul(None, G_nm1, self.r_l, G_n_i)
+#                self.uGnd.r = self.r_l
+#                self.uGnd.A = self.A[0]
+#                self.uGnd.l = self.l[0]
+#                l = self.l[0].copy()
+#                self.uGnd.Calc_lr()
+#                self.l[0] = self.uGnd.l
+#                self.A[0] = self.uGnd.A
+#                fac = 1.0 / self.l[0].trace().real
+#                if dbg:
+#                    print "Scale l[0]: %g" % fac
+#                self.l[0] *= fac
+#                self.r_l *= 1/fac
+#                print la.norm(l - self.l[n])
             
             if self.sanity_checks:
                 l = self.EpsL(None, n, l_nm1)
@@ -845,7 +867,8 @@ class evoMPS_TDVP_Generic_FBC:
             l_nm1 = self.l[n]
             
             if self.sanity_checks:
-                if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]), atol=1E-12, rtol=1E-12):
+                if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]), 
+                                   atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in Restore_RCF!: Bad GT for l_%u" % n
         
         #Now G_nm1 = G_N
@@ -858,6 +881,8 @@ class evoMPS_TDVP_Generic_FBC:
         self.r[self.N + 1] = self.r[self.N]
         self.l_r[:] = mm.matmul(None, mm.H(G_nm1_i), self.l_r, G_nm1_i)
         
+        if dbg:
+            print "Uni left:"
         self.uGnd.A = self.A[0]
         self.uGnd.r = self.r_l
         self.uGnd.l = self.l[0]
@@ -875,6 +900,8 @@ class evoMPS_TDVP_Generic_FBC:
         self.l[0] *= fac
         self.r_l *= 1/fac
         
+        if dbg:
+            print "Uni right:"
         self.uGnd.A = self.A[self.N + 1]
         self.uGnd.r = self.r[self.N]
         self.uGnd.l = self.l_r
@@ -912,7 +939,8 @@ class evoMPS_TDVP_Generic_FBC:
             
             print h_after - h_before
                 
-            print h_after.sum() - h_before.sum()
+            print (h_after.sum() - h_before.sum() + h_left_after - h_left_before
+                   + h_right_after - h_right_before)
     
     def CheckCanonical_R(self):
         """Tests for right canonical form.
@@ -950,8 +978,9 @@ class evoMPS_TDVP_Generic_FBC:
         for n in xrange(m + 1, self.N + 2):
             self.A[n][:] = oldA[n - m]
             
-        self.l[0][:] = oldl_0
-        self.r[self.N][:] = oldr_N
+        self.l[0] = oldl_0
+        self.r[self.N] = oldr_N
+        self.r[self.N + 1] = self.r[self.N]
     
     def Get_l(self, n):
         if 0 <= n <= self.N + 1:
