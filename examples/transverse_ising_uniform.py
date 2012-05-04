@@ -97,7 +97,7 @@ s.h_nn = h_nn
 """
 Set the initial Hamiltonian parameters.
 """
-h = 0.25
+h = 0.7
 J = 1.00
 
 """
@@ -110,7 +110,7 @@ J_real = 2
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.1
+step = 0.05
 realstep = 0.0001
 
 """
@@ -133,7 +133,7 @@ grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
 
 expand = False
 
-if False:
+if True:
     try:
        a_file = open(grnd_fname, 'rb')
        s.LoadState(a_file)
@@ -148,6 +148,9 @@ if False:
 else:
     loaded = False
     real_time = False
+    
+s.sanity_checks = True
+s.symm_gauge = False
 
 if __name__ == "__main__":
     """
@@ -181,9 +184,6 @@ if __name__ == "__main__":
                  "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
-    
-    s.sanity_checks = True
-    s.symm_gauge = True
     
     for i in xrange(total_steps):
         T[i] = t
