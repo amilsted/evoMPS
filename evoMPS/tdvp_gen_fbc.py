@@ -13,7 +13,7 @@ Issues:
         - Or is this a result of the right gauge-fixing choice?
         
 TODO:
-    - Use diagonal matrices where possible
+    - Use separate uGndL and uGndR objects to make things cleaner
 
 """
 import scipy as sp
@@ -30,8 +30,8 @@ def go(sfbc, tau, steps, dbg=False, force_upd_lr=False):
             sfbc.Upd_l()
             sfbc.Upd_r()
         h, eta = sfbc.TakeStep(tau)
-        norm_uni = uni.adot(sfbc.uGnd.l, sfbc.uGnd.r).real
-        h_uni = sfbc.uGnd.h.real / norm_uni
+        norm_uni = uni.adot(sfbc.uGndR.l, sfbc.uGndR.r).real
+        h_uni = sfbc.uGndR.h.real / norm_uni
         print "\t".join(map(str, (eta.real, h.real - h_uni, (h - h_prev).real)))
         print sfbc.eta.real
 #        if i > 0 and (h - h_prev).real > 0:
@@ -55,7 +55,8 @@ class evoMPS_TDVP_Generic_FBC:
     
     sanity_checks = True
     
-    uGnd = None
+    uGndL = None
+    uGndR = None
     
     def TrimD(self):
         qacc = 1
@@ -71,8 +72,8 @@ class evoMPS_TDVP_Generic_FBC:
                 self.D[n] = qacc
             
     def _init_arrays(self):
-        self.D = sp.repeat(self.uGnd.D, self.N + 2)
-        self.q = sp.repeat(self.uGnd.q, self.N + 2)
+        self.D = sp.repeat(self.uGndL.D, self.N + 2)
+        self.q = sp.repeat(self.uGndL.q, self.N + 2)
         
         #Make indicies correspond to the thesis
         #Deliberately add a None to the end to catch [-1] indexing!
@@ -90,8 +91,8 @@ class evoMPS_TDVP_Generic_FBC:
             
         
         #Don't do anything pointless
-        self.D[0] = self.uGnd.D
-        self.D[self.N + 1] = self.uGnd.D
+        self.D[0] = self.uGndL.D
+        self.D[self.N + 1] = self.uGndL.D
         
         #self.TrimD()
         
@@ -111,18 +112,27 @@ class evoMPS_TDVP_Generic_FBC:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
             
     def __init__(self, numsites, uGnd):
-        self.uGnd = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
-        self.uGnd.sanity_checks = True
-        self.uGnd.h_nn = uGnd.h_nn
-        self.uGnd.h_nn_cptr = uGnd.h_nn_cptr
-        self.uGnd.A = uGnd.A.copy()
-        self.uGnd.l = uGnd.l.copy()
-        self.uGnd.r = uGnd.r.copy()
+        self.uGndL = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
+        self.uGndL.sanity_checks = True
+        self.uGndL.h_nn = uGnd.h_nn
+        self.uGndL.h_nn_cptr = uGnd.h_nn_cptr
+        self.uGndL.A = uGnd.A.copy()
+        self.uGndL.l = uGnd.l.copy()
+        self.uGndL.r = uGnd.r.copy()
         
-        self.uGnd.symm_gauge = False
-        self.uGnd.Calc_lr()
-        self.uGnd.Restore_CF()
-        self.uGnd.Calc_lr()
+        self.uGndL.symm_gauge = False
+        self.uGndL.Calc_lr()
+        self.uGndL.Restore_CF()
+        self.uGndL.Calc_lr()
+        
+        self.uGndR = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
+        self.uGndR.sanity_checks = True
+        self.uGndR.symm_gauge = False
+        self.uGndR.h_nn = uGnd.h_nn
+        self.uGndR.h_nn_cptr = uGnd.h_nn_cptr
+        self.uGndR.A = self.uGndL.A.copy()
+        self.uGndR.l = self.uGndL.l.copy()
+        self.uGndR.r = self.uGndL.r.copy()
         
         self.h_nn = self.Wrap_h
 
@@ -135,14 +145,11 @@ class evoMPS_TDVP_Generic_FBC:
         mm.matmul_init(dtype=self.typ, order=self.odr)
                 
         for n in xrange(self.N + 2):
-            self.A[n][:] = self.uGnd.A
+            self.A[n][:] = self.uGndL.A
             
-        self.r[self.N] = self.uGnd.r.copy()
+        self.r[self.N] = self.uGndR.r
         self.r[self.N + 1] = self.r[self.N]
-        self.l[0] = self.uGnd.l.copy()
-        
-        self.l_r = self.uGnd.l.copy()
-        self.r_l = self.uGnd.r.copy()
+        self.l[0] = self.uGndL.l
         
     def Randomize(self):
         """Set A's randomly, trying to keep the norm reasonable.
@@ -155,7 +162,7 @@ class evoMPS_TDVP_Generic_FBC:
             self.A[n].imag = 0#(sp.rand(self.D[n - 1], self.D[n]) - 0.5) / sp.sqrt(self.q[n])
     
     def Wrap_h(self, n, s, t, u, v):
-        return self.uGnd.h_nn(s, t, u, v)
+        return self.uGndL.h_nn(s, t, u, v)
     
     def BuildC(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -235,7 +242,7 @@ class evoMPS_TDVP_Generic_FBC:
             K_n.fill(0)
             
             if not r_np1 is None and sp.allclose(r_np1/la.norm(r_np1),
-                                                 self.r_l/la.norm(self.r_l),
+                                                 self.uGndL.r/la.norm(self.uGndL.r),
                                                  atol=1E-10, rtol=1E-10):
                 break
             else:
@@ -258,7 +265,7 @@ class evoMPS_TDVP_Generic_FBC:
                 print (n, h.real, uni.adot(self.l[0], K_n).real, 
                        (uni.adot(self.l[0], K_np1) + h_l).real, h_is_stable, 
                        la.norm(K_n/la.norm(K_n) - K_np1/la.norm(K_np1)), 
-                       la.norm(r_np1/la.norm(r_np1) - self.r_l/la.norm(self.r_l)))
+                       la.norm(r_np1/la.norm(r_np1) - self.uGndL.r/la.norm(self.uGndL.r)))
                 if h_is_stable:
                     break
             
@@ -449,22 +456,16 @@ class evoMPS_TDVP_Generic_FBC:
     def Update(self):
         self.BuildC()
         
-        self.uGnd.A = self.A[self.N + 1]
-        self.uGnd.r = self.r[self.N]
-        self.uGnd.l = self.l_r
-        self.uGnd.Calc_AA()
-        self.uGnd.Calc_C()
-        self.uGnd.Calc_K()
-        self.K[self.N + 1][:] = self.uGnd.K
+        self.uGndR.Calc_AA()
+        self.uGndR.Calc_C()
+        self.uGndR.Calc_K()
+        self.K[self.N + 1][:] = self.uGndR.K
         
         self.CalcK()
 
-        self.uGnd.A = self.A[0]
-        self.uGnd.r = self.r_l
-        self.uGnd.l = self.l[0]
-        self.uGnd.Calc_AA()
-        self.uGnd.Calc_C()
-        K_left, h_left_uni = self.uGnd.Calc_K_left()
+        self.uGndL.Calc_AA()
+        self.uGndL.Calc_C()
+        K_left, h_left_uni = self.uGndL.Calc_K_left()
         
         h = (uni.adot(K_left, self.r[0]) + uni.adot(self.l[0], self.K[0])) / (self.N + 1)
 
@@ -739,8 +740,8 @@ class evoMPS_TDVP_Generic_FBC:
                 print (n, self.l[n].trace().real, self.r[n].trace().real, 
                        uni.adot(self.l[n], self.r[n]).real)
                 
-            norm_r = uni.adot(self.l_r, self.r[self.N])
-            norm_l = uni.adot(self.l[0], self.r_l)
+            norm_r = uni.adot(self.uGndR.l, self.r[self.N])
+            norm_l = uni.adot(self.l[0], self.uGndL.r)
             print norm_r
             print norm_l
             
@@ -754,29 +755,19 @@ class evoMPS_TDVP_Generic_FBC:
                 h[n] = self.Expect_2S(self.h_nn, n)
             h *= 1/norm
             
-            self.uGnd.A = self.A[0].copy()
-            self.uGnd.l = self.l[0].copy()
-            self.uGnd.r = self.r_l.copy()
-            self.uGnd.Calc_AA()
-            h_left = self.uGnd.Expect_2S(self.uGnd.h_nn) / norm_l
+            self.uGndL.A = self.A[0].copy()
+            self.uGndL.l = self.l[0].copy()
+            self.uGndL.Calc_AA()
+            h_left = self.uGndL.Expect_2S(self.uGndL.h_nn) / norm_l
 
-            self.uGnd.A = self.A[self.N + 1].copy()
-            self.uGnd.l = self.l_r.copy()
-            self.uGnd.r = self.r[self.N].copy()
-            self.uGnd.Calc_AA()
-            h_right = self.uGnd.Expect_2S(self.uGnd.h_nn) / norm_r
+            self.uGndR.A = self.A[self.N + 1].copy()
+            self.uGndR.r = self.r[self.N].copy()
+            self.uGndR.Calc_AA()
+            h_right = self.uGndL.Expect_2S(self.uGndR.h_nn) / norm_r
                 
             return h, h_left, h_right
     
-    def Restore_RCF(self, update_l=True, normalize=True, dbg=False):
-        if dbg:
-            self.Upd_l()
-            self.Upd_r()
-            print "BEFORE..."
-            h_before, h_left_before, h_right_before = self.Restore_RCF_dbg()
-                
-            print (h_left_before, h_before, h_right_before)
-        
+    def Restore_RCF_r(self):
         G_n_i = None
         for n in reversed(xrange(1, self.N + 2)):
             G_n_i, G_n = self.Restore_ON_R_n(n, G_n_i)
@@ -797,34 +788,14 @@ class evoMPS_TDVP_Generic_FBC:
         for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
             self.A[0][s] = mm.matmul(None, G_n, self.A[0][s], G_n_i)            
             
-        self.r_l = mm.matmul(None, G_n, self.r_l, mm.H(G_n))
+        self.uGndL.r = mm.matmul(None, G_n, self.uGndL.r, mm.H(G_n))
         self.l[0] = mm.matmul(None, mm.H(G_n_i), self.l[0], G_n_i)
-        
-#        self.uGnd.A = self.A[0]
-#        self.uGnd.r = self.r_l
-#        self.uGnd.l = self.l[0]
-#        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
-#        self.r_l = self.uGnd.r
-#        self.l[0] = self.uGnd.l
-#        self.A[0] = self.uGnd.A
-        
-        if dbg:
-            self.Upd_l()
-            print "MIDDLE..."
-            h_mid, h_left_mid, h_right_mid = self.Restore_RCF_dbg()
-                
-            print (h_left_mid, h_mid, h_right_mid)     
-        
-        fac = 1 / self.l[0].trace().real
-        if dbg:
-            print "Scale l[0]: %g" % fac
-        self.l[0] *= fac
-        self.r_l *= 1/fac
-                        
+    
+    def Restore_RCF_l(self):
         G_nm1 = None
         l_nm1 = self.l[0]
         for n in xrange(self.N + 1):
-            if G_nm1 is None:
+            if n == 0:
                 x = l_nm1
             else:
                 x = mm.matmul(None, mm.H(G_nm1), l_nm1, G_nm1)
@@ -834,28 +805,13 @@ class evoMPS_TDVP_Generic_FBC:
             self.l[n] = mm.simple_diag_matrix(ev, dtype=self.typ)
             G_n_i = EV
             
-            if G_nm1 is None:
+            if n == 0:
                 G_nm1 = mm.H(EV) #for left uniform case
+                l_nm1 = self.l[n] #for sanity check
+                self.uGndL.r = mm.matmul(None, G_nm1, self.uGndL.r, G_n_i) #since r is not eye
                 
             for s in xrange(self.q[n]):                
                 mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
-            
-            if n == 0:
-                l_nm1 = self.l[n]
-                self.r_l = mm.matmul(None, G_nm1, self.r_l, G_n_i)
-#                self.uGnd.r = self.r_l
-#                self.uGnd.A = self.A[0]
-#                self.uGnd.l = self.l[0]
-#                l = self.l[0].copy()
-#                self.uGnd.Calc_lr()
-#                self.l[0] = self.uGnd.l
-#                self.A[0] = self.uGnd.A
-#                fac = 1.0 / self.l[0].trace().real
-#                if dbg:
-#                    print "Scale l[0]: %g" % fac
-#                self.l[0] *= fac
-#                self.r_l *= 1/fac
-#                print la.norm(l - self.l[n])
             
             if self.sanity_checks:
                 l = self.EpsL(None, n, l_nm1)
@@ -876,19 +832,44 @@ class evoMPS_TDVP_Generic_FBC:
         for s in xrange(self.q[self.N + 1]):
             self.A[self.N + 1][s] = mm.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
             
-        #This should not be necessary if G_N is really unitary
-        self.r[self.N] = mm.matmul(None, G_nm1, self.r[self.N], mm.H(G_nm1))
-        self.r[self.N + 1] = self.r[self.N]
-        self.l_r[:] = mm.matmul(None, mm.H(G_nm1_i), self.l_r, G_nm1_i)
+        ##This should not be necessary if G_N is really unitary
+        #self.r[self.N] = mm.matmul(None, G_nm1, self.r[self.N], mm.H(G_nm1))
+        #self.r[self.N + 1] = self.r[self.N]
+        self.uGndR.l[:] = mm.matmul(None, mm.H(G_nm1_i), self.uGndR.l, G_nm1_i)
+    
+    def Restore_RCF(self, dbg=False):
+        if dbg:
+            self.Upd_l()
+            self.Upd_r()
+            print "BEFORE..."
+            h_before, h_left_before, h_right_before = self.Restore_RCF_dbg()
+                
+            print (h_left_before, h_before, h_right_before)
+        
+        self.Restore_RCF_r()
+        
+        if dbg:
+            self.Upd_l()
+            print "MIDDLE..."
+            h_mid, h_left_mid, h_right_mid = self.Restore_RCF_dbg()
+                
+            print (h_left_mid, h_mid, h_right_mid)     
+        
+        fac = 1 / self.l[0].trace().real
+        if dbg:
+            print "Scale l[0]: %g" % fac
+        self.l[0] *= fac
+        self.uGndL.r *= 1/fac
+                        
+        self.Restore_RCF_l()
         
         if dbg:
             print "Uni left:"
-        self.uGnd.A = self.A[0]
-        self.uGnd.r = self.r_l
-        self.uGnd.l = self.l[0]
-        self.uGnd.Calc_lr() #Ensures largest ev of E=1        
-        self.l[0] = self.uGnd.l #No longer diagonal!
-        self.r_l = self.uGnd.r #No longer eyemat!
+        self.uGndL.A = self.A[0]
+        self.uGndL.l = self.l[0]
+        self.uGndL.Calc_lr() #Ensures largest ev of E=1        
+        self.l[0] = self.uGndL.l #No longer diagonal!
+        self.A[0] = self.uGndL.A
         if self.sanity_checks:
             if not sp.allclose(self.l[0], sp.diag(sp.diag(self.l[0])), atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in Restore_RCF!: True l[0] not diagonal!"
@@ -898,25 +879,24 @@ class evoMPS_TDVP_Generic_FBC:
         if dbg:
             print "Scale l[0]: %g" % fac
         self.l[0] *= fac
-        self.r_l *= 1/fac
+        self.uGndL.r *= 1/fac
+        
+        self.uGndL.l = self.l[0]
         
         if dbg:
             print "Uni right:"
-        self.uGnd.A = self.A[self.N + 1]
-        self.uGnd.r = self.r[self.N]
-        self.uGnd.l = self.l_r
-        self.uGnd.Calc_lr() #Ensures largest ev of E=1
-        self.l_r = self.uGnd.l
-        self.r[self.N] = self.uGnd.r
+        self.uGndR.A = self.A[self.N + 1]
+        self.uGndR.r = self.r[self.N]
+        self.uGndR.Calc_lr() #Ensures largest ev of E=1
+        self.r[self.N] = self.uGndR.r
+        self.A[self.N + 1] = self.uGndR.A
         if self.sanity_checks:
             if not sp.allclose(self.r[self.N], sp.eye(self.D[self.N]), atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in Restore_RCF!: True r[N] not eye!"
         self.r[self.N] = mm.eyemat(self.D[self.N], dtype=self.typ)
-        
+        self.uGndR.r = self.r[self.N]
         self.r[self.N + 1] = self.r[self.N]
-        
-        #Calc_lr() enforces trace(r) == 1, so we don't need to re-scale r[N]
-                   
+               
         self.l[self.N + 1][:] = self.EpsL(None, self.N + 1, self.l[self.N])
             
         if self.sanity_checks:
