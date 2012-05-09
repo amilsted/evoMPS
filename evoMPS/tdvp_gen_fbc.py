@@ -22,14 +22,17 @@ import nullspace as ns
 import matmul as mm
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps, dbg=False, force_upd_lr=False):
+def go(sfbc, tau, steps, dbg=False, force_upd_lr=False, RK4=False):
     h_prev = 0
     for i in xrange(steps):
         sfbc.Restore_RCF(dbg=dbg)
         if force_upd_lr:
             sfbc.Upd_l()
             sfbc.Upd_r()
-        h, eta = sfbc.TakeStep(tau)
+        if RK4:
+            h, eta = sfbc.TakeStep_RK4(tau)
+        else:
+            h, eta = sfbc.TakeStep(tau)
         norm_uni = uni.adot(sfbc.uGndR.l, sfbc.uGndR.r).real
         h_uni = sfbc.uGndR.h.real / norm_uni
         print "\t".join(map(str, (eta.real, h.real - h_uni, (h - h_prev).real)))
@@ -506,6 +509,94 @@ class evoMPS_TDVP_Generic_FBC:
             B_prev = B
         
         return h, eta_tot
+        
+        
+    def TakeStep_RK4(self, dtau):
+        """Take a step using the fourth-order explicit Runge-Kutta method.
+        
+        This requires more memory than a simple forward Euler step, and also
+        more than a backward Euler step. It is, however, far more accurate
+        and stable than forward Euler, and much faster than the backward
+        Euler method, since there is no need to iteratively solve an implicit
+        equation.
+        """
+        #self.Restore_RCF()
+        
+        h = self.Update()
+        
+        eta_tot = 0
+        
+        #Take a copy of the current state
+        A0 = sp.empty_like(self.A)
+        for n in xrange(1, self.N + 1):
+            A0[n] = self.A[n].copy()
+            
+        B_fin = sp.empty_like(self.A)
+
+        B_prev = None
+        for n in xrange(1, self.N + 2):
+            if n <= self.N:
+                B = self.GetB(n) #k1
+                B_fin[n] = B
+                
+            if not B_prev is None:
+                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
+                
+            B_prev = B
+            
+        #self.Restore_RCF()
+        #self.Update()
+        self.Upd_l()
+        self.Upd_r()
+        self.BuildC()
+        self.CalcK()
+        
+        B_prev = None
+        for n in xrange(1, self.N + 2):
+            if n <= self.N:
+                B = self.GetB(n) #k2                
+                
+            if not B_prev is None:
+                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
+                B_fin[n - 1] += 2 * B_prev
+                
+            B_prev = B            
+            
+        #self.Restore_RCF()
+        #self.Update()
+        self.Upd_l()
+        self.Upd_r()
+        self.BuildC()
+        self.CalcK()
+            
+        B_prev = None
+        for n in xrange(1, self.N + 2):
+            if n <= self.N:
+                B = self.GetB(n) #k3                
+                
+            if not B_prev is None:
+                self.A[n - 1] = A0[n - 1] - dtau * B_prev
+                B_fin[n - 1] += 2 * B_prev
+                
+            B_prev = B
+             
+        #self.Restore_RCF()
+        #self.Update()
+        self.Upd_l()
+        self.Upd_r()
+        self.BuildC()
+        self.CalcK()
+        
+        for n in xrange(1, self.N + 1):
+            B = self.GetB(n) #k4
+            if not B is None:
+                B_fin[n] += B
+            
+        for n in xrange(1, self.N + 1):
+            if not B_fin[n] is None:
+                self.A[n] = A0[n] - dtau /6 * B_fin[n]
+                
+        return h, eta_tot
             
     def AddNoise(self, fac, n_i=-1, n_f=-1):
         """Adds some random noise of a given order to the state matrices A
@@ -553,10 +644,7 @@ class evoMPS_TDVP_Generic_FBC:
         if n_high < 0:
             n_high = self.N - 1
         for n in reversed(xrange(n_low, n_high + 1)):
-            try:
-                self.r[n] = self.r[n].A
-            except:
-                pass
+            self.r[n] = sp.asarray(self.r[n])
             self.EpsR(self.r[n], n + 1, self.r[n + 1], None)
     
     def EpsR(self, res, n, x, o):
