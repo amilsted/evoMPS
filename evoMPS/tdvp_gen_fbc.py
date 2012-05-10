@@ -11,9 +11,6 @@ Issues:
       - Always on the left! Due to choice of canonical form? But how?
         - Is the Restore_RCF GT pushing info to the left after all?
         - Or is this a result of the right gauge-fixing choice?
-        
-TODO:
-    - Use separate uGndL and uGndR objects to make things cleaner
 
 """
 import scipy as sp
@@ -498,11 +495,11 @@ class evoMPS_TDVP_Generic_FBC:
         
         B_prev = None
         for n in xrange(1, self.N + 2):
-            #V is not always defined (e.g. at the right boundary vector, and possibly before)
             if n <= self.N:
                 B = self.GetB(n)
                 eta_tot += self.eta[n]
             
+            #V is not always defined
             if n > 1 and not B_prev is None:
                 self.A[n - 1] += -dtau * B_prev
                 
