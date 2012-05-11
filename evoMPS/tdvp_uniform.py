@@ -33,16 +33,7 @@ def adot(a, b, tmp=None):
     Calculates the scalar product for the ancilla, expecting
     the arguments in matrix form.
     Equivalent to trace(dot(H(a), b))
-    """
-    if sp.isscalar(a) and sp.isscalar(b):
-        return None #cover this later?
-        
-    if sp.isscalar(a) and a == 1:
-        return sp.trace(b)
-
-    if sp.isscalar(b) and b == 1:
-        return sp.trace(a)
-    
+    """    
     if tmp is None:
         return sp.inner(a.ravel().conj(), b.ravel())
     else:
@@ -60,11 +51,14 @@ class PPInv_op:
     
     dtype = None
     
-    def __init__(self, tdvp, p=0):
+    left = False
+    
+    def __init__(self, tdvp, p=0, left=False):
         self.tdvp = tdvp
         self.l = tdvp.l
         self.r = tdvp.r
         self.p = 0
+        self.left = left
         
         self.D = tdvp.D
         
@@ -75,23 +69,19 @@ class PPInv_op:
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        Ex = self.tdvp.EpsR(x)
+        if self.left:
+            xE = self.tdvp.EpsL(x)
+            QEQ = xE - m.H(self.l) * adot(self.r, x)
+        else:
+            Ex = self.tdvp.EpsR(x)
+            QEQ = Ex - self.r * adot(self.l, x)        
         
-        try:
-            r = self.r.toarray()
-        except:
-            r = self.r
-            
-        if sp.isscalar(r) and r == 1:
-            r = sp.eye(self.D)
-        
-        QEQ = Ex - r * adot(self.l, x)
         
         if not self.p == 0:
             QEQ *= sp.exp(1.j * self.p)
         
         res = x - QEQ
-            
+        
         return res.reshape((self.D**2))
 
 class H_tangeant_op:
@@ -156,6 +146,7 @@ class evoMPS_TDVP_Uniform:
         self.C = sp.empty((q, q, D, D), dtype=self.typ, order=self.odr)
         
         self.K = sp.ones_like(self.A[0])
+        self.K_left = None
         
         self.l = sp.ones_like(self.A[0])
         self.r = sp.ones_like(self.A[0])
@@ -282,7 +273,13 @@ class evoMPS_TDVP_Uniform:
         print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
-    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):        
+    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):
+        """Power iteration to obtain eigenvector corresponding to largest
+           eigenvalue.
+           
+           The contents of the starting vector x is modifed.
+        """
+        x *= 1/la.norm(x)
         for i in xrange(max_itr):
             e(x, out=tmp)
             ev = la.norm(tmp)
@@ -295,33 +292,27 @@ class evoMPS_TDVP_Uniform:
         #re-scale
         if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
             self.A *= 1 / sp.sqrt(ev)
-            ev = la.norm(e(x, out=tmp))
+            if self.sanity_checks:
+                ev = la.norm(e(x, out=tmp))
+                if not sp.allclose(ev, 1.0, rtol=rtol, atol=atol):
+                    print "Sanity check failed: Largest ev after re-scale = %g" % ev
         
-        return i < max_itr - 1, i
+        return x, i < max_itr - 1, i
     
     def Calc_lr(self, force_r_CF=False):        
         tmp = sp.empty_like(self.tmp)
-        
-        self.l_di = None
-        self.r_di = None
 
-        try:
-            self.l = self.l.toarray()
-        except:
-            self.l = self.l
+        self.l = sp.asarray(self.l)
 
-        try:
-            self.r = self.r.toarray()
-        except:
-            self.r = self.r
+        self.r = sp.asarray(self.r)
         
-        self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
-                                                rtol=self.itr_rtol, 
-                                                atol=self.itr_atol)
+        self.l, self.conv_l, self.itr_l = self._Calc_lr(self.l, self.EpsL, tmp, 
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
         
-        self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
-                                                rtol=self.itr_rtol, 
-                                                atol=self.itr_atol)
+        self.r, self.conv_r, self.itr_r = self._Calc_lr(self.r, self.EpsR, tmp, 
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
         #normalize eigenvectors:
 
         if self.symm_gauge and not force_r_CF:
@@ -338,7 +329,7 @@ class evoMPS_TDVP_Uniform:
             if itr == 10:
                 print "Warning: Max. iterations reached during normalization!"
         else:
-            fac = self.D / sp.trace(self.r)
+            fac = self.D / sp.trace(self.r).real
             self.l *= 1 / fac
             self.r *= fac
 
@@ -395,9 +386,7 @@ class evoMPS_TDVP_Uniform:
         lam = sv**2
         self.S_hc = - sp.sum(lam * sp.log2(lam))
         
-        sv = sp.array(sv, dtype=self.typ)
-        
-        S = m.simple_diag_matrix(sv)
+        S = m.simple_diag_matrix(sv, dtype=self.typ)
         Srt = S.sqrt()
         
         g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
@@ -408,7 +397,7 @@ class evoMPS_TDVP_Uniform:
             m.matmul(self.A[s], g, self.A[s], g_i)
                 
         if self.sanity_checks:
-            Sfull = S.toarray()
+            Sfull = sp.asarray(S)
             
             if not sp.allclose(g.dot(g_i), sp.eye(self.D)):
                 print "Sanity check failed! Restore_SCF, bad GT!"
@@ -436,15 +425,11 @@ class evoMPS_TDVP_Uniform:
         self.l = S
         self.r = S
     
-    def Restore_CF(self, force_r_CF=False):
+    def Restore_CF(self, force_r_CF=False, ret_g=False):
         if self.symm_gauge and not force_r_CF:
             self.Restore_SCF()
         else:
             #First get G such that r = eye
-            M = sp.zeros_like(self.A[0])
-            for s in xrange(self.q):
-                M += m.matmul(None, self.A[s], m.H(self.A[s]))
-            
             G = la.cholesky(self.r, lower=True)
             G_i = m.invtr(G, lower=True)
 
@@ -462,11 +447,10 @@ class evoMPS_TDVP_Uniform:
             #ev contains the squares of the Schmidt coefficients,
             self.S_hc = - sp.sum(ev * sp.log2(ev))
             
-            ev = sp.array(ev, dtype=self.typ)
-            self.l = m.simple_diag_matrix(ev)
+            self.l = m.simple_diag_matrix(ev, dtype=self.typ)
 
             if self.sanity_checks:
-                M.fill(0)
+                M = sp.zeros_like(self.r)
                 for s in xrange(self.q):
                     M += m.matmul(None, self.A[s], m.H(self.A[s]))            
                 
@@ -493,13 +477,18 @@ class evoMPS_TDVP_Uniform:
                     print "Sanity check failed: Restore_RCF, bad r!"
                     print "Off by: " + str(la.norm(r - self.r))
 
-                if not sp.allclose(l, self.l.toarray(),
+                if not sp.allclose(l, self.l,
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     print "Sanity check failed: Restore_RCF, bad l!"
-                    print "Off by: " + str(la.norm(l - self.l.toarray()))
+                    print "Off by: " + str(la.norm(l - self.l))
         
             self.r = m.eyemat(self.D, dtype=self.typ)
+        
+        if ret_g:
+            return G, G_i
+        else:
+            return
     
     def Calc_C(self):
         if not self.h_nn_cptr is None:
@@ -515,14 +504,21 @@ class evoMPS_TDVP_Uniform:
                             if h != 0:
                                 self.C[s, t] += h * self.AA[u, v]
     
-    def Calc_PPinv(self, x, p=0, out=None):
-        op = PPInv_op(self, p)
+    def Calc_PPinv(self, x, p=0, out=None, left=False):
+        if out is None:
+            out = sp.ones_like(self.A[0])
         
-        res = out.reshape((self.D**2))
-        x = x.reshape((self.D**2))
+        op = PPInv_op(self, p, left)
+        
+        if left:
+            res = m.H(out).ravel()
+            x = m.H(x).ravel()
+        else:
+            res = out.reshape((self.D**2))
+            x = x.reshape((self.D**2))
         
         res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
-                                    tol=self.itr_rtol)
+                                 tol=self.itr_rtol)
         
         if info > 0:
             print "Warning: Did not converge on solution for ppinv!"
@@ -535,7 +531,12 @@ class evoMPS_TDVP_Uniform:
                 print "Sanity check failed: Bad ppinv solution! Off by: " + str(
                         la.norm(RHS_test - x))
         
-        out[:] = res.reshape((self.D, self.D))
+        res = res.reshape((self.D, self.D))
+        
+        if left:
+            res = m.H(res)
+        
+        out[:] = res
         
         return out
         
@@ -551,6 +552,38 @@ class evoMPS_TDVP_Uniform:
         QHr = Hr - self.r * self.h
         
         self.Calc_PPinv(QHr, out=self.K)
+        
+        if self.sanity_checks:
+            Ex = self.EpsR(self.K)
+            QEQ = Ex - self.r * adot(self.l, self.K)
+            res = self.K - QEQ
+            if not sp.allclose(res, QHr):
+                print "Sanity check failed: Bad K!"
+                print "Off by: " + str(la.norm(res - QHr))
+        
+    def Calc_K_left(self):
+        lH = sp.zeros_like(self.A[0])
+        
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                lH += m.matmul(None, m.H(self.AA[s, t]), self.l, self.C[s, t])
+        
+        h = adot(lH, self.r)
+        
+        lHQ = lH - self.l * h
+        
+        self.K_left = self.Calc_PPinv(lHQ, left=True, out=self.K_left)
+        
+        if self.sanity_checks:
+            xE = self.EpsL(self.K_left)
+            QEQ = xE - self.l * adot(self.K_left, self.r)
+            res = self.K_left - QEQ
+            if not sp.allclose(res, lHQ):
+                print "Sanity check failed: Bad K_left!"
+                print "Off by: " + str(la.norm(res - lHQ))
+        
+        
+        return self.K_left, h
             
     def Calc_Vsh(self, r_sqrt):
         R = sp.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
@@ -704,12 +737,8 @@ class evoMPS_TDVP_Uniform:
         h_min = self.h
         A_min = self.A.copy()
         
-        try:
-            l_min = self.l.toarray()
-            r_min = self.r.toarray()
-        except:
-            l_min = self.l.copy()
-            r_min = self.r.copy()            
+        l_min = sp.array(self.l, copy=True)
+        r_min = sp.array(self.r, copy=True)
         
         itr = 0
         while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
@@ -893,12 +922,8 @@ class evoMPS_TDVP_Uniform:
         if userdata is None:
             userdata = self.userdata
 
-        try:
-            l = self.l.toarray()
-            r = self.r.toarray()
-        except:
-            l = self.l
-            r = self.r
+        l = sp.asarray(self.l)
+        r = sp.asarray(self.r)
             
         tosave = sp.empty((5), dtype=sp.ndarray)
         tosave[0] = self.A
@@ -922,15 +947,9 @@ class evoMPS_TDVP_Uniform:
         if (newA.shape == self.A.shape):
             self.A[:] = newA
             self.K[:] = newK
-            try:
-                self.l = newl.A
-                self.r = newr.A
-            except:
-                self.l = newl
-                self.r = newr
-                
-            if sp.isscalar(self.r):
-                self.r = self.r * sp.eye(self.D, dtype=self.typ)
+
+            self.l = sp.asarray(newl)
+            self.r = sp.asarray(newr)
                 
             return True
         elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
@@ -956,15 +975,8 @@ class evoMPS_TDVP_Uniform:
         oldA = self.A
         oldK = self.K
         
-        try:
-            oldl = self.l.A
-        except:
-            oldl = self.l
-
-        try:
-            oldr = self.r.A
-        except:
-            oldr = self.r
+        oldl = sp.asarray(self.l)
+        oldr = sp.asarray(self.r)
         
         self._init_arrays(newD, self.q)
         

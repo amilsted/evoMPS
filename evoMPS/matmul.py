@@ -16,6 +16,9 @@ class eyemat(object):
         self.shape = (D, D)
         self.dtype = dtype
         self.data = None
+        
+    def __array__(self):
+        return self.toarray()
     
     def toarray(self):
         return sp.eye(self.shape[0], dtype=self.dtype)
@@ -87,6 +90,21 @@ class eyemat(object):
     def transpose(self):
         return self
         
+    def trace(self, offset=0):
+        if offset == 0:
+            return self.shape[0]
+        else:
+            return 0
+            
+    def sqrt(self):
+        return self
+        
+    def inv(self):
+        return self
+        
+    def ravel(self):
+        return self.toarray().ravel()
+        
     def copy(self, order='C'):
         return eyemat(self.shape[0], dtype=self.dtype)
         
@@ -104,12 +122,17 @@ class simple_diag_matrix:
     
     diag = None
     shape = None
+    dtype = None
     
-    def __init__(self, diag):
-        diag = sp.asanyarray(diag)
+    def __init__(self, diag, dtype=None):
+        self.dtype = dtype
+        diag = sp.asanyarray(diag, dtype=dtype)
         assert diag.ndim == 1
         self.diag = diag
         self.shape = (diag.shape[0], diag.shape[0])
+        
+    def __array__(self):
+        return self.toarray()
         
     def dot(self, b, out=None):
         if isinstance(b, simple_diag_matrix):
@@ -140,6 +163,12 @@ class simple_diag_matrix:
         
     def diagonal(self):
         return self.diag
+        
+    def trace(self, offset=0):
+        if offset == 0:
+            return self.diag.sum()
+        else:
+            return 0
         
     def toarray(self):
         return sp.diag(self.diag)
@@ -315,7 +344,7 @@ def H(m, out=None):
         The result.    
     """
     if out is None:
-        return m.T.conjugate()
+        return m.T.conj()
     else:
         out = sp.conjugate(m.T, out)
         return out
