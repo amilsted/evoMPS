@@ -711,8 +711,45 @@ class evoMPS_TDVP_Uniform:
         if B is None:
             B = self.Calc_B(assumeCF=assumeCF)
         
-        for s in xrange(self.q):
-            self.A[s] += -dtau * B[s]
+        self.A += -dtau * B
+            
+    def TakeStep_RK4(self, dtau, B_i=None):
+        def update():
+            self.Calc_lr()
+            #self.Restore_CF() #this really messes things up...
+            self.Calc_AA()
+            self.Calc_C()
+            self.Calc_K()            
+
+        A0 = self.A.copy()
+            
+        B_fin = sp.empty_like(self.A)
+
+        if not B_i is None:
+            B = B_i
+        else:
+            B = self.Calc_B() #k1
+        B_fin = B
+        self.A = A0 - dtau/2 * B
+        
+        update()
+        
+        B = self.Calc_B() #k2                
+        self.A = A0 - dtau/2 * B
+        B_fin += 2 * B         
+            
+        update()
+            
+        B = self.Calc_B() #k3                
+        self.A = A0 - dtau * B
+        B_fin += 2 * B
+
+        update()
+        
+        B = self.Calc_B() #k4
+        B_fin += B
+            
+        self.A = A0 - dtau /6 * B_fin
             
     def Calc_BHB(self, x):
         B = self.B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
