@@ -107,6 +107,9 @@ class evoMPS_TDVP_Uniform:
     typ = sp.complex128
     eps = 0
     
+    D = 0
+    q = 0
+    
     itr_rtol = 1E-13
     itr_atol = 1E-14
     
