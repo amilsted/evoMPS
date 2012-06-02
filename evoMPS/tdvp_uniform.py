@@ -273,11 +273,13 @@ class evoMPS_TDVP_Uniform:
         print "Left ok?: " + str(sp.allclose(self.EpsL(self.l), self.l))
         print "Right ok?: " + str(sp.allclose(self.EpsR(self.r), self.r))
         
-    def _Calc_lr(self, x, e, tmp, max_itr=1000, rtol=1E-14, atol=1E-14):
+    def _Calc_lr(self, x, e, tmp, max_itr=2000, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
            
            The contents of the starting vector x is modifed.
+           
+           Why do we require more iterations for larger q and D?
         """
         x *= 1/la.norm(x)
         for i in xrange(max_itr):
@@ -681,7 +683,7 @@ class evoMPS_TDVP_Uniform:
             if (not sp.allclose(self.r_sqrt.dot(self.r_sqrt_i), sp.eye(self.D))):
                 print "Sanity check failed: r_sqrt_i is bad!"
         
-    def Calc_B(self, assumeCF=False):
+    def Calc_B(self, assumeCF=False, set_eta=True):
         self.Calc_sqrts(assumeCF=assumeCF)
                 
         #print "Vsh start"
@@ -693,7 +695,8 @@ class evoMPS_TDVP_Uniform:
                         self.r_sqrt_i, self.Vsh)
         #print "x stop"
         
-        self.eta = sp.sqrt(adot(self.x, self.x))
+        if set_eta:
+            self.eta = sp.sqrt(adot(self.x, self.x))
         
         B = self.B_from_x(self.x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
@@ -734,19 +737,19 @@ class evoMPS_TDVP_Uniform:
         
         update()
         
-        B = self.Calc_B() #k2                
+        B = self.Calc_B(set_eta=False) #k2                
         self.A = A0 - dtau/2 * B
         B_fin += 2 * B         
             
         update()
             
-        B = self.Calc_B() #k3                
+        B = self.Calc_B(set_eta=False) #k3                
         self.A = A0 - dtau * B
         B_fin += 2 * B
 
         update()
         
-        B = self.Calc_B() #k4
+        B = self.Calc_B(set_eta=False) #k4
         B_fin += B
             
         self.A = A0 - dtau /6 * B_fin
@@ -971,7 +974,7 @@ class evoMPS_TDVP_Uniform:
         
         sp.save(file, tosave)
         
-    def LoadState(self, file, expand=False):
+    def LoadState(self, file, expand=False, expand_q=False):
         state = sp.load(file)
         
         newA = state[0]
@@ -1000,9 +1003,41 @@ class evoMPS_TDVP_Uniform:
             self.r = newr
             self.K[:] = newK
             self.Expand_D(newD)
-            print "EXPANDED"
+            print "EXPANDED!"
+        elif expand_q and (len(newA.shape) == 3) and (newA.shape[0] <= 
+        self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
+        == self.A.shape[1]):
+            newQ = self.q
+            savedQ = newA.shape[0]
+            self._init_arrays(self.D, savedQ)
+            self.A[:] = newA
+            self.l = newl
+            self.r = newr
+            self.K[:] = newK
+            self.Expand_q(newQ)
+            print "EXPANDED in q!"
         else:
             return False
+            
+    def Expand_q(self, newq):
+        if newq < self.q:
+            return False
+        
+        oldq = self.q
+        oldA = self.A
+        oldK = self.K
+        
+        oldl = self.l
+        oldr = self.r
+        
+        self._init_arrays(self.D, newq) 
+        
+        self.l = oldl
+        self.r = oldr
+        self.K = oldK
+        
+        self.A.fill(0)
+        self.A[:oldq, :, :] = oldA
             
     def Expand_D(self, newD):
         if newD < self.D:
