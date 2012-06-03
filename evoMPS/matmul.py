@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# cython: profile=False
 """
 Created on Fri Nov  4 13:05:59 2011
 
@@ -281,8 +282,8 @@ def matmul(out, *args):
     out : ndarray
         The result.
     """
-    if not out is None and (args.count == 2 and out in args or args[-1] is out):
-        raise
+    #if not out is None and (args.count == 2 and out in args or args[-1] is out):
+    #    raise
 
     res = args[0]
     
@@ -462,7 +463,7 @@ def sqrtmpo(A, out=None):
     R = la.qr(R, overwrite_a=True, mode='r')
     
     #FIXME: NOTFINISHED
-    raise
+    assert False
     
     return 0
     

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# cython: profile=False
 """
 Created on Sat Jun  2 18:29:31 2012
 
@@ -9,7 +10,6 @@ cimport numpy as np
 
 #np.ndarray[np.complex128_t, ndim=3]
 
-#@cython.locals(q = cython.int, D = cython.int)
 cdef class evoMPS_TDVP_Uniform:
     cdef public int q
     cdef public int D
@@ -24,12 +24,12 @@ cdef class evoMPS_TDVP_Uniform:
     cdef public object h_nn
     cdef public object h_nn_cptr
     
-    cdef public int symm_gauge
+    cdef public bint symm_gauge
     
-    cdef public int sanity_checks
+    cdef public bint sanity_checks
     cdef public int check_fac
     
-    cdef public int conv_l, conv_r
+    cdef public bint conv_l, conv_r
     cdef public int itr_l, itr_r
     
     cdef public object userdata

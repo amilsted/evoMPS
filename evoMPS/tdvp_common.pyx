@@ -6,7 +6,6 @@ Created on Sat Jan 21 13:21:20 2012
 """
 
 import cython as cy
-import scipy as sp
 import numpy as np
 cimport numpy as np
 cimport cpython.pycapsule as pc
@@ -17,7 +16,8 @@ ctypedef np.complex128_t DTYPE_t
 ctypedef DTYPE_t (*h_nn_func)(int s, int t, int u, int v) nogil
 
 @cy.boundscheck(False)
-def calc_C(np.ndarray[DTYPE_t, ndim=4] AA not None,
+@cy.wraparound(False)
+cpdef calc_C(np.ndarray[DTYPE_t, ndim=4] AA,
              h_nn_cptr, np.ndarray[DTYPE_t, ndim=4] out):
     
     assert pc.PyCapsule_CheckExact(h_nn_cptr)
