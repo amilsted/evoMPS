@@ -9,9 +9,39 @@ cimport numpy as np
 
 #np.ndarray[np.complex128_t, ndim=3]
 
+#@cython.locals(q = cython.int, D = cython.int)
 cdef class evoMPS_TDVP_Uniform:
-    cdef cython.int q
-    cdef cython.int D
+    cdef public int q
+    cdef public int D
+
+    #odr = 'C'
+    #typ = sp.complex128
+    cdef public float eps
+    
+    cdef public float itr_rtol
+    cdef public float itr_atol
+    
+    cdef public object h_nn
+    cdef public object h_nn_cptr
+    
+    cdef public int symm_gauge
+    
+    cdef public int sanity_checks
+    cdef public int check_fac
+    
+    cdef public int conv_l, conv_r
+    cdef public int itr_l, itr_r
+    
+    cdef public object userdata
+    
+    cdef public np.complex128_t h
+    cdef public np.complex128_t eta
+    cdef public float S_hc
+    
+    cdef public object l, r
+    cdef object A, AA, C, K, K_left, tmp
+    cdef object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
+    cdef object Vsh, x
     
     @cython.locals(s = cython.int, t = cython.int)
     cpdef Calc_AA(self)

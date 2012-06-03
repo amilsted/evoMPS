@@ -18,7 +18,6 @@ TODO:
 
 """
 import scipy as sp
-import scipy.sparse as sps
 import scipy.linalg as la
 import scipy.sparse.linalg as las
 import scipy.optimize as opti
@@ -105,25 +104,22 @@ class H_tangeant_op:
 class evoMPS_TDVP_Uniform:
     odr = 'C'
     typ = sp.complex128
-    eps = 0
-    
-    D = 0
-    q = 0
-    
-    itr_rtol = 1E-13
-    itr_atol = 1E-14
-    
-    h_nn = None    
-    h_nn_cptr = None
-    
-    symm_gauge = False
-    
-    sanity_checks = False
-    check_fac = 50
-    
-    userdata = None
-    
+        
     def __init__(self, D, q):
+        
+        self.itr_rtol = 1E-13
+        self.itr_atol = 1E-14
+        
+        self.h_nn = None    
+        self.h_nn_cptr = None
+        
+        self.symm_gauge = False
+        
+        self.sanity_checks = False
+        self.check_fac = 50
+        
+        self.userdata = None        
+        
         self.eps = sp.finfo(self.typ).eps
         
         self.eta = 0
