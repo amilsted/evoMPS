@@ -11,10 +11,6 @@ cimport numpy as np
 cimport cpython.pycapsule as pc
 from cython.parallel import prange
 
-ctypedef np.complex128_t DTYPE_t
-
-ctypedef DTYPE_t (*h_nn_func)(int s, int t, int u, int v) nogil
-
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cpdef calc_C(np.ndarray[DTYPE_t, ndim=4] AA,

@@ -7,6 +7,7 @@ Created on Sat Jun  2 18:29:31 2012
 """
 import cython
 cimport numpy as np
+cimport tdvp_common as tc
 
 #np.ndarray[np.complex128_t, ndim=3]
 

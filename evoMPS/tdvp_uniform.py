@@ -25,7 +25,6 @@ import scipy.optimize as opti
 import nullspace as ns
 import matmul as m
 
-import pyximport; pyximport.install()
 import tdvp_common as tc
     
 def adot(a, b, tmp=None):
