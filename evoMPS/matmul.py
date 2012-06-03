@@ -405,19 +405,19 @@ def matmul_diag(Adiag, B, out=None, act_right=True):
     assert B.ndim == 2
     
     if out is None:
-        dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
+        #dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
+        dtype = B.dtype
         if act_right:
-            #Since we get a column at a time, fortran ordering is more efficient.
-            out = sp.empty((Adiag.shape[0], B.shape[1]), dtype=dtype, order='F')
+            out = sp.empty((Adiag.shape[0], B.shape[1]), dtype=dtype, order='C')
         else:
             out = sp.empty((B.shape[0], Adiag.shape[0]), dtype=dtype, order='C')
-        
+
     if act_right:
-        for i in xrange(B.shape[1]):
-            out[:,i] = Adiag * B[:,i]
+        #B = sp.asarray(B, order='F')
+        tmp = Adiag * B.T
+        out[:] = tmp.T
     else:
-        for i in xrange(B.shape[0]):
-            out[i,:] = Adiag * B[i,:]
+        out[:] = Adiag * B
         
     return out
         
