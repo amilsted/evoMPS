@@ -81,7 +81,7 @@ class PPInv_op:
         
         res = x - QEQ
         
-        return res.reshape((self.D**2))
+        return res.ravel()
 
 class H_tangeant_op:
     tdvp = None
@@ -516,8 +516,8 @@ class evoMPS_TDVP_Uniform:
             res = m.H(out).ravel()
             x = m.H(x).ravel()
         else:
-            res = out.reshape((self.D**2))
-            x = x.reshape((self.D**2))
+            res = out.ravel()
+            x = x.ravel()
         
         res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
                                  tol=self.itr_rtol)
@@ -595,20 +595,20 @@ class evoMPS_TDVP_Uniform:
         
         R = R.reshape((self.q * self.D, self.D))
         
-        V = m.H(ns.nullspace_qr(m.H(R))) 
+        Vconj = ns.nullspace_qr(m.H(R)).T
         #R can be pretty huge for large q and D. The decomp. can take a long time...
 
-#        print "V Checks..."
-#        print np.allclose(np.dot(V, m.H(V)), np.eye(self.q*self.D - self.D))
-#        print np.allclose(np.dot(V, R), 0)
-        V = V.reshape(((self.q - 1) * self.D, self.D, self.q)) 
+        if self.sanity_checks:
+            if not np.allclose(np.dot(Vconj, m.H(Vconj)), np.eye(self.q*self.D - self.D)):
+                print "Sanity check failed: V . H(V) not eye!"
+            if not np.allclose(np.dot(Vconj.conj(), R), 0):
+                print "Sanity check failed: V . R not zero!"
+        Vconj = Vconj.reshape(((self.q - 1) * self.D, self.D, self.q))
         
         #prepare for using V[s] and already take the adjoint, since we use it more often
-        Vsh = np.empty((self.q, self.D, (self.q - 1) * self.D), dtype=self.typ, 
-                       order=self.odr)
-        for s in xrange(self.q):
-            Vsh[s] = m.H(V[:,:,s])
-        
+        Vsh = Vconj.T
+        Vsh = np.asarray(Vsh, order='C')
+
         return Vsh
         
     def Calc_x(self, l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh, out=None):
@@ -617,15 +617,11 @@ class evoMPS_TDVP_Uniform:
                            order=self.odr)
         
         tmp = np.zeros_like(out)
-        tmp2 = np.zeros_like(self.A[0])
         for s in xrange(self.q):
-            tmp += m.matmul(None, self.A[s], self.K, r_sqrt_i, Vsh[s])
-            
-            tmp2.fill(0)
+            tmp2 = m.matmul(None, self.A[s], self.K)
             for t in xrange(self.q):
                 tmp2 += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]))
             tmp += m.matmul(None, tmp2, r_sqrt_i, Vsh[s])
-            
         out += l_sqrt.dot(tmp)
         
         tmp.fill(0)
@@ -686,14 +682,10 @@ class evoMPS_TDVP_Uniform:
     def Calc_B(self, assumeCF=False, set_eta=True):
         self.Calc_sqrts(assumeCF=assumeCF)
                 
-        #print "Vsh start"
         self.Vsh = self.Calc_Vsh(self.r_sqrt)
-        #print "Vsh stop"
         
-        #print "x start"
         self.x = self.Calc_x(self.l_sqrt, self.l_sqrt_i, self.r_sqrt, 
                         self.r_sqrt_i, self.Vsh)
-        #print "x stop"
         
         if set_eta:
             self.eta = sp.sqrt(adot(self.x, self.x))

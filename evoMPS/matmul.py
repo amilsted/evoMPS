@@ -135,17 +135,17 @@ class simple_diag_matrix:
     def __array__(self):
         return self.toarray()
         
-    def dot(self, b, out=None):
+    def dot(self, b):
         if isinstance(b, simple_diag_matrix):
             return simple_diag_matrix(self.diag * b.diag)
             
-        return matmul_diag(self.diag, b, out=out)
+        return matmul_diag(self.diag, b)
         
-    def dot_left(self, a, out=None):
+    def dot_left(self, a):
         if isinstance(a, simple_diag_matrix):
             return simple_diag_matrix(self.diag * a.diag)
             
-        return matmul_diag(self.diag, a, out=out, act_right=False)
+        return matmul_diag(self.diag, a, act_right=False)
         
     def conj(self):
         return simple_diag_matrix(self.diag.conj())
@@ -396,7 +396,7 @@ def sqrtmh(A, out=None, ret_evd=False, evd=None):
     else:
         return matmul(out, EV, B)
         
-def matmul_diag(Adiag, B, out=None, act_right=True):
+def matmul_diag(Adiag, B, act_right=True):
     if act_right:
         assert B.shape[0] == Adiag.shape[0]
     else:
@@ -404,21 +404,13 @@ def matmul_diag(Adiag, B, out=None, act_right=True):
         
     assert Adiag.ndim == 1
     assert B.ndim == 2
-    
-    if out is None:
-        #dtype = sp.find_common_type([Adiag.dtype, B.dtype], [])
-        dtype = B.dtype
-        if act_right:
-            out = sp.empty((Adiag.shape[0], B.shape[1]), dtype=dtype, order='C')
-        else:
-            out = sp.empty((B.shape[0], Adiag.shape[0]), dtype=dtype, order='C')
 
     if act_right:
         #B = sp.asarray(B, order='F')
         tmp = Adiag * B.T
-        out[:] = tmp.T
+        out = tmp.T
     else:
-        out[:] = Adiag * B
+        out = Adiag * B
         
     return out
         
