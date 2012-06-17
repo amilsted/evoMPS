@@ -1,10 +1,22 @@
-evoMPS
--------
+========
+ evoMPS
+========
 
-evoMPS simulates dynamics (real or imaginary time) for matrix product states 
-(MPS) using the time dependent variational principle (TDVP).
+Introduction
+------------
 
-It is based on an algorithm published by: 
+evoMPS simulates time-evolution (real or imaginary time) of one-dimensional 
+many-particle quantum systems using matrix product states
+(MPS) and the time dependent variational principle (TDVP).
+
+It can be used to efficiently find ground states and simulate dynamics.
+
+The evoMPS implementation assumes a nearest-neighbour Hamiltonian and either
+
+* a finite lattice with open boundary conditions or
+* spatially uniform states on an infinite lattice.
+
+It is based on algorithms published by: 
 
 * Jutho Haegeman
 * J. Ignacio Cirac
@@ -13,7 +25,7 @@ It is based on an algorithm published by:
 * Henri Verschelde
 * Frank Verstraete
 
-which is available on arxiv.org under arXiv:1103.0936v2 [cond-mat.str-el]
+and available on arxiv.org under arXiv:1103.0936v2 [cond-mat.str-el]
 <http://arxiv.org/abs/1103.0936v2>.
 
 For details, see doc/implementation_details.pdf and the source code itself,
@@ -25,7 +37,7 @@ Leibniz Universität Hannover <http://www.itp.uni-hannover.de/>.
 
 
 Contact
---------
+-------
 
 Please send bug reports or comments to:
 
