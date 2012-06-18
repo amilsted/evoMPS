@@ -25,7 +25,11 @@ import scipy.optimize as opti
 import nullspace as ns
 import matmul as m
 
-import tdvp_common as tc
+try:
+    import tdvp_common as tc
+except ImportError:
+    tc = None
+    print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
     
 def adot(a, b, tmp=None):
     """
@@ -185,15 +189,15 @@ class evoMPS_TDVP_Uniform:
             
         if op is None:
             for s in xrange(self.q):
-                out += m.matmul(self.tmp, A1[s], x, m.H(A2[s]))
+                out += m.matmul(A1[s], x, m.H(A2[s]))
         else:
             for s in xrange(self.q):
                 for t in xrange(self.q):
                     o_st = op(s, t)
                     if o_st != 0.:
-                        m.matmul(self.tmp, A1[t], x, m.H(A2[s]))
-                        self.tmp *= o_st
-                        out += self.tmp
+                        tmp = m.matmul(A1[t], x, m.H(A2[s]))
+                        tmp *= o_st
+                        out += tmp
         return out
         
     def EpsL(self, x, out=None):
@@ -203,14 +207,23 @@ class evoMPS_TDVP_Uniform:
             out.fill(0.)
             
         for s in xrange(self.q):
-            out += m.matmul(self.tmp, m.H(self.A[s]), x, self.A[s])        
+            out += m.matmul(m.H(self.A[s]), x, self.A[s])        
             
         return out
         
     def Calc_AA(self):
         for s in xrange(self.q):
             for t in xrange(self.q):
-                m.matmul(self.AA[s, t], self.A[s], self.A[t])
+                self.AA[s, t] = m.matmul(self.A[s], self.A[t])
+        
+        #einsum is an optimized C implementation, so this is probably
+        #faster for smaller D (at larger D, ATLAS is faster...)
+        #..although it only uses SSE for real types..
+        #np.einsum("sij,tjk->stac", self.A, self.A, out=self.AA)
+        
+        #This would be an alternative, but it does not appear to be able
+        #to use the BLAS library, using multiarray instead :(
+        #self.AA = np.rollaxis(np.dot(self.A, self.A), 2, 1)
         
     def EpsR_2(self, x, op, A1=None, A2=None, A3=None, A4=None):
         res = np.zeros_like(self.A[0])
@@ -233,20 +246,19 @@ class evoMPS_TDVP_Uniform:
                             opval = op(u, v, s, t)
                             if opval != 0:
                                 subres += opval * self.AA[s, t]
-                    res += m.matmul(subres, subres, x, m.H(self.AA[u, v]))
+                    res += m.matmul(subres, x, m.H(self.AA[u, v]))
         else:
             AAuvH = np.empty_like(self.A[0])
             for u in xrange(self.q):
                 for v in xrange(self.q):
-                    m.matmul(AAuvH, A3[u], A4[v])
-                    AAuvH = m.H(AAuvH, out=AAuvH)
+                    AAuvH = m.H(m.matmul(A3[u], A4[v]), out=AAuvH)
                     subres = np.zeros_like(self.A[0])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             opval = op(u, v, s, t)
                             if opval != 0:
                                 subres += opval * np.dot(A1[s], A2[t])
-                    res += m.matmul(subres, subres, x, AAuvH)
+                    res += m.matmul(subres, x, AAuvH)
                     
         return res
 
@@ -386,17 +398,17 @@ class evoMPS_TDVP_Uniform:
         
         #s contains the Schmidt coefficients,
         lam = sv**2
-        self.S_hc = - np.sum(lam * np.log2(lam))
+        self.S_hc = - np.sum(lam * sp.log2(lam))
         
         S = m.simple_diag_matrix(sv, dtype=self.typ)
         Srt = S.sqrt()
         
-        g = m.matmul(None, Srt, Vh, m.invtr(X, lower=True))
+        g = m.matmul(Srt, Vh, m.invtr(X, lower=True))
         
-        g_i = m.matmul(None, m.invtr(Y, lower=False), U, Srt)
+        g_i = m.matmul(m.invtr(Y, lower=False), U, Srt)
         
         for s in xrange(self.q):
-            m.matmul(self.A[s], g, self.A[s], g_i)
+            self.A[s] = m.matmul(g, self.A[s], g_i)
                 
         if self.sanity_checks:
             Sfull = np.asarray(S)
@@ -404,8 +416,8 @@ class evoMPS_TDVP_Uniform:
             if not np.allclose(g.dot(g_i), np.eye(self.D)):
                 print "Sanity check failed! Restore_SCF, bad GT!"
             
-            l = m.matmul(None, m.H(g_i), self.l, g_i)
-            r = m.matmul(None, g, self.r, m.H(g))
+            l = m.matmul(m.H(g_i), self.l, g_i)
+            r = m.matmul(g, self.r, m.H(g))
             
             if not np.allclose(Sfull, l):
                 print "Sanity check failed: Restorce_SCF, left failed!"
@@ -435,7 +447,7 @@ class evoMPS_TDVP_Uniform:
             G = la.cholesky(self.r, lower=True)
             G_i = m.invtr(G, lower=True)
 
-            m.matmul(self.l, m.H(G), self.l, G)
+            self.l = m.matmul(m.H(G), self.l, G)
             
             #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
             ev, EV = la.eigh(self.l)
@@ -444,19 +456,19 @@ class evoMPS_TDVP_Uniform:
             G_i = m.H(EV).dot(G_i)
             
             for s in xrange(self.q):
-                m.matmul(self.A[s], G_i, self.A[s], G)
+                self.A[s] = m.matmul(G_i, self.A[s], G)
                 
             #ev contains the squares of the Schmidt coefficients,
-            self.S_hc = - np.sum(ev * np.log2(ev))
+            self.S_hc = - np.sum(ev * sp.log2(ev))
             
             self.l = m.simple_diag_matrix(ev, dtype=self.typ)
 
             if self.sanity_checks:
                 M = np.zeros_like(self.r)
                 for s in xrange(self.q):
-                    M += m.matmul(None, self.A[s], m.H(self.A[s]))            
+                    M += m.matmul(self.A[s], m.H(self.A[s]))            
                 
-                m.matmul(self.r, G_i, self.r, m.H(G_i))
+                self.r = m.matmul(G_i, self.r, m.H(G_i))
                 
                 if not np.allclose(M, self.r, 
                                    rtol=self.itr_rtol*self.check_fac,
@@ -493,7 +505,7 @@ class evoMPS_TDVP_Uniform:
             return
     
     def Calc_C(self):
-        if not self.h_nn_cptr is None:
+        if not tc is None and not self.h_nn_cptr is None:
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
         else:
             self.C.fill(0)
@@ -547,7 +559,7 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             for t in xrange(self.q):
-                Hr += m.matmul(None, self.C[s, t], self.r, m.H(self.AA[s, t]))
+                Hr += m.matmul(self.C[s, t], self.r, m.H(self.AA[s, t]))
         
         self.h = adot(self.l, Hr)
         
@@ -568,7 +580,7 @@ class evoMPS_TDVP_Uniform:
         
         for s in xrange(self.q):
             for t in xrange(self.q):
-                lH += m.matmul(None, m.H(self.AA[s, t]), self.l, self.C[s, t])
+                lH += m.matmul(m.H(self.AA[s, t]), self.l, self.C[s, t])
         
         h = adot(lH, self.r)
         
@@ -591,7 +603,7 @@ class evoMPS_TDVP_Uniform:
         R = np.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
         
         for s in xrange(self.q):
-            R[:,s,:] = m.matmul(None, r_sqrt, m.H(self.A[s]))
+            R[:,s,:] = m.matmul(r_sqrt, m.H(self.A[s]))
         
         R = R.reshape((self.q * self.D, self.D))
         
@@ -618,18 +630,18 @@ class evoMPS_TDVP_Uniform:
         
         tmp = np.zeros_like(out)
         for s in xrange(self.q):
-            tmp2 = m.matmul(None, self.A[s], self.K)
+            tmp2 = m.matmul(self.A[s], self.K)
             for t in xrange(self.q):
-                tmp2 += m.matmul(None, self.C[s, t], self.r, m.H(self.A[t]))
-            tmp += m.matmul(None, tmp2, r_sqrt_i, Vsh[s])
+                tmp2 += m.matmul(self.C[s, t], self.r, m.H(self.A[t]))
+            tmp += m.matmul(tmp2, r_sqrt_i, Vsh[s])
         out += l_sqrt.dot(tmp)
         
         tmp.fill(0)
         for s in xrange(self.q):
             tmp2.fill(0)
             for t in xrange(self.q):
-                tmp2 += m.matmul(None, m.H(self.A[t]), self.l, self.C[t, s])
-            tmp += m.matmul(None, tmp2, r_sqrt, Vsh[s])
+                tmp2 += m.matmul(m.H(self.A[t]), self.l, self.C[t, s])
+            tmp += m.matmul(tmp2, r_sqrt, Vsh[s])
         out += l_sqrt_i.dot(tmp)
         
         return out
@@ -639,37 +651,26 @@ class evoMPS_TDVP_Uniform:
             out = np.zeros_like(self.A)
             
         for s in xrange(self.q):
-            m.matmul(out[s], l_sqrt_i, x, m.H(Vsh[s]), r_sqrt_i)
+            out[s] = m.matmul(l_sqrt_i, x, m.H(Vsh[s]), r_sqrt_i)
             
         return out
         
-    def Calc_sqrts(self, assumeCF=False):
-        #print "sqrts and inverses start"
-        if assumeCF:
+    def Calc_sqrts(self):
+        try:
             self.l_sqrt = self.l.sqrt()
             self.l_sqrt_i = self.l_sqrt.inv()
-            #It would be nice to be able to do this...
-            #self.l_sqrt = sps.dia_matrix((sqrtd, 0), shape=(self.D, self.D))
-            #self.l_sqrt_i = sps.dia_matrix((1. / sqrtd, 0), shape=(self.D, self.D))
-        else:
+        except:
             self.l_sqrt, evd = m.sqrtmh(self.l, ret_evd=True)
             self.l_sqrt_i = m.invmh(self.l_sqrt, evd=evd)
             
-        if self.symm_gauge and assumeCF:
-            #r=l
-            self.r_sqrt = self.l_sqrt
-            self.r_sqrt_i = self.l_sqrt_i
-        elif assumeCF:
-            #self.r_sqrt = np.eye(self.D)
-            #self.r_sqrt_i = self.r_sqrt
-            self.r_sqrt = self.r
-            self.r_sqrt_i = self.r
-        else:
+        try:
+            self.r_sqrt = self.r.sqrt()
+            self.r_sqrt_i = self.r_sqrt.inv()
+        except:
             self.r_sqrt, evd = m.sqrtmh(self.r, ret_evd=True)
             self.r_sqrt_i = m.invmh(self.r_sqrt, evd=evd)
-        #print "sqrts and inverses stop"
         
-        if not assumeCF and self.sanity_checks:
+        if self.sanity_checks:
             if not np.allclose(self.l_sqrt.dot(self.l_sqrt), self.l):
                 print "Sanity check failed: l_sqrt is bad!"
             if not np.allclose(self.l_sqrt.dot(self.l_sqrt_i), np.eye(self.D)):
@@ -679,8 +680,8 @@ class evoMPS_TDVP_Uniform:
             if (not np.allclose(self.r_sqrt.dot(self.r_sqrt_i), np.eye(self.D))):
                 print "Sanity check failed: r_sqrt_i is bad!"
         
-    def Calc_B(self, assumeCF=False, set_eta=True):
-        self.Calc_sqrts(assumeCF=assumeCF)
+    def Calc_B(self, set_eta=True):
+        self.Calc_sqrts()
                 
         self.Vsh = self.Calc_Vsh(self.r_sqrt)
         
@@ -696,15 +697,22 @@ class evoMPS_TDVP_Uniform:
             #Test gauge-fixing:
             tst = np.zeros_like(self.A[0])
             for s in xrange(self.q):
-                tst += m.matmul(None, B[s], self.r, m.H(self.A[s]))
+                tst += m.matmul(B[s], self.r, m.H(self.A[s]))
             if not np.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
 
         return B
         
-    def TakeStep(self, dtau, B=None, assumeCF=False):
+    def Update(self):
+        self.Calc_lr()
+        self.Restore_CF()
+        self.Calc_AA()
+        self.Calc_C()
+        self.Calc_K()
+        
+    def TakeStep(self, dtau, B=None):
         if B is None:
-            B = self.Calc_B(assumeCF=assumeCF)
+            B = self.Calc_B()
         
         self.A += -dtau * B
             
@@ -885,8 +893,8 @@ class evoMPS_TDVP_Uniform:
         return h.real < self.h.real, h
 
     def CalcB_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False,
-                 skipIfLower=False, brent=True, assumeCF=False):
-        B = self.Calc_B(assumeCF=assumeCF)
+                 skipIfLower=False, brent=True):
+        B = self.Calc_B()
         eta = self.eta
         x = self.x
         
@@ -946,10 +954,18 @@ class evoMPS_TDVP_Uniform:
     def Density_SS(self):
         rho = np.empty((self.q, self.q), dtype=self.typ)
         for s in xrange(self.q):
-            for t in xrange(self.q):
-                m.matmul(self.tmp, self.A[t], self.r, m.H(self.A[s]))
-                rho[s, t] = adot(self.l, self.tmp)
+            for t in xrange(self.q):                
+                rho[s, t] = adot(self.l, m.matmul(self.A[t], self.r, m.H(self.A[s])))
         return rho
+        
+    def ApplyOp_SS(self, o):
+        newA = sp.zeros_like(self.A)
+        
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                newA[s] += self.A[t] * o(s, t)
+                
+        self.A = newA
             
     def SaveState(self, file, userdata=None):
         if userdata is None:

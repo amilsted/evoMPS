@@ -19,24 +19,54 @@ import nullspace as ns
 import matmul as mm
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps, dbg=False, force_upd_lr=False, RK4=False):
+def go(sfbc, tau, steps, dbg=False, force_upd_lr=False, RK4=False,
+       op=None, op_every=5, autogrow=False):
     h_prev = 0
+    sfbc.Restore_RCF(dbg=dbg)
+    if force_upd_lr:
+        sfbc.Upd_l()
+        sfbc.Upd_r()
+                
+    data = []
+        
     for i in xrange(steps):
-        sfbc.Restore_RCF(dbg=dbg)
-        if force_upd_lr:
-            sfbc.Upd_l()
-            sfbc.Upd_r()
         if RK4:
             h, eta = sfbc.TakeStep_RK4(tau)
         else:
             h, eta = sfbc.TakeStep(tau)
+        
+        etas = sfbc.eta[1:].copy()
+        
+        if autogrow and etas[0] > sfbc.eta_uni * 10:
+            sfbc.Grow_left(2)
+            for row in data:
+                row.insert(0, 0)
+                row.insert(0, 0)
+            
+        if autogrow and etas[-1] > sfbc.eta_uni * 10:
+            sfbc.Grow_right(2)
+            for row in data:
+                row.append(0)
+                row.append(0)
+            
+        sfbc.Restore_RCF(dbg=dbg)
+        if force_upd_lr:
+            sfbc.Upd_l()
+            sfbc.Upd_r()
+            
         norm_uni = uni.adot(sfbc.uGndR.l, sfbc.uGndR.r).real
         h_uni = sfbc.uGndR.h.real / norm_uni
         print "\t".join(map(str, (eta.real, h.real - h_uni, (h - h_prev).real)))
-        print sfbc.eta.real
+        print etas.real
 #        if i > 0 and (h - h_prev).real > 0:
 #            break
         h_prev = h
+        
+        if (not op is None) and (i % op_every == 0):
+            op_range = range(-10, sfbc.N + 10)
+            data.append(map(lambda n: sfbc.Expect_SS(op, n).real, op_range))
+            
+    return sp.array(data)
 
 class evoMPS_TDVP_Generic_FBC:
     odr = 'C'
@@ -53,7 +83,7 @@ class evoMPS_TDVP_Generic_FBC:
     
     eps = 0
     
-    sanity_checks = True
+    sanity_checks = False
     
     uGndL = None
     uGndR = None
@@ -113,7 +143,7 @@ class evoMPS_TDVP_Generic_FBC:
             
     def __init__(self, numsites, uGnd):
         self.uGndL = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
-        self.uGndL.sanity_checks = True
+        self.uGndL.sanity_checks = self.sanity_checks
         self.uGndL.h_nn = uGnd.h_nn
         self.uGndL.h_nn_cptr = uGnd.h_nn_cptr
         self.uGndL.A = uGnd.A.copy()
@@ -121,12 +151,13 @@ class evoMPS_TDVP_Generic_FBC:
         self.uGndL.r = uGnd.r.copy()
         
         self.uGndL.symm_gauge = False
+        self.uGndL.Update()
         self.uGndL.Calc_lr()
-        self.uGndL.Restore_CF()
-        self.uGndL.Calc_lr()
+        self.uGndL.Calc_B()
+        self.eta_uni = self.uGndL.eta
         
         self.uGndR = uni.evoMPS_TDVP_Uniform(uGnd.D, uGnd.q)
-        self.uGndR.sanity_checks = True
+        self.uGndR.sanity_checks = self.sanity_checks
         self.uGndR.symm_gauge = False
         self.uGndR.h_nn = uGnd.h_nn
         self.uGndR.h_nn_cptr = uGnd.h_nn_cptr
@@ -186,10 +217,9 @@ class evoMPS_TDVP_Generic_FBC:
         
         for n in xrange(n_low, n_high):
             self.C[n].fill(0)
-            AA = sp.empty_like(self.C[n][0][0], order='A')
             for u in xrange(self.q[n]):
                 for v in xrange(self.q[n + 1]):
-                    mm.matmul(AA, self.A[n][u], self.A[n + 1][v]) #only do this once for each 
+                    AA = mm.matmul(self.A[n][u], self.A[n + 1][v]) #only do this once for each 
                     for s in xrange(self.q[n]):
                         for t in xrange(self.q[n + 1]):                
                             h_nn_stuv = self.h_nn(n, s, t, u, v)
@@ -220,16 +250,15 @@ class evoMPS_TDVP_Generic_FBC:
             
         for n in reversed(xrange(n_low, n_high)):
             self.K[n].fill(0)
-            tmp = sp.empty_like(self.K[n])
             
             for s in xrange(self.q[n]): 
                 for t in xrange(self.q[n+1]):
-                    self.K[n] += mm.matmul(tmp, self.C[n][s, t],
-                                          self.r[n + 1], mm.H(self.A[n + 1][t]), 
-                                          mm.H(self.A[n][s]))
+                    self.K[n] += mm.matmul(self.C[n][s, t], self.r[n + 1], 
+                                           mm.H(self.A[n + 1][t]), 
+                                           mm.H(self.A[n][s]))
                 
-                self.K[n] += mm.matmul(tmp, self.A[n][s], self.K[n + 1], 
-                                      mm.H(self.A[n][s]))
+                self.K[n] += mm.matmul(self.A[n][s], self.K[n + 1], 
+                                       mm.H(self.A[n][s]))
         
     def Calc_K_luni(self, C, h_l):
         K_np1 = self.K[0]
@@ -250,10 +279,10 @@ class evoMPS_TDVP_Generic_FBC:
             
             for s in xrange(self.q[0]): 
                 for t in xrange(self.q[0]):
-                    K_n += mm.matmul(None, C[s, t], r_np1, mm.H(self.A[0][t]), 
+                    K_n += mm.matmul(C[s, t], r_np1, mm.H(self.A[0][t]), 
                                      mm.H(self.A[0][s]))
                 
-                K_n += mm.matmul(None, self.A[0][s], K_np1, mm.H(self.A[0][s]))
+                K_n += mm.matmul(self.A[0][s], K_np1, mm.H(self.A[0][s]))
             
             h = (uni.adot(self.l[0], K_n) - h_l * abs(n)) / (self.N + 1.0)
             #Note: This becomes ever more inaccurate due to numerical error!!
@@ -288,15 +317,15 @@ class evoMPS_TDVP_Generic_FBC:
         R = sp.zeros((self.D[n], self.q[n], self.D[n-1]), dtype=self.typ, order='C')
         
         for s in xrange(self.q[n]):
-            R[:,s,:] = mm.matmul(None, sqrt_r, mm.H(self.A[n][s]))
+            R[:,s,:] = mm.matmul(sqrt_r, mm.H(self.A[n][s]))
 
         R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
         V = mm.H(ns.nullspace(mm.H(R)))
         
         if self.sanity_checks:
-            if not sp.allclose(mm.matmul(None, V, R), 0):
+            if not sp.allclose(mm.matmul(V, R), 0):
                 print "Sanity Fail in BuildVsh!: VR_%u != 0" % (n)
-            if not sp.allclose(mm.matmul(None, V, mm.H(V)), sp.eye(V.shape[0])):
+            if not sp.allclose(mm.matmul(V, mm.H(V)), sp.eye(V.shape[0])):
                 print "Sanity Fail in BuildVsh!: V H(V)_%u != eye" % (n)
         #print (q[n]*D[n] - D[n-1], q[n]*D[n])
         #print V.shape
@@ -312,7 +341,7 @@ class evoMPS_TDVP_Generic_FBC:
         if self.sanity_checks:
             M = sp.zeros((self.q[n] * self.D[n] - self.D[n - 1], self.D[n]), dtype=self.typ)
             for s in xrange(self.q[n]):
-                M += mm.matmul(None, mm.H(Vsh[s]), sqrt_r, mm.H(self.A[n][s]))
+                M += mm.matmul(mm.H(Vsh[s]), sqrt_r, mm.H(self.A[n][s]))
             if not sp.allclose(M, 0):
                 print "Sanity Fail in BuildVsh!: Bad Vsh_%u" % (n)
         
@@ -342,7 +371,6 @@ class evoMPS_TDVP_Generic_FBC:
         x_part = sp.empty_like(x)
         x_subpart = sp.empty_like(self.A[n][0])
         x_subsubpart = sp.empty_like(self.A[n][0])
-        tmp = sp.empty_like(x_subpart)
         
         x_part.fill(0)
         for s in xrange(self.q[n]):
@@ -351,21 +379,21 @@ class evoMPS_TDVP_Generic_FBC:
             if n < self.N + 1:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += mm.matmul(tmp, self.C[n][s,t], self.r[n + 1], mm.H(self.A[n + 1][t])) #~1st line
+                    x_subsubpart += mm.matmul(self.C[n][s,t], self.r[n + 1], mm.H(self.A[n + 1][t])) #~1st line
                     
-                x_subsubpart += mm.matmul(tmp, self.A[n][s], self.K[n + 1]) #~3rd line               
+                x_subsubpart += mm.matmul(self.A[n][s], self.K[n + 1]) #~3rd line               
                 
-                x_subpart += mm.matmul(tmp, x_subsubpart, sqrt_r_inv)
+                x_subpart += mm.matmul(x_subsubpart, sqrt_r_inv)
             
             if not self.h_ext is None:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
                     x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-                x_subpart += mm.matmul(tmp, x_subsubpart, sqrt_r)
+                x_subpart += mm.matmul(x_subsubpart, sqrt_r)
             
-            x_part += mm.matmul(None, x_subpart, Vsh[s])
+            x_part += mm.matmul(x_subpart, Vsh[s])
                 
-        x += mm.matmul(None, sqrt_l, x_part)
+        x += mm.matmul(sqrt_l, x_part)
             
         if n > 0:
             l_nm2 = self.Get_l(n - 2)
@@ -373,9 +401,9 @@ class evoMPS_TDVP_Generic_FBC:
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += mm.matmul(tmp, mm.H(self.A[n - 1][t]), l_nm2, self.C[n - 1][t, s])
-                x_part += mm.matmul(None, x_subsubpart, sqrt_r, Vsh[s])
-            x += mm.matmul(None, sqrt_l_inv, x_part)
+                    x_subsubpart += mm.matmul(mm.H(self.A[n - 1][t]), l_nm2, self.C[n - 1][t, s])
+                x_part += mm.matmul(x_subsubpart, sqrt_r, Vsh[s])
+            x += mm.matmul(sqrt_l_inv, x_part)
                 
         return x
         
@@ -398,12 +426,12 @@ class evoMPS_TDVP_Generic_FBC:
             
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                mm.matmul(B[s], l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
+                B[s] = mm.matmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
                 
             if self.sanity_checks:
                 M = sp.zeros_like(self.r[n - 1])
                 for s in xrange(self.q[n]):
-                    M += mm.matmul(None, B[s], self.r[n], mm.H(self.A[n][s]))
+                    M += mm.matmul(B[s], self.r[n], mm.H(self.A[n][s]))
                     
                 if not sp.allclose(M, 0):
                     print "Sanity Fail in GetB!: B_%u does not satisfy GFC!" % n
@@ -442,13 +470,13 @@ class evoMPS_TDVP_Generic_FBC:
             r_sqrt_inv = mm.invmh(r_sqrt, evd=evd)
         
         if self.sanity_checks:
-            if not sp.allclose(mm.matmul(None, l_sqrt, l_sqrt), self.l[n - 1]):
+            if not sp.allclose(mm.matmul(l_sqrt, l_sqrt), self.l[n - 1]):
                 print "Sanity Fail in Get_l_r_roots: Bad l_sqrt_%u" % (n - 1)
-            if not sp.allclose(mm.matmul(None, r_sqrt, r_sqrt), self.r[n]):
+            if not sp.allclose(mm.matmul(r_sqrt, r_sqrt), self.r[n]):
                 print "Sanity Fail in Get_l_r_roots: Bad r_sqrt_%u" % (n)
-            if not sp.allclose(mm.matmul(None, l_sqrt, l_sqrt_inv), sp.eye(l_sqrt.shape[0])):
+            if not sp.allclose(mm.matmul(l_sqrt, l_sqrt_inv), sp.eye(l_sqrt.shape[0])):
                 print "Sanity Fail in Get_l_r_roots: Bad l_sqrt_inv_%u" % (n - 1)
-            if not sp.allclose(mm.matmul(None, r_sqrt, r_sqrt_inv), sp.eye(r_sqrt.shape[0])):
+            if not sp.allclose(mm.matmul(r_sqrt, r_sqrt_inv), sp.eye(r_sqrt.shape[0])):
                 print "Sanity Fail in Get_l_r_roots: Bad r_sqrt_inv_%u" % (n)
         
         return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
@@ -627,9 +655,9 @@ class evoMPS_TDVP_Generic_FBC:
             except:
                 pass
             self.l[n].fill(0)
-            tmp = sp.empty_like(self.l[n])
+
             for s in xrange(self.q[n]):
-                self.l[n] += mm.matmul(tmp, mm.H(self.A[n][s]), self.l[n - 1], self.A[n][s])
+                self.l[n] += mm.matmul(mm.H(self.A[n][s]), self.l[n - 1], self.A[n][s])
     
     def Upd_r(self, n_low=-1, n_high=-1):
         """Updates the r matrices using the current state.
@@ -674,16 +702,16 @@ class evoMPS_TDVP_Generic_FBC:
             res = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ)
         else:
             res.fill(0)
-        tmp = sp.empty_like(res)
+
         if o is None:
             for s in xrange(self.q[n]):
-                res += mm.matmul(tmp, self.A[n][s], x, mm.H(self.A[n][s]))            
+                res += mm.matmul(self.A[n][s], x, mm.H(self.A[n][s]))            
         else:
             for s in xrange(self.q[n]):
                 for t in xrange(self.q[n]):
                     o_st = o(n, s, t)
                     if o_st != 0.:
-                        mm.matmul(tmp, self.A[n][t], x, mm.H(self.A[n][s]))
+                        tmp = mm.matmul(self.A[n][t], x, mm.H(self.A[n][s]))
                         tmp *= o_st
                         res += tmp
         return res
@@ -709,10 +737,9 @@ class evoMPS_TDVP_Generic_FBC:
             
         res = sp.zeros((A1.shape[1], A1.shape[1]), dtype=self.typ)
         
-        AAuvH = sp.empty_like(A3[0])
         for u in xrange(self.q[n]):
             for v in xrange(self.q[m]):
-                mm.matmul(AAuvH, A3[u], A4[v])
+                AAuvH = mm.matmul(A3[u], A4[v])
                 AAuvH = mm.H(AAuvH, out=AAuvH)
                 subres = sp.zeros_like(A1[0])
                 for s in xrange(self.q[n]):
@@ -720,7 +747,7 @@ class evoMPS_TDVP_Generic_FBC:
                         opval = op(n, u, v, s, t)
                         if opval != 0:
                             subres += opval * sp.dot(A1[s], A2[t])
-                res += mm.matmul(subres, subres, x, AAuvH)
+                res += mm.matmul(subres, x, AAuvH)
         
         return res
         
@@ -752,10 +779,9 @@ class evoMPS_TDVP_Generic_FBC:
             res = sp.zeros_like(self.l[n])
         else:
             res.fill(0.)
-        tmp = sp.empty_like(res)
 
         for s in xrange(self.q[n]):
-            res += mm.matmul(tmp, mm.H(self.A[n][s]), x, self.A[n][s])
+            res += mm.matmul(mm.H(self.A[n][s]), x, self.A[n][s])
         return res
     
     def Restore_ON_R_n(self, n, G_n_i):
@@ -790,7 +816,7 @@ class evoMPS_TDVP_Generic_FBC:
         if G_n_i is None:
             GGh_n_i = self.r[n]
         else:
-            GGh_n_i = mm.matmul(None, G_n_i, self.r[n], mm.H(G_n_i))
+            GGh_n_i = mm.matmul(G_n_i, self.r[n], mm.H(G_n_i))
         
         M = self.EpsR(None, n, GGh_n_i, None)            
                     
@@ -802,7 +828,7 @@ class evoMPS_TDVP_Generic_FBC:
         except sp.linalg.LinAlgError:
             print "Restore_ON_R_%u: Falling back to eigh()!" % n
             e,Gh = la.eigh(M)
-            G_nm1 = mm.H(mm.matmul(None, Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
+            G_nm1 = mm.H(mm.matmul(Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
             G_nm1_i = la.inv(G_nm1)
         
         if G_n_i is None:
@@ -813,9 +839,7 @@ class evoMPS_TDVP_Generic_FBC:
                 print "Sanity Fail in Restore_ON_R_%u!: Bad GT at n=%u" % (n, n)
         
         for s in xrange(self.q[n]):                
-            mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
-            #It's ok to use the same matrix as out and as an operand here
-            #since there are > 2 matrices in the chain and it is not the last argument.
+            self.A[n][s] = mm.matmul(G_nm1, self.A[n][s], G_n_i)
 
         return G_nm1_i, G_nm1
         
@@ -871,10 +895,10 @@ class evoMPS_TDVP_Generic_FBC:
 
         #Now G_n_i contains g_0_i
         for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
-            self.A[0][s] = mm.matmul(None, G_n, self.A[0][s], G_n_i)            
+            self.A[0][s] = mm.matmul(G_n, self.A[0][s], G_n_i)            
             
-        self.uGndL.r = mm.matmul(None, G_n, self.uGndL.r, mm.H(G_n))
-        self.l[0] = mm.matmul(None, mm.H(G_n_i), self.l[0], G_n_i)
+        self.uGndL.r = mm.matmul(G_n, self.uGndL.r, mm.H(G_n))
+        self.l[0] = mm.matmul(mm.H(G_n_i), self.l[0], G_n_i)
     
     def Restore_RCF_l(self):
         G_nm1 = None
@@ -883,7 +907,7 @@ class evoMPS_TDVP_Generic_FBC:
             if n == 0:
                 x = l_nm1
             else:
-                x = mm.matmul(None, mm.H(G_nm1), l_nm1, G_nm1)
+                x = mm.matmul(mm.H(G_nm1), l_nm1, G_nm1)
             M = self.EpsL(None, n, x)
             ev, EV = la.eigh(M)
             
@@ -893,10 +917,10 @@ class evoMPS_TDVP_Generic_FBC:
             if n == 0:
                 G_nm1 = mm.H(EV) #for left uniform case
                 l_nm1 = self.l[n] #for sanity check
-                self.uGndL.r = mm.matmul(None, G_nm1, self.uGndL.r, G_n_i) #since r is not eye
+                self.uGndL.r = mm.matmul(G_nm1, self.uGndL.r, G_n_i) #since r is not eye
                 
             for s in xrange(self.q[n]):                
-                mm.matmul(self.A[n][s], G_nm1, self.A[n][s], G_n_i)
+                self.A[n][s] = mm.matmul(G_nm1, self.A[n][s], G_n_i)
             
             if self.sanity_checks:
                 l = self.EpsL(None, n, l_nm1)
@@ -915,12 +939,12 @@ class evoMPS_TDVP_Generic_FBC:
         #Now G_nm1 = G_N
         G_nm1_i = mm.H(G_nm1)
         for s in xrange(self.q[self.N + 1]):
-            self.A[self.N + 1][s] = mm.matmul(None, G_nm1, self.A[self.N + 1][s], G_nm1_i)
+            self.A[self.N + 1][s] = mm.matmul(G_nm1, self.A[self.N + 1][s], G_nm1_i)
             
         ##This should not be necessary if G_N is really unitary
-        #self.r[self.N] = mm.matmul(None, G_nm1, self.r[self.N], mm.H(G_nm1))
+        #self.r[self.N] = mm.matmul(G_nm1, self.r[self.N], mm.H(G_nm1))
         #self.r[self.N + 1] = self.r[self.N]
-        self.uGndR.l[:] = mm.matmul(None, mm.H(G_nm1_i), self.uGndR.l, G_nm1_i)
+        self.uGndR.l[:] = mm.matmul(mm.H(G_nm1_i), self.uGndR.l, G_nm1_i)
     
     def Restore_RCF(self, dbg=False):
         if dbg:
@@ -1046,6 +1070,24 @@ class evoMPS_TDVP_Generic_FBC:
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
+        
+    def Grow_right(self, m):
+        oldA = self.A
+        oldl_0 = self.l[0]
+        oldr_N = self.r[self.N]
+            
+        self.N = self.N + m
+        self._init_arrays()
+        
+        for n in xrange(self.N - m + 1):
+            self.A[n][:] = oldA[n]
+            
+        for n in xrange(self.N - m + 1, self.N + 2):
+            self.A[n][:] = oldA[self.N - m + 1]
+            
+        self.l[0] = oldl_0
+        self.r[self.N] = oldr_N
+        self.r[self.N + 1] = self.r[self.N]
     
     def Get_l(self, n):
         if 0 <= n <= self.N + 1:
@@ -1122,7 +1164,7 @@ class evoMPS_TDVP_Generic_FBC:
 
         r_n = self.EpsR(None, n1, r_n, o1)   
          
-        res = mm.matmul(None, self.l[n1 - 1], r_n)
+        res = mm.matmul(self.l[n1 - 1], r_n)
         return res.trace()
         
     def DensityMatrix_2S(self, n1, n2):
@@ -1138,11 +1180,10 @@ class evoMPS_TDVP_Generic_FBC:
         rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
         r_n2 = sp.empty_like(self.r[n2 - 1])
         r_n1 = sp.empty_like(self.r[n1 - 1])
-        tmp = sp.empty_like(self.r[n1 - 1])
         
         for s2 in xrange(self.q[n2]):
             for t2 in xrange(self.q[n2]):
-                mm.matmul(r_n2, self.A[n2][t2], self.r[n2], mm.H(self.A[n2][s2]))
+                r_n2 = mm.matmul(self.A[n2][t2], self.r[n2], mm.H(self.A[n2][s2]))
                 
                 r_n = r_n2
                 for n in reversed(xrange(n1 + 1, n2)):
@@ -1150,11 +1191,20 @@ class evoMPS_TDVP_Generic_FBC:
                     
                 for s1 in xrange(self.q[n1]):
                     for t1 in xrange(self.q[n1]):
-                        mm.matmul(r_n1, self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
-                        mm.matmul(tmp, self.l[n1 - 1], r_n1)
+                        r_n1 = mm.matmul(self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
+                        tmp = mm.matmul(self.l[n1 - 1], r_n1)
                         rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp.trace()
         return rho
     
+    def ApplyOp_SS(self, o, n):
+        newA = sp.zeros_like(self.A[n])
+        
+        for s in xrange(self.q[n]):
+            for t in xrange(self.q[n]):
+                newA[s] += self.A[n][t] * o(n, s, t)
+                
+        self.A[n] = newA
+
     def SaveState(self, file):
         sp.save(file, self.A)
         

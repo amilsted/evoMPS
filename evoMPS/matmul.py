@@ -4,6 +4,10 @@
 Created on Fri Nov  4 13:05:59 2011
 
 @author: Ashley Milsted
+
+TODO:
+    Look into using e.g. sp.linalg.fblas.zgemm._cpointer from cython? Or
+    link it to blas at compile time using distutils...
 """
 
 import scipy as sp
@@ -257,7 +261,7 @@ def _matmul_gemm(out, args):
         out[...] = gemm(1., res, args[-1])
         return out
 
-def matmul(out, *args):
+def matmul(*args):
     """Multiplies a chain of matrices (2-d ndarrays)
     
     The final output matrix may be provided, or may be set to None. Setting out
@@ -295,20 +299,8 @@ def matmul(out, *args):
     
     #Since, for some reason, the method version of dot() does not generally
     #take an "out" argument, I ignored this (for now, minor) optimization.
-    if not out is None:
-        out[...] = res
-        return out
-    else:
-        return res
-#    if isinstance(args[-1], simple_diag_matrix):
-#        if out is None:
-#            return args[-1].dot_left(res)
-#        elif out.size == 1: #dot() seems to dislike this
-#            out[...] = args[-1].dot_left(res)
-#            return out
-#        else:
-#            return args[-1].dot_left(res, out=out)
-#    else:
+    return res
+
 #        if out is None:
 #            return res.dot(args[-1])
 #        elif out.size == 1: #dot() seems to dislike this
@@ -355,7 +347,7 @@ def randomize_cmplx(x, a=-0.5, b=0.5, aj=-0.5, bj=0.5):
             + 1.j * ((bj - aj) * sp.random.ranf(x.shape) + aj))
     return x
 
-def sqrtmh(A, out=None, ret_evd=False, evd=None):
+def sqrtmh(A, ret_evd=False, evd=None):
     """Return the matrix square root of a hermitian or symmetric matrix
 
     Uses scipy.linalg.eigh() to diagonalize the input efficiently.
@@ -392,9 +384,9 @@ def sqrtmh(A, out=None, ret_evd=False, evd=None):
     B = matmul_diag(ev, H(EV))
         
     if ret_evd:
-        return matmul(out, EV, B), (ev, EV)
+        return matmul(EV, B), (ev, EV)
     else:
-        return matmul(out, EV, B)
+        return matmul(EV, B)
         
 def matmul_diag(Adiag, B, act_right=True):
     if act_right:
@@ -414,7 +406,7 @@ def matmul_diag(Adiag, B, act_right=True):
         
     return out
         
-def invmh(A, out=None, ret_evd=False, evd=None):
+def invmh(A, ret_evd=False, evd=None):
     if not evd is None:
         (ev, EV) = evd
     else:
@@ -425,9 +417,9 @@ def invmh(A, out=None, ret_evd=False, evd=None):
     B = matmul_diag(ev, H(EV))
     
     if ret_evd:
-        return matmul(out, EV, B), (ev, EV)
+        return matmul(EV, B), (ev, EV)
     else:
-        return matmul(out, EV, B)   
+        return matmul(EV, B)   
     
 def sqrtmpo(A, out=None):
     """Return the matrix square root of a hermitian or symmetric positive definite matrix
