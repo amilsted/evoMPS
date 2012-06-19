@@ -242,21 +242,20 @@ class simple_diag_matrix:
 
 def mmul(*args):
     """Multiplies a chain of matrices (2-d ndarrays)
-    
-    The final output matrix may be provided, or may be set to None. Setting out
-    to None causes a new ndarray to be created to hold the result.
-    
+        
     All matrices must have dimensions compatible with matrix multiplication.
+    This function actually calls the dot() method of the objects passed in
+    as arguments. It thus handles any object that provides a dot() method
+    that accepts 2D ndarrays.
     
-    The underlying matrix multiplication algorithm may not support using the output
-    matrix as one of the two arguments (the result may just be wrong in this case).
-    As such, mmul raises an exception if the specified out matrix (if any) is
-    also one of the arguments in the final multiplication operation.
+    We also try to call dot_left(), in case an optimized left-acting
+    dot operation is available.
+    
+    This function is intended to work nicely with the above defined "sparse"
+    matrix objects.
     
     Parameters
     ----------
-    out : ndarray
-        A matrix to hold the final result (dimensions must be correct). May be None.
     *args : ndarray
         The chain of matrices to multiply together.
 
