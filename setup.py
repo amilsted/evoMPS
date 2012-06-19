@@ -1,14 +1,20 @@
 from distutils.core import setup, Extension
 from evoMPS.version import __version__
 
-from Cython.Distutils import build_ext
+try:
+    from Cython.Distutils import build_ext
+except ImportError:
+    use_cython = False
+    print "Cython not found: Some optimizations will not be available."
+else:
+    use_cython = True
 
-ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.py"]),
-               Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.pyx"]),
-               Extension("evoMPS.tdvp_uniform", ["evoMPS/tdvp_uniform.py"])]
-
-#for e in ext_modules:
-#    e.pyrex_directives = {"profile": True}
+if use_cython:
+    ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.py"]),
+                   Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.pyx"]),
+                   Extension("evoMPS.tdvp_uniform", ["evoMPS/tdvp_uniform.py"])]
+else:
+    ext_modules = []
 
 setup(name='evoMPS',
       version=__version__,
