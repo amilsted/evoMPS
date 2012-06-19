@@ -11,7 +11,7 @@ cimport tdvp_common as tc
 
 #np.ndarray[np.complex128_t, ndim=3]
 
-cdef class evoMPS_TDVP_Uniform:
+cdef class EvoMPS_TDVP_Uniform:
     cdef public int q
     cdef public int D
 
@@ -39,13 +39,13 @@ cdef class evoMPS_TDVP_Uniform:
     cdef public np.complex128_t eta
     cdef public float S_hc
     
-    cdef public object l, r
-    cdef object A, AA, C, K, K_left, tmp
+    cdef public object A, l, r, K
+    cdef object AA, C, K_left, tmp
     cdef object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
     cdef object Vsh, x
     
     @cython.locals(s = cython.int, t = cython.int)
-    cpdef Calc_AA(self)
+    cpdef calc_AA(self)
     
     @cython.locals(i = cython.int)
-    cpdef _Calc_lr(self, x, e, tmp, int max_itr=*, rtol=*, atol=*)
+    cpdef _calc_lr(self, x, e, tmp, int max_itr=*, rtol=*, atol=*)

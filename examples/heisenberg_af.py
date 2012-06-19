@@ -83,7 +83,7 @@ q.fill(qn)
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp_gen.evoMPS_TDVP_Generic(N, D, q)
+s = tdvp_gen.EvoMPS_TDVP_Generic(N, D, q)
 
 """
 Tell evoMPS about our Hamiltonian.
@@ -126,7 +126,7 @@ grnd_fname = "heis_af_N%d_D%d_q%d_J%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim,
 
 try:
    a_file = open(grnd_fname, 'rb')
-   s.LoadState(a_file)
+   s.load_state(a_file)
    a_file.close
    real_time = True
    loaded = True
@@ -174,8 +174,8 @@ for i in xrange(total_steps):
     row = [str(i)]
     row.append(str(t))
     
-    s.Upd_r()
-    s.Upd_l()
+    s.calc_r()
+    s.calc_l()
 
     lN[i] = s.l[N][0, 0]
     row.append("%.3g" % lN[i].real)
@@ -183,7 +183,7 @@ for i in xrange(total_steps):
     restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
     reCF.append(restoreCF)
     if restoreCF:
-        s.Restore_ON_R()
+        s.restore_RCF()
         row.append("Yes")
     else:
         row.append("No")
@@ -193,12 +193,12 @@ for i in xrange(total_steps):
     reNorm.append(reNormalize)
     if reNormalize:
         row.append("True")
-        s.Simple_renorm()
+        s.simple_renorm()
     else:
         row.append("False")
     
-    s.BuildC()    
-    s.CalcK()
+    s.calc_C()    
+    s.calc_K()
         
     K1[i] = s.K[1][0, 0]    
     row.append("%.15g" % K1[i].real)
@@ -214,21 +214,21 @@ for i in xrange(total_steps):
     Compute obserables!
     """
     
-    Sx_3[i] = s.Expect_SS(x_ss, 10) #Spin observables for site 3.
-    Sy_3[i] = s.Expect_SS(y_ss, 10)
-    Sz_3[i] = s.Expect_SS(z_ss, 10)
+    Sx_3[i] = s.expect_1s(x_ss, 10) #Spin observables for site 3.
+    Sy_3[i] = s.expect_1s(y_ss, 10)
+    Sz_3[i] = s.expect_1s(z_ss, 10)
     row.append("%.3g" % Sx_3[i].real)
     row.append("%.3g" % Sy_3[i].real)
     row.append("%.3g" % Sz_3[i].real)
     
-    rho_34 = s.DensityMatrix_2S(3, 4) #Reduced density matrix for sites 3 and 4.
+    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
     E_v = -trace(dot(rho_34, la.logm(rho_34)/log(2))) #The von Neumann entropy.
     
     row.append("%.9g" % E_v.real)
     
     m = 0   #x-Magnetization
     for n in xrange(1, N + 1):
-        m += s.Expect_SS(x_ss, n) 
+        m += s.expect_1s(x_ss, n) 
         
     row.append("%.9g" % m.real)
     Mx[i] = m
@@ -251,17 +251,17 @@ for i in xrange(total_steps):
     """
     if not real_time:
         print "\t".join(row)
-        s.TakeStep(step)     
+        s.take_step(step)     
         imsteps += 1
     elif False: #Midpoint method. Currently disabled. Change to True to test!
-        itr, delta, delta_check = s.TakeStep_BEuler(step)
+        itr, delta, delta_check = s.take_step_implicit(step)
         row.append(str(itr))
         row.append("%.3g" % delta.real)
         row.append("%.3g" % delta_check.real)
         print "\t".join(row)
     else:
         print "\t".join(row)
-        s.TakeStep_RK4(step)
+        s.take_step_RK4(step)
     
     t += 1.j * conj(step)
 

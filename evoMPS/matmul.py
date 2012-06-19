@@ -143,13 +143,13 @@ class simple_diag_matrix:
         if isinstance(b, simple_diag_matrix):
             return simple_diag_matrix(self.diag * b.diag)
             
-        return matmul_diag(self.diag, b)
+        return mmul_diag(self.diag, b)
         
     def dot_left(self, a):
         if isinstance(a, simple_diag_matrix):
             return simple_diag_matrix(self.diag * a.diag)
             
-        return matmul_diag(self.diag, a, act_right=False)
+        return mmul_diag(self.diag, a, act_right=False)
         
     def conj(self):
         return simple_diag_matrix(self.diag.conj())
@@ -239,29 +239,8 @@ class simple_diag_matrix:
             return self.transpose()
         else:
             raise AttributeError(attr + " not found")
-            
 
-gemm = None
-using_fblas = False
-
-def _matmul_gemm(out, args):
-    if len(args) < 3:
-        res = args[0]
-    else:
-        res = gemm(1., args[0], args[1])    
-        for x in args[2:-1]:
-            res = gemm(1., res, x)
-            
-    if out is None:
-        #out = empty((args[0].shape[0], args[-1].shape[1]), dtype=args[0].dtype)
-        return gemm(1., res, args[-1])
-    elif la.blas.has_column_major_storage(out) == using_fblas: #'out' must have the right layout for the gemm function...   
-        return gemm(1., res, args[-1], c=out, overwrite_c=True)
-    else:
-        out[...] = gemm(1., res, args[-1])
-        return out
-
-def matmul(*args):
+def mmul(*args):
     """Multiplies a chain of matrices (2-d ndarrays)
     
     The final output matrix may be provided, or may be set to None. Setting out
@@ -271,7 +250,7 @@ def matmul(*args):
     
     The underlying matrix multiplication algorithm may not support using the output
     matrix as one of the two arguments (the result may just be wrong in this case).
-    As such, matmul raises an exception if the specified out matrix (if any) is
+    As such, mmul raises an exception if the specified out matrix (if any) is
     also one of the arguments in the final multiplication operation.
     
     Parameters
@@ -309,14 +288,13 @@ def matmul(*args):
 #        else:
 #            return sp.dot(res, args[-1], out=out)
 
-    
-def matmul_init(dtype=sp.float64, order='C'):
-    global gemm
-    global using_fblas
-    
-    m = sp.empty((1,1), dtype=dtype, order=order)
-    gemm, = la.blas.get_blas_funcs(['gemm'], m) #gets correct gemm (i.e. S, C, D, Z)
-    using_fblas = gemm.module_name == 'fblas'
+def adot(a, b):
+    """
+    Calculates the scalar product for the ancilla, expecting
+    the arguments in matrix form.
+    Equivalent to trace(dot(H(a), b))
+    """    
+    return sp.inner(a.ravel().conj(), b.ravel())
 
 def H(m, out=None):
     """Matrix conjugate transpose (adjoint).
@@ -381,14 +359,14 @@ def sqrtmh(A, ret_evd=False, evd=None):
     ev = sp.sqrt(ev) #we don't require positive (semi) definiteness, so we need the scipy sqrt here
     
     #Carry out multiplication with the diagonal matrix of eigenvalue square roots with H(EV)
-    B = matmul_diag(ev, H(EV))
+    B = mmul_diag(ev, H(EV))
         
     if ret_evd:
-        return matmul(EV, B), (ev, EV)
+        return mmul(EV, B), (ev, EV)
     else:
-        return matmul(EV, B)
+        return mmul(EV, B)
         
-def matmul_diag(Adiag, B, act_right=True):
+def mmul_diag(Adiag, B, act_right=True):
     if act_right:
         assert B.shape[0] == Adiag.shape[0]
     else:
@@ -414,12 +392,12 @@ def invmh(A, ret_evd=False, evd=None):
     
     ev = 1. / ev
         
-    B = matmul_diag(ev, H(EV))
+    B = mmul_diag(ev, H(EV))
     
     if ret_evd:
-        return matmul(EV, B), (ev, EV)
+        return mmul(EV, B), (ev, EV)
     else:
-        return matmul(EV, B)   
+        return mmul(EV, B)   
     
 def sqrtmpo(A, out=None):
     """Return the matrix square root of a hermitian or symmetric positive definite matrix

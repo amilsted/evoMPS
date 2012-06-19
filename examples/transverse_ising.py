@@ -78,7 +78,7 @@ N = 21 #The length of the finite spin chain.
 The bond dimension for each site is given as a vector, length N.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 256 #The maximum bond dimension
+bond_dim = 8 #The maximum bond dimension
 
 D = sp.empty(N + 1, dtype=sp.int32)
 D.fill(bond_dim)
@@ -96,7 +96,7 @@ q.fill(qn)
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp.evoMPS_TDVP_Generic(N, D, q)
+s = tdvp.EvoMPS_TDVP_Generic(N, D, q)
 
 """
 Tell evoMPS about our Hamiltonian.
@@ -107,8 +107,8 @@ s.h_ext = h_ext
 """
 Set the initial Hamiltonian parameters.
 """
-h = 1
-J = 0.25
+h = 1.00
+J = 0.75
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -128,8 +128,8 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 5E-15
-total_steps = 10
+tol_im = 1E-12
+total_steps = 500
 
 """
 The following handles loading the ground state from a file.
@@ -139,17 +139,20 @@ ground state will be loaded, if present.
 """
 grnd_fname = "t_ising_N%d_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim, J, h, tol_im, step)
 
-try:
-   a_file = open(grnd_fname, 'rb')
-   s.LoadState(a_file)
-   a_file.close
-   real_time = True
-   loaded = True
-   print 'Using saved ground state: ' + grnd_fname
-except IOError as e:
-   print 'No existing ground state could be opened.'
-   real_time = False
-   loaded = False
+real_time = False
+loaded = False
+
+if False:
+    try:
+        a_file = open(grnd_fname, 'rb')
+        s.load_state(a_file)
+        a_file.close
+        real_time = True
+        loaded = True
+        print 'Using saved ground state: ' + grnd_fname
+    except IOError as e:
+        print 'No existing ground state could be opened.'
+
 
 """
 Prepare some loop variables and some vectors to hold data from each step.
@@ -189,16 +192,16 @@ for i in xrange(total_steps):
     row = [str(i)]
     row.append(str(t))
     
-    s.Upd_r()
-    s.Upd_l()
+    s.calc_r()
+    s.calc_l()
 
     lN[i] = s.l[N][0, 0]
     row.append("%.3g" % lN[i].real)
 
-    restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
+    restoreCF = True #(i % 4 == 0) #Restore canonical form every 4 steps.
     reCF.append(restoreCF)
     if restoreCF:
-        s.Restore_ON_R()
+        s.restore_RCF()
         row.append("Yes")
     else:
         row.append("No")
@@ -208,12 +211,12 @@ for i in xrange(total_steps):
     reNorm.append(reNormalize)
     if reNormalize:
         row.append("True")
-        s.Simple_renorm()
+        s.simple_renorm()
     else:
         row.append("False")
     
-    s.BuildC()    
-    s.CalcK()
+    s.calc_C()    
+    s.calc_K()
         
     K1[i] = s.K[1][0, 0]    
     row.append("%.15g" % K1[i].real)
@@ -229,21 +232,40 @@ for i in xrange(total_steps):
     Compute obserables!
     """
     
-    Sx_3[i] = s.Expect_SS(x_ss, 3) #Spin observables for site 3.
-    Sy_3[i] = s.Expect_SS(y_ss, 3)
-    Sz_3[i] = s.Expect_SS(z_ss, 3)
+    Sx_3[i] = s.expect_1s(x_ss, 3) #Spin observables for site 3.
+    Sy_3[i] = s.expect_1s(y_ss, 3)
+    Sz_3[i] = s.expect_1s(z_ss, 3)
     row.append("%.3g" % Sx_3[i].real)
     row.append("%.3g" % Sy_3[i].real)
     row.append("%.3g" % Sz_3[i].real)
     
-    rho_34 = s.DensityMatrix_2S(3, 4) #Reduced density matrix for sites 3 and 4.
-    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
+#    print sp.diag(s.l[4])
+    #rho_8 = s.density_1S(1)
+    #print la.eigvalsh(rho_8)
+    #rho_9 = s.density_1S(1)
+    #print la.eigvalsh(rho_9)
     
-    row.append("%.9g" % E_v.real)
+#    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
+#    print rho_34
+#    print sp.trace(rho_34)
+#    #print sp.trace(rho_34)
+#    w, v = la.eigh(rho_34)
+#    print w
+#    T, Z = la.schur(rho_34)
+#    T, Z = la.rsf2csf(T,Z)
+#    print sp.diag(T)
+#    print sp.log2(sp.diag(T))
+#    F, errest = la.funm(rho_34,sp.log2,disp=0)
+#    print F
+#    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
+#    
+#    quit()
+    
+#    row.append("%.9g" % E_v.real)
     
     m = 0   #x-Magnetization
     for n in xrange(1, N + 1):
-        m += s.Expect_SS(x_ss, n) 
+        m += s.expect_1s(x_ss, n) 
         
     row.append("%.9g" % m.real)
     Mx[i] = m
@@ -253,7 +275,7 @@ for i in xrange(total_steps):
     """
     if loaded or (not real_time and abs(dK1) < tol_im):
         real_time = True
-        s.SaveState(grnd_fname)
+        s.save_state(grnd_fname)
         J = J_real
         step = realstep * 1.j
         loaded = False
@@ -266,52 +288,52 @@ for i in xrange(total_steps):
     """
     if not real_time:
         print "\t".join(row)
-        s.TakeStep(step)     
+        s.take_step(step)     
         imsteps += 1
     elif False: #Midpoint method. Currently disabled. Change to True to test!
-        itr, delta, delta_check = s.TakeStep_BEuler(step)
+        itr, delta, delta_check = s.take_step_implicit(step)
         row.append(str(itr))
         row.append("%.3g" % delta.real)
         row.append("%.3g" % delta_check.real)
         print "\t".join(row)
     else:
         print "\t".join(row)
-        s.TakeStep_RK4(step)
+        s.take_step_RK4(step)
     
     t += 1.j * sp.conj(step)
 
-#"""
-#Simple plots of the results.
-#"""
-#
-#if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-#    tau = T.imag[0:imsteps]
-#    
-#    fig1 = plt.figure(1)
-#    fig2 = plt.figure(2) 
-#    K1_tau = fig1.add_subplot(111)
-#    K1_tau.set_xlabel('tau')
-#    K1_tau.set_ylabel('H')
-#    M_tau = fig2.add_subplot(111)
-#    M_tau.set_xlabel('tau')
-#    M_tau.set_ylabel('M_x')    
-#    
-#    K1_tau.plot(tau, K1.real[0:imsteps])
-#    M_tau.plot(tau, Mx.real[0:imsteps])
-#
-##Now plot the real time evolution of K1 and Mx
-#t = T.real[imsteps + 1:]
-#fig3 = plt.figure(3)
-#fig4 = plt.figure(4)
-#
-#K1_t = fig3.add_subplot(111)
-#K1_t.set_xlabel('t')
-#K1_t.set_ylabel('H')
-#M_t = fig4.add_subplot(111)
-#M_t.set_xlabel('t')
-#M_t.set_ylabel('M_x')
-#
-#K1_t.plot(t, K1.real[imsteps + 1:])
-#M_t.plot(t, Mx.real[imsteps + 1:])
-#
-#plt.show()
+"""
+Simple plots of the results.
+"""
+
+if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
+    tau = T.imag[0:imsteps]
+    
+    fig1 = plt.figure(1)
+    fig2 = plt.figure(2) 
+    K1_tau = fig1.add_subplot(111)
+    K1_tau.set_xlabel('tau')
+    K1_tau.set_ylabel('H')
+    M_tau = fig2.add_subplot(111)
+    M_tau.set_xlabel('tau')
+    M_tau.set_ylabel('M_x')    
+    
+    K1_tau.plot(tau, K1.real[0:imsteps])
+    M_tau.plot(tau, Mx.real[0:imsteps])
+
+#Now plot the real time evolution of K1 and Mx
+t = T.real[imsteps + 1:]
+fig3 = plt.figure(3)
+fig4 = plt.figure(4)
+
+K1_t = fig3.add_subplot(111)
+K1_t.set_xlabel('t')
+K1_t.set_ylabel('H')
+M_t = fig4.add_subplot(111)
+M_t.set_xlabel('t')
+M_t.set_ylabel('M_x')
+
+K1_t.plot(t, K1.real[imsteps + 1:])
+M_t.plot(t, Mx.real[imsteps + 1:])
+
+plt.show()
