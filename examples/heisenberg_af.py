@@ -8,45 +8,32 @@ for the transverse Ising model.
 @author: Ashley Milsted
 """
 
-import scipy as sp
+from scipy import *
 import scipy.linalg as la
 import matplotlib.pyplot as plt
 
-import evoMPS.tdvp_gen as tdvp
+from evoMPS import *
 
 """
 First, we define our Hamiltonian and some observables.
 """
 
-def h_ext(n, s, t):
-    """The single-site Hamiltonian representing the external field.
-    
-    -h * sigmaX_s,t.
-    
-    The global variable h determines the strength.
-    """
-    if s == t:
-        return 0
-    else:
-        return -h        
-
 def h_nn(n, s, t, u, v):
     """The nearest neighbour Hamiltonian representing the interaction.
 
-    -J * sigmaZ_n_s,t * sigmaZ_n+1_u,v.
-    
     The global variable J determines the strength.
     """
-    if s == u and t == v:
-        return -J * (-1)**s * (-1)**t
-    else:
-        return 0
+    res = x_ss(n, s, u) * x_ss(n, t, v)
+    res += y_ss(n, s, u) * y_ss(n, t, v)
+    res += z_ss(n, s, u) * z_ss(n, t, v)    
+        
+    return J * 1.0 * res
     
 def z_ss(n, s, t):
     """Spin observable: z-direction
     """
     if s == t:
-        return (-1)**s
+        return (-1.0)**s
     else:
         return 0
         
@@ -56,7 +43,7 @@ def x_ss(n, s, t):
     if s == t:
         return 0
     else:
-        return 1
+        return 1.0
         
 def y_ss(n, s, t):
     """Spin observable: y-direction
@@ -64,23 +51,23 @@ def y_ss(n, s, t):
     if s == t:
         return 0
     else:
-        return 1.j * (-1)**t
+        return (1.j * (-1.0)**t)
 
 """
 Next, we set up some global variables to be used as parameters to 
 the evoMPS class.
 """
 
-N = 21 #The length of the finite spin chain.
+N = 20 #The length of the finite spin chain.
 
 
 """
 The bond dimension for each site is given as a vector, length N.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 8 #The maximum bond dimension
+bond_dim = 16 #The maximum bond dimension
 
-D = sp.empty(N + 1, dtype=sp.int32)
+D = empty(N + 1, dtype=int32)
 D.fill(bond_dim)
 
 
@@ -90,25 +77,23 @@ Here, we set all sites to dimension = qn.
 """
 qn = 2 #The site dimension
 
-q = sp.empty(N + 1, dtype=sp.int32)
+q = empty(N + 1, dtype=int32)
 q.fill(qn)
 
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp.EvoMPS_TDVP_Generic(N, D, q)
+s = tdvp_gen.EvoMPS_TDVP_Generic(N, D, q)
 
 """
 Tell evoMPS about our Hamiltonian.
 """
 s.h_nn = h_nn
-s.h_ext = h_ext
 
 """
 Set the initial Hamiltonian parameters.
 """
-h = 1.00
-J = 0.75
+J = 1
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -120,7 +105,7 @@ J_real = 2
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.02
+step = 0.05
 realstep = 0.01
 
 """
@@ -128,7 +113,7 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-12
+tol_im = 5E-15
 total_steps = 500
 
 """
@@ -137,22 +122,19 @@ The ground state will be saved automatically when it is declared found.
 If this script is run again with the same settings, an existing
 ground state will be loaded, if present.
 """
-grnd_fname = "t_ising_N%d_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim, J, h, tol_im, step)
+grnd_fname = "heis_af_N%d_D%d_q%d_J%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim, J, tol_im, step)
 
-real_time = False
-loaded = False
-
-if False:
-    try:
-        a_file = open(grnd_fname, 'rb')
-        s.load_state(a_file)
-        a_file.close
-        real_time = True
-        loaded = True
-        print 'Using saved ground state: ' + grnd_fname
-    except IOError as e:
-        print 'No existing ground state could be opened.'
-
+try:
+   a_file = open(grnd_fname, 'rb')
+   s.load_state(a_file)
+   a_file.close
+   real_time = True
+   loaded = True
+   print 'Using saved ground state: ' + grnd_fname
+except IOError as e:
+   print 'No existing ground state could be opened.'
+   real_time = False
+   loaded = False
 
 """
 Prepare some loop variables and some vectors to hold data from each step.
@@ -163,15 +145,15 @@ imsteps = 0
 reCF = []
 reNorm = []
 
-T = sp.zeros((total_steps), dtype=sp.complex128)
-K1 = sp.zeros((total_steps), dtype=sp.complex128)
-lN = sp.zeros((total_steps), dtype=sp.complex128)
+T = zeros((total_steps), dtype=complex128)
+K1 = zeros((total_steps), dtype=complex128)
+lN = zeros((total_steps), dtype=complex128)
 
-Sx_3 = sp.zeros((total_steps), dtype=sp.complex128) #Observables for site 3.
-Sy_3 = sp.zeros((total_steps), dtype=sp.complex128)
-Sz_3 = sp.zeros((total_steps), dtype=sp.complex128)
+Sx_3 = zeros((total_steps), dtype=complex128) #Observables for site 3.
+Sy_3 = zeros((total_steps), dtype=complex128)
+Sz_3 = zeros((total_steps), dtype=complex128)
 
-Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
+Mx = zeros((total_steps), dtype=complex128)   #Magnetization in x-direction.
    
    
 """
@@ -198,7 +180,7 @@ for i in xrange(total_steps):
     lN[i] = s.l[N][0, 0]
     row.append("%.3g" % lN[i].real)
 
-    restoreCF = True #(i % 4 == 0) #Restore canonical form every 4 steps.
+    restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
     reCF.append(restoreCF)
     if restoreCF:
         s.restore_RCF()
@@ -207,7 +189,7 @@ for i in xrange(total_steps):
         row.append("No")
     
     #Renormalize if the norm is drifting.
-    reNormalize = not sp.allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
+    reNormalize = not allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
     reNorm.append(reNormalize)
     if reNormalize:
         row.append("True")
@@ -232,36 +214,17 @@ for i in xrange(total_steps):
     Compute obserables!
     """
     
-    Sx_3[i] = s.expect_1s(x_ss, 3) #Spin observables for site 3.
-    Sy_3[i] = s.expect_1s(y_ss, 3)
-    Sz_3[i] = s.expect_1s(z_ss, 3)
+    Sx_3[i] = s.expect_1s(x_ss, 10) #Spin observables for site 3.
+    Sy_3[i] = s.expect_1s(y_ss, 10)
+    Sz_3[i] = s.expect_1s(z_ss, 10)
     row.append("%.3g" % Sx_3[i].real)
     row.append("%.3g" % Sy_3[i].real)
     row.append("%.3g" % Sz_3[i].real)
     
-#    print sp.diag(s.l[4])
-    #rho_8 = s.density_1S(1)
-    #print la.eigvalsh(rho_8)
-    #rho_9 = s.density_1S(1)
-    #print la.eigvalsh(rho_9)
+    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
+    E_v = -trace(dot(rho_34, la.logm(rho_34)/log(2))) #The von Neumann entropy.
     
-#    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
-#    print rho_34
-#    print sp.trace(rho_34)
-#    #print sp.trace(rho_34)
-#    w, v = la.eigh(rho_34)
-#    print w
-#    T, Z = la.schur(rho_34)
-#    T, Z = la.rsf2csf(T,Z)
-#    print sp.diag(T)
-#    print sp.log2(sp.diag(T))
-#    F, errest = la.funm(rho_34,sp.log2,disp=0)
-#    print F
-#    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
-#    
-#    quit()
-    
-#    row.append("%.9g" % E_v.real)
+    row.append("%.9g" % E_v.real)
     
     m = 0   #x-Magnetization
     for n in xrange(1, N + 1):
@@ -273,15 +236,15 @@ for i in xrange(total_steps):
     """
     Switch to real time evolution if we have the ground state.
     """
-    if loaded or (not real_time and abs(dK1) < tol_im):
-        real_time = True
-        s.save_state(grnd_fname)
-        J = J_real
-        step = realstep * 1.j
-        loaded = False
-        print 'Starting real time evolution!'
+#    if loaded or (not real_time and abs(dK1) < tol_im):
+#        real_time = True
+#        s.SaveState(grnd_fname)
+#        J = J_real
+#        step = realstep * 1.j
+#        loaded = False
+#        print 'Starting real time evolution!'
     
-    row.append(str(1.j * sp.conj(step)))
+    row.append(str(1.j * conj(step)))
     
     """
     Carry out next step!
@@ -300,7 +263,7 @@ for i in xrange(total_steps):
         print "\t".join(row)
         s.take_step_RK4(step)
     
-    t += 1.j * sp.conj(step)
+    t += 1.j * conj(step)
 
 """
 Simple plots of the results.
