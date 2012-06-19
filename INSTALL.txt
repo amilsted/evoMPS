@@ -19,6 +19,9 @@ Numpy should be compiled with a LAPACK library, preferably
 an optimized one such as ATLAS <http://math-atlas.sourceforge.net/>. 
 Scipy requires a LAPACK library to be present.
 
+If present, Cython <http://www.cython.org/> will also be used to perform
+some (currently minor) optimizations.
+
 To run the included examples, the following is also required:
 
 * matplotlib <http://matplotlib.sourceforge.net/> (tested on 1.1.0)
