@@ -21,6 +21,7 @@ import tdvp_uniform as uni
 
 def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
        op=None, op_every=5, autogrow=False):
+    """A simple integration loop for testing"""
     h_prev = 0
     sfbc.restore_RCF(dbg=dbg)
     if force_calc_lr:
@@ -36,7 +37,8 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
             h, eta = sfbc.take_step(tau)
 
         etas = sfbc.eta[1:].copy()
-
+        
+        #Basic dynamic expansion:
         if autogrow and etas[0] > sfbc.eta_uni * 10:
             sfbc.Grow_left(2)
             for row in data:
