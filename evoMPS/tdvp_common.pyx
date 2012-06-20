@@ -13,8 +13,8 @@ from cython.parallel import prange
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
-cpdef calc_C(np.ndarray[DTYPE_t, ndim=4] AA,
-             h_nn_cptr, np.ndarray[DTYPE_t, ndim=4] out):
+cpdef calc_C(np.ndarray[DTYPE_t, ndim=4, mode="c"] AA,
+             h_nn_cptr, np.ndarray[DTYPE_t, ndim=4, mode="c"] out):
     
     assert pc.PyCapsule_CheckExact(h_nn_cptr)
     
@@ -44,7 +44,7 @@ cpdef calc_C(np.ndarray[DTYPE_t, ndim=4] AA,
                 for v in range(q2):
                     h = h_nn(s, t, u, v)
                     if h != 0:
-                        for i in range(D1): #avoid slicing!
+                        for i in range(D1): #avoid slicing, although this may work in latest cython...
                             for j in range(D2):
                                 out[s, t, i, j] = out[s, t, i, j] + h * AA[u, v, i, j]
     
