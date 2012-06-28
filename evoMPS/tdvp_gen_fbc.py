@@ -20,7 +20,11 @@ import matmul as mm
 import tdvp_uniform as uni
 
 def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
-       op=None, op_every=5, autogrow=False):
+       autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
+       op=None, op_every=5, prev_op_data=None, op_save_as=None,
+       save_every=10, save_as=None, counter_start=0,
+       csv_file=None,
+       tol=0):
     """A simple integration loop for testing"""
     h_prev = 0
     sfbc.restore_RCF(dbg=dbg)
@@ -28,7 +32,18 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
         sfbc.calc_l()
         sfbc.calc_r()
 
-    data = []
+    if not prev_op_data is None:
+        data = prev_op_data
+    else:
+        data = []
+        
+    #TODO: Load existing data in the opf file!
+        
+    if not op_save_as is None:
+        opf = open(op_save_as, "a")
+        
+    if not csv_file is None:
+        csvf = open(csv_file, "a")
 
     for i in xrange(steps):
         if RK4:
@@ -39,36 +54,70 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
         etas = sfbc.eta[1:].copy()
         
         #Basic dynamic expansion:
-        if autogrow and etas[0] > sfbc.eta_uni * 10:
-            sfbc.Grow_left(2)
-            for row in data:
-                row.insert(0, 0)
-                row.insert(0, 0)
+        rewrite_opf = False
+        if autogrow and sfbc.N < autogrow_max_N:
+            if etas[0] > sfbc.eta_uni * 10:
+                rewrite_opf = True
+                sfbc.grow_left(autogrow_amount)
+                for row in data:
+                    for j in range(autogrow_amount):
+                        row.insert(0, 0)
 
-        if autogrow and etas[-1] > sfbc.eta_uni * 10:
-            sfbc.Grow_right(2)
-            for row in data:
-                row.append(0)
-                row.append(0)
+            if etas[-1] > sfbc.eta_uni * 10:
+                rewrite_opf = True
+                sfbc.grow_right(autogrow_amount)
+                for row in data:
+                    for j in range(autogrow_amount):
+                        row.append(0)
 
         sfbc.restore_RCF(dbg=dbg)
         if force_calc_lr:
             sfbc.calc_l()
             sfbc.calc_r()
+            
+        if not save_as is None and (((counter_start + i) % save_every == 0)
+                                    or i == steps - 1):
+            sfbc.save_state(save_as + "_%u" % (counter_start + i))
 
         norm_uni = mm.adot(sfbc.u_gnd_r.l, sfbc.u_gnd_r.r).real
         h_uni = sfbc.u_gnd_r.h.real / norm_uni
-        print "\t".join(map(str, (eta.real, h.real - h_uni, (h - h_prev).real)))
+        line = "\t".join(map(str, (counter_start + i, eta.real, h.real - h_uni, 
+                                  (h - h_prev).real)))
+        print line
         print etas.real
-#        if i > 0 and (h - h_prev).real > 0:
-#            break
+        if not csv_file is None:
+            csvf.write(line + "\n")
+            csvf.flush()
+            #csvf.write(str(etas.real) + "\n")
+
         h_prev = h
 
-        if (not op is None) and (i % op_every == 0):
+        if (not op is None) and ((counter_start + i) % op_every == 0):
             op_range = range(-10, sfbc.N + 10)
-            data.append(map(lambda n: sfbc.expect_1S(op, n).real, op_range))
+            row = map(lambda n: sfbc.expect_1s(op, n).real, op_range)
+            data.append(row)
+            if not op_save_as is None:
+                if rewrite_opf:
+                    opf.close()
+                    opf = open(op_save_as, "w")
+                    for row in data:
+                        opf.write("\t".join(map(str, row)) + "\n")
+                    opf.flush()
+                else:
+                    opf.write("\t".join(map(str, row)) + "\n")
+                    opf.flush()
+                
+        if eta.real < tol:
+            print "Tolerance reached!"
+            break
+            
+    if not op_save_as is None:
+        opf.close()
+        
+    if not csv_file is None:
+        csvf.close()
 
-    return sp.array(data)
+    return data
 
 class EvoMPS_TDVP_GenFBC:
     odr = 'C'
@@ -144,7 +193,7 @@ class EvoMPS_TDVP_GenFBC:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
 
     def __init__(self, numsites, uni_ground):
-        self.u_gnd_l = uni.evoMPS_TDVP_Uniform(uni_ground.D, uni_ground.q)
+        self.u_gnd_l = uni.EvoMPS_TDVP_Uniform(uni_ground.D, uni_ground.q)
         self.u_gnd_l.sanity_checks = self.sanity_checks
         self.u_gnd_l.h_nn = uni_ground.h_nn
         self.u_gnd_l.h_nn_cptr = uni_ground.h_nn_cptr
@@ -153,12 +202,14 @@ class EvoMPS_TDVP_GenFBC:
         self.u_gnd_l.r = uni_ground.r.copy()
 
         self.u_gnd_l.symm_gauge = False
-        self.u_gnd_l.Update()
-        self.u_gnd_l.Calc_lr()
-        self.u_gnd_l.Calc_B()
+        self.u_gnd_l.update()
+        self.u_gnd_l.calc_lr()
+        self.u_gnd_l.calc_B()
         self.eta_uni = self.u_gnd_l.eta
+        self.u_gnd_l_kmr = la.norm(self.u_gnd_l.r / la.norm(self.u_gnd_l.r) - 
+                                   self.u_gnd_l.K / la.norm(self.u_gnd_l.K))
 
-        self.u_gnd_r = uni.evoMPS_TDVP_Uniform(uni_ground.D, uni_ground.q)
+        self.u_gnd_r = uni.EvoMPS_TDVP_Uniform(uni_ground.D, uni_ground.q)
         self.u_gnd_r.sanity_checks = self.sanity_checks
         self.u_gnd_r.symm_gauge = False
         self.u_gnd_r.h_nn = uni_ground.h_nn
@@ -166,8 +217,14 @@ class EvoMPS_TDVP_GenFBC:
         self.u_gnd_r.A = self.u_gnd_l.A.copy()
         self.u_gnd_r.l = self.u_gnd_l.l.copy()
         self.u_gnd_r.r = self.u_gnd_l.r.copy()
+        
+        self.grown_left = 0
+        self.grown_right = 0
+        self.shrunk_left = 0
+        self.shrunk_right = 0
 
         self.h_nn = self.wrap_h
+        self.h_nn_mat = None
 
         self.eps = sp.finfo(self.typ).eps
 
@@ -194,6 +251,16 @@ class EvoMPS_TDVP_GenFBC:
 
     def wrap_h(self, n, s, t, u, v):
         return self.u_gnd_l.h_nn(s, t, u, v)
+        
+    def gen_h_matrix(self):
+        self.h_nn_mat = sp.zeros((self.N + 1, self.q.max(), self.q.max(), 
+                                  self.q.max(), self.q.max()), dtype=sp.complex128)
+        for n in xrange(self.N + 1):
+            for u in xrange(self.q[n]):
+                for v in xrange(self.q[n + 1]):
+                    for s in xrange(self.q[n]):
+                        for t in xrange(self.q[n + 1]):
+                            self.h_nn_mat[n, s, t, u, v] = self.h_nn(n, s, t, u, v)
 
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -214,17 +281,34 @@ class EvoMPS_TDVP_GenFBC:
             n_low = 0
         if n_high < 1:
             n_high = self.N + 1
-
-        for n in xrange(n_low, n_high):
-            self.C[n].fill(0)
-            for u in xrange(self.q[n]):
-                for v in xrange(self.q[n + 1]):
-                    AA = mm.mmul(self.A[n][u], self.A[n + 1][v]) #only do this once for each
-                    for s in xrange(self.q[n]):
-                        for t in xrange(self.q[n + 1]):
-                            h_nn_stuv = self.h_nn(n, s, t, u, v)
-                            if h_nn_stuv != 0:
-                                self.C[n][s, t] += h_nn_stuv * AA
+        
+        if self.h_nn_mat is None:
+            for n in xrange(n_low, n_high):
+                self.C[n].fill(0)
+                for u in xrange(self.q[n]):
+                    for v in xrange(self.q[n + 1]):
+                        AA = mm.mmul(self.A[n][u], self.A[n + 1][v]) #only do this once for each
+                        for s in xrange(self.q[n]):
+                            for t in xrange(self.q[n + 1]):
+                                h_nn_stuv = self.h_nn(n, s, t, u, v)
+                                if h_nn_stuv != 0:
+                                    self.C[n][s, t] += h_nn_stuv * AA
+        else:
+            dot = sp.dot
+            for n in xrange(n_low, n_high):
+                An = self.A[n]
+                Anp1 = self.A[n + 1]
+                
+                AA = sp.empty_like(self.C[n])
+                for u in xrange(self.q[n]):
+                    for v in xrange(self.q[n + 1]):
+                        AA[u, v] = dot(An[u], Anp1[v])
+                
+                res = sp.tensordot(AA, self.h_nn_mat[n], ((0, 1), (2, 3)))
+                res = sp.rollaxis(res, 3)
+                res = sp.rollaxis(res, 3)
+                
+                self.C[n][:] = res
 
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's
@@ -247,18 +331,25 @@ class EvoMPS_TDVP_GenFBC:
             n_low = 0
         if n_high < 1:
             n_high = self.N + 1
+            
+        H = mm.H
 
         for n in reversed(xrange(n_low, n_high)):
             self.K[n].fill(0)
+            
+            K = self.K[n]
+            Kp1 = self.K[n + 1]
+            C = self.C[n]
+            rp1 = self.r[n + 1]
+            A = self.A[n]
+            Ap1 = self.A[n + 1]
 
             for s in xrange(self.q[n]):
+                Ash = H(A[s])
                 for t in xrange(self.q[n+1]):
-                    self.K[n] += mm.mmul(self.C[n][s, t], self.r[n + 1],
-                                           mm.H(self.A[n + 1][t]),
-                                           mm.H(self.A[n][s]))
+                    K += C[s, t].dot(rp1.dot(H(Ap1[t]).dot(Ash)))
 
-                self.K[n] += mm.mmul(self.A[n][s], self.K[n + 1],
-                                       mm.H(self.A[n][s]))
+                K += A[s].dot(Kp1.dot(Ash))
 
     def calc_K_luni(self, C, h_l):
         K_np1 = self.K[0]
@@ -267,7 +358,14 @@ class EvoMPS_TDVP_GenFBC:
 
         print (mm.adot(self.l[0], K_np1) / (self.N + 1)).real
 
-        for n in reversed(xrange(-10000, 0)):
+        for n in reversed(xrange(-1000, 0)):
+            Kmr = la.norm(K_np1/la.norm(K_np1) - self.u_gnd_l.r/la.norm(self.u_gnd_l.r))
+
+            if n < -1:
+                print (n, mm.adot(self.l[0], K_np1).real, Kmr, self.u_gnd_l_kmr)
+                if Kmr < self.u_gnd_l_kmr * 1.1:
+                    break            
+            
             K_n.fill(0)
 
             if not r_np1 is None and sp.allclose(r_np1/la.norm(r_np1),
@@ -284,23 +382,9 @@ class EvoMPS_TDVP_GenFBC:
 
                 K_n += mm.mmul(self.A[0][s], K_np1, mm.H(self.A[0][s]))
 
-            h = (mm.adot(self.l[0], K_n) - h_l * abs(n)) / (self.N + 1.0)
-            #Note: This becomes ever more inaccurate due to numerical error!!
-
-            h_is_stable = sp.allclose(mm.adot(self.l[0], K_n), mm.adot(self.l[0], K_np1) + h_l,
-                                      atol=1E-14, rtol=1E-14)
-
-            if n < -1:
-                print (n, h.real, mm.adot(self.l[0], K_n).real,
-                       (mm.adot(self.l[0], K_np1) + h_l).real, h_is_stable,
-                       la.norm(K_n/la.norm(K_n) - K_np1/la.norm(K_np1)),
-                       la.norm(r_np1/la.norm(r_np1) - self.u_gnd_l.r/la.norm(self.u_gnd_l.r)))
-                if h_is_stable:
-                    break
-
             K_np1 = K_n.copy()
 
-        return h
+        return n
 
     def calc_Vsh(self, n, sqrt_r):
         """Generates mm.H(V[n][s]) for a given n, used for generating B[n][s]
@@ -320,7 +404,7 @@ class EvoMPS_TDVP_GenFBC:
             R[:,s,:] = mm.mmul(sqrt_r, mm.H(self.A[n][s]))
 
         R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
-        V = mm.H(ns.nullspace(mm.H(R)))
+        V = mm.H(ns.nullspace_qr(mm.H(R)))
 
         if self.sanity_checks:
             if not sp.allclose(mm.mmul(V, R), 0):
@@ -371,6 +455,17 @@ class EvoMPS_TDVP_GenFBC:
         x_part = sp.empty_like(x)
         x_subpart = sp.empty_like(self.A[n][0])
         x_subsubpart = sp.empty_like(self.A[n][0])
+        
+        C = self.C[n]
+        Cm1 = self.C[n - 1]
+        rp1 = self.r[n + 1]
+        A = self.A[n]
+        Ap1 = self.A[n + 1]
+        Am1 = self.A[n - 1]
+        Kp1 = self.K[n + 1]
+        
+        mmul = mm.mmul
+        H = mm.H
 
         x_part.fill(0)
         for s in xrange(self.q[n]):
@@ -379,21 +474,24 @@ class EvoMPS_TDVP_GenFBC:
             if n < self.N + 1:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += mm.mmul(self.C[n][s,t], self.r[n + 1], mm.H(self.A[n + 1][t])) #~1st line
+                    x_subsubpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
 
-                x_subsubpart += mm.mmul(self.A[n][s], self.K[n + 1]) #~3rd line
+                x_subsubpart += A[s].dot(Kp1) #~3rd line
 
-                x_subpart += mm.mmul(x_subsubpart, sqrt_r_inv)
+                try:
+                    x_subpart += sqrt_r_inv.dot_left(x_subsubpart)
+                except AttributeError:
+                    x_subpart += x_subsubpart.dot(sqrt_r_inv)
 
             if not self.h_ext is None:
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n]):                         #Extra term to take care of h_ext..
-                    x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-                x_subpart += mm.mmul(x_subsubpart, sqrt_r)
+                    x_subsubpart += self.h_ext(n, s, t) * A[t] #it may be more effecient to squeeze this into the nn term...
+                x_subpart += mmul(x_subsubpart, sqrt_r)
 
-            x_part += mm.mmul(x_subpart, Vsh[s])
+            x_part += x_subpart.dot(Vsh[s])
 
-        x += mm.mmul(sqrt_l, x_part)
+        x += sqrt_l.dot(x_part)
 
         if n > 0:
             l_nm2 = self.get_l(n - 2)
@@ -401,13 +499,13 @@ class EvoMPS_TDVP_GenFBC:
             for s in xrange(self.q[n]):     #~2nd line
                 x_subsubpart.fill(0)
                 for t in xrange(self.q[n + 1]):
-                    x_subsubpart += mm.mmul(mm.H(self.A[n - 1][t]), l_nm2, self.C[n - 1][t, s])
-                x_part += mm.mmul(x_subsubpart, sqrt_r, Vsh[s])
-            x += mm.mmul(sqrt_l_inv, x_part)
+                    x_subsubpart += H(Am1[t]).dot(l_nm2.dot(Cm1[t, s]))
+                x_part += x_subsubpart.dot(sqrt_r.dot(Vsh[s]))
+            x += sqrt_l_inv.dot(x_part)
 
         return x
 
-    def calc_B(self, n):
+    def calc_B(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
 
         In other words, this returns B[n][x*] (equiv. eqn. (47) of
@@ -421,8 +519,9 @@ class EvoMPS_TDVP_GenFBC:
             Vsh = self.calc_Vsh(n, r_sqrt)
 
             x = self.calc_opt_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
-
-            self.eta[n] = sp.sqrt(mm.adot(x, x))
+            
+            if set_eta:
+                self.eta[n] = sp.sqrt(mm.adot(x, x))
 
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -484,16 +583,16 @@ class EvoMPS_TDVP_GenFBC:
     def update(self):
         self.calc_C()
 
-        self.u_gnd_r.Calc_AA()
-        self.u_gnd_r.Calc_C()
-        self.u_gnd_r.Calc_K()
+        self.u_gnd_r.calc_AA()
+        self.u_gnd_r.calc_C()
+        self.u_gnd_r.calc_K()
         self.K[self.N + 1][:] = self.u_gnd_r.K
 
         self.calc_K()
 
-        self.u_gnd_l.Calc_AA()
-        self.u_gnd_l.Calc_C()
-        K_left, h_left_uni = self.u_gnd_l.Calc_K_left()
+        self.u_gnd_l.calc_AA()
+        self.u_gnd_l.calc_C()
+        K_left, h_left_uni = self.u_gnd_l.calc_K_l()
 
         h = (mm.adot(K_left, self.r[0]) + mm.adot(self.l[0], self.K[0])) / (self.N + 1)
 
@@ -548,6 +647,14 @@ class EvoMPS_TDVP_GenFBC:
         #self.Restore_RCF()
 
         h = self.update()
+        
+        def upd():
+            #self.Restore_RCF()
+            #self.Update()
+            self.calc_l()
+            self.calc_r()
+            self.calc_C()
+            self.calc_K()            
 
         eta_tot = 0
 
@@ -562,6 +669,7 @@ class EvoMPS_TDVP_GenFBC:
         for n in xrange(1, self.N + 2):
             if n <= self.N:
                 B = self.calc_B(n) #k1
+                eta_tot += self.eta[n]
                 B_fin[n] = B
 
             if not B_prev is None:
@@ -569,17 +677,12 @@ class EvoMPS_TDVP_GenFBC:
 
             B_prev = B
 
-        #self.Restore_RCF()
-        #self.Update()
-        self.calc_l()
-        self.calc_r()
-        self.calc_C()
-        self.calc_K()
+        upd()
 
         B_prev = None
         for n in xrange(1, self.N + 2):
             if n <= self.N:
-                B = self.calc_B(n) #k2
+                B = self.calc_B(n, set_eta=False) #k2
 
             if not B_prev is None:
                 self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
@@ -587,17 +690,12 @@ class EvoMPS_TDVP_GenFBC:
 
             B_prev = B
 
-        #self.Restore_RCF()
-        #self.Update()
-        self.calc_l()
-        self.calc_r()
-        self.calc_C()
-        self.calc_K()
+        upd()
 
         B_prev = None
         for n in xrange(1, self.N + 2):
             if n <= self.N:
-                B = self.calc_B(n) #k3
+                B = self.calc_B(n, set_eta=False) #k3
 
             if not B_prev is None:
                 self.A[n - 1] = A0[n - 1] - dtau * B_prev
@@ -605,15 +703,10 @@ class EvoMPS_TDVP_GenFBC:
 
             B_prev = B
 
-        #self.Restore_RCF()
-        #self.Update()
-        self.calc_l()
-        self.calc_r()
-        self.calc_C()
-        self.calc_K()
+        upd()
 
         for n in xrange(1, self.N + 1):
-            B = self.calc_B(n) #k4
+            B = self.calc_B(n, set_eta=False) #k4
             if not B is None:
                 B_fin[n] += B
 
@@ -707,13 +800,13 @@ class EvoMPS_TDVP_GenFBC:
             for s in xrange(self.q[n]):
                 res += mm.mmul(self.A[n][s], x, mm.H(self.A[n][s]))
         else:
+            A = self.A[n]
             for s in xrange(self.q[n]):
+                Ash = mm.H(A[s])
                 for t in xrange(self.q[n]):
                     o_st = o(n, s, t)
-                    if o_st != 0.:
-                        tmp = mm.mmul(self.A[n][t], x, mm.H(self.A[n][s]))
-                        tmp *= o_st
-                        res += tmp
+                    if o_st != 0:
+                        res += o_st * A[t].dot(x.dot(Ash))
         return res
 
     def eps_r_2s(self, n, x, op, A1=None, A2=None, A3=None, A4=None):
@@ -736,18 +829,22 @@ class EvoMPS_TDVP_GenFBC:
             A4 = self.A[m]
 
         res = sp.zeros((A1.shape[1], A1.shape[1]), dtype=self.typ)
+        subres = sp.zeros_like(A1[0])
+        
+        H = mm.H
 
         for u in xrange(self.q[n]):
+            A3u = A3[u]
             for v in xrange(self.q[m]):
-                AAuvH = mm.mmul(A3[u], A4[v])
-                AAuvH = mm.H(AAuvH, out=AAuvH)
-                subres = sp.zeros_like(A1[0])
+                AAuvH = H(A3u.dot(A4[v]))
+                subres.fill(0)
                 for s in xrange(self.q[n]):
+                    A1s = A1[s]
                     for t in xrange(self.q[m]):
                         opval = op(n, u, v, s, t)
                         if opval != 0:
-                            subres += opval * sp.dot(A1[s], A2[t])
-                res += mm.mmul(subres, x, AAuvH)
+                            subres += opval * A1s.dot(A2[t])
+                res += subres.dot(x.dot(AAuvH))
 
         return res
 
@@ -866,13 +963,13 @@ class EvoMPS_TDVP_GenFBC:
 
         self.u_gnd_l.A = self.A[0].copy()
         self.u_gnd_l.l = self.l[0].copy()
-        self.u_gnd_l.Calc_AA()
-        h_left = self.u_gnd_l.Expect_2S(self.u_gnd_l.h_nn) / norm_l
+        self.u_gnd_l.calc_AA()
+        h_left = self.u_gnd_l.expect_2s(self.u_gnd_l.h_nn) / norm_l
 
         self.u_gnd_r.A = self.A[self.N + 1].copy()
         self.u_gnd_r.r = self.r[self.N].copy()
-        self.u_gnd_r.Calc_AA()
-        h_right = self.u_gnd_l.Expect_2S(self.u_gnd_r.h_nn) / norm_r
+        self.u_gnd_r.calc_AA()
+        h_right = self.u_gnd_l.expect_2s(self.u_gnd_r.h_nn) / norm_r
 
         return h, h_left, h_right
 
@@ -883,7 +980,7 @@ class EvoMPS_TDVP_GenFBC:
 
             self.r[n - 1] = mm.eyemat(self.D[n - 1], self.typ)
 
-            if self.sanity_checks: #and not diag_l:
+            if self.sanity_checks:
                 r_n = mm.eyemat(self.D[n], self.typ)
 
                 r_nm1 = self.eps_r(None, n, r_n, None)
@@ -976,7 +1073,7 @@ class EvoMPS_TDVP_GenFBC:
             print "Uni left:"
         self.u_gnd_l.A = self.A[0]
         self.u_gnd_l.l = self.l[0]
-        self.u_gnd_l.Calc_lr() #Ensures largest ev of E=1
+        self.u_gnd_l.calc_lr() #Ensures largest ev of E=1
         self.l[0] = self.u_gnd_l.l #No longer diagonal!
         self.A[0] = self.u_gnd_l.A
         if self.sanity_checks:
@@ -996,7 +1093,7 @@ class EvoMPS_TDVP_GenFBC:
             print "Uni right:"
         self.u_gnd_r.A = self.A[self.N + 1]
         self.u_gnd_r.r = self.r[self.N]
-        self.u_gnd_r.Calc_lr() #Ensures largest ev of E=1
+        self.u_gnd_r.calc_lr() #Ensures largest ev of E=1
         self.r[self.N] = self.u_gnd_r.r
         self.A[self.N + 1] = self.u_gnd_r.A
         if self.sanity_checks:
@@ -1070,6 +1167,10 @@ class EvoMPS_TDVP_GenFBC:
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
+        
+        self.grown_left += m
+        
+        self.gen_h_matrix()
 
     def grow_right(self, m):
         oldA = self.A
@@ -1088,7 +1189,54 @@ class EvoMPS_TDVP_GenFBC:
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
+        
+        self.grown_right += m
+        
+        self.gen_h_matrix()
+    
+    def shrink_left(self, m):
+        oldA = self.A
+        oldl_0 = self.l[0]
+        oldr_N = self.r[self.N]
 
+        self.N = self.N - m
+        self._init_arrays()
+
+        for n in xrange(self.N + 2):
+            self.A[n][:] = oldA[n + m]
+            
+        self.A[0][:] = oldA[0]
+
+        self.l[0] = oldl_0
+        self.r[self.N] = oldr_N
+        self.r[self.N + 1] = self.r[self.N]
+        
+        self.shrunk_left += m
+        
+        self.gen_h_matrix()
+        
+    def shrink_right(self, m):
+        oldA = self.A
+        oldl_0 = self.l[0]
+        oldr_N = self.r[self.N]
+
+        self.N = self.N - m
+        self._init_arrays()
+
+        for n in xrange(self.N + 1):
+            self.A[n][:] = oldA[n]
+            
+        for n in xrange(self.N + 1, self.N + 2):
+            self.A[n][:] = oldA[n + m]
+
+        self.l[0] = oldl_0
+        self.r[self.N] = oldr_N
+        self.r[self.N + 1] = self.r[self.N]
+        
+        self.shrunk_right += m
+        
+        self.gen_h_matrix()
+    
     def get_l(self, n):
         if 0 <= n <= self.N + 1:
             return self.l[n]
@@ -1205,8 +1353,50 @@ class EvoMPS_TDVP_GenFBC:
 
         self.A[n] = newA
 
-    def save_state(self, file_name):
-        sp.save(file_name, self.A)
+    def save_state(self, file_name, userdata=None):
+        tosave = sp.empty((9), dtype=sp.ndarray)
+        
+        tosave[0] = self.A
+        tosave[1] = self.l[0]
+        tosave[2] = self.u_gnd_l.r
+        tosave[3] = self.u_gnd_l.K_left
+        tosave[4] = self.r[self.N]
+        tosave[5] = self.u_gnd_r.l
+        tosave[6] = self.u_gnd_r.K
+        tosave[7] = sp.array([[self.grown_left, self.grown_right], 
+                             [self.shrunk_left, self.shrunk_right]])
+        tosave[8] = userdata
+        
+        sp.save(file_name, tosave)
 
     def load_state(self, file_name):
-        self.A = sp.load(file_name)
+        toload = sp.load(file_name)
+        
+        try:
+            if toload.shape[0] != 9:
+                print "Error loading state: Bad data!"
+                return
+                
+            if toload[0].shape != self.A.shape:
+                print "Cannot load state: Dimension mismatch!"
+                return
+            
+            self.A = toload[0]
+            self.l[0] = toload[1]
+            self.u_gnd_l.r = toload[2]
+            self.u_gnd_l.K_left = toload[3]
+            self.r[self.N] = toload[4]
+            self.r[self.N + 1] = self.r[self.N]
+            self.u_gnd_r.l = toload[5]
+            self.u_gnd_r.K = toload[6]
+            
+            self.grown_left = toload[7][0, 0]
+            self.grown_right = toload[7][0, 1]
+            self.shrunk_left = toload[7][1, 0]
+            self.shrunk_right = toload[7][1, 1]
+            
+            return toload[8]
+            
+        except AttributeError:
+            print "Error loading state: Bad data!"
+            return

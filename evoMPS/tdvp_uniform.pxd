@@ -39,8 +39,8 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public np.complex128_t eta
     cdef public float S_hc
     
-    cdef public object A, l, r, K
-    cdef object AA, C, K_left, tmp
+    cdef public object A, l, r, K, K_left
+    cdef object AA, C, tmp
     cdef object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
     cdef object Vsh, x
     
