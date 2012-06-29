@@ -4,14 +4,6 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
-Issues:
-    - Getting stuck: Especially transverse Ising. More noise -> higher "residual energy"
-      - Tends to involve a problem at the left boundary
-      - Expanding to the left allows the 'excitation' to dissipate
-      - Always on the left! Due to choice of canonical form? But how?
-        - Is the Restore_RCF GT pushing info to the left after all?
-        - Or is this a result of the right gauge-fixing choice?
-
 """
 import scipy as sp
 import scipy.linalg as la
@@ -22,7 +14,7 @@ import tdvp_uniform as uni
 def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
-       en_save_as=None, en_every=5,
+       en_save_as=None,
        save_every=10, save_as=None, counter_start=0,
        csv_file=None,
        tol=0):
@@ -89,6 +81,7 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
                                   (h - h_prev).real)))
         print line
         print etas.real
+        #print sfbc.h_expect.real
         if not csv_file is None:
             csvf.write(line + "\n")
             csvf.flush()
@@ -111,9 +104,8 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
                     opf.write("\t".join(map(str, row)) + "\n")
                     opf.flush()
                     
-        if (not en_save_as is None) and ((counter_start + i) % en_every == 0):
-            op_range = range(-10, sfbc.N + 10)
-            row = map(lambda n: sfbc.expect_2s(sfbc.h_nn, n).real, op_range)
+        if (not en_save_as is None):
+            row = sfbc.h_expect.real.tolist()
             enf.write("\t".join(map(str, row)) + "\n")
             enf.flush()
             
@@ -316,6 +308,11 @@ class EvoMPS_TDVP_GenFBC:
                 for u in xrange(self.q[n]):
                     for v in xrange(self.q[n + 1]):
                         AA[u, v] = dot(An[u], Anp1[v])
+                        
+                if n == 0: #FIXME: Temp. hack
+                    self.AA0 = AA
+                elif n == 1:
+                    self.AA1 = AA
                 
                 res = sp.tensordot(AA, self.h_nn_mat[n], ((0, 1), (2, 3)))
                 res = sp.rollaxis(res, 3)
@@ -346,6 +343,8 @@ class EvoMPS_TDVP_GenFBC:
             n_high = self.N + 1
             
         H = mm.H
+        
+        self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
 
         for n in reversed(xrange(n_low, n_high)):
             self.K[n].fill(0)
@@ -356,13 +355,19 @@ class EvoMPS_TDVP_GenFBC:
             rp1 = self.r[n + 1]
             A = self.A[n]
             Ap1 = self.A[n + 1]
+            
+            Hr = sp.zeros_like(K)
 
             for s in xrange(self.q[n]):
                 Ash = H(A[s])
                 for t in xrange(self.q[n+1]):
-                    K += C[s, t].dot(rp1.dot(H(Ap1[t]).dot(Ash)))
+                    Hr += C[s, t].dot(rp1.dot(H(Ap1[t]).dot(Ash)))
 
                 K += A[s].dot(Kp1.dot(Ash))
+                
+            self.h_expect[n] = mm.adot(self.get_l(n), Hr)
+                
+            K += Hr
 
     def calc_K_luni(self, C, h_l):
         K_np1 = self.K[0]
@@ -531,46 +536,42 @@ class EvoMPS_TDVP_GenFBC:
         except AttributeError:
             l0_i = mm.invmh(self.l[0])
         
-        KLh = mm.H(self.u_gnd_l.K_left - self.l[0] * mm.adot(self.u_gnd_l.K_left, self.r[0]))
-        K2 = self.K[2] - self.r[1] * mm.adot(self.l[1], self.K[2])
+        A0 = self.A[0]
+        A1 = self.A[1]
+        A2 = self.A[2]
+        r1 = self.r[1]
+        r2 = self.r[2]
+        l0 = self.l[0]
         
-        h_1_2 = self.expect_2s(self.h_nn, 1)
-        C1h = sp.empty_like(self.C[1])
-        for s in xrange(self.q[1]):
-            for t in xrange(self.q[2]):
-                C1h[s,t] = self.A[1][s].dot(self.A[2][t])
-        C1h *= h_1_2
-        C1 = self.C[1] - C1h
-
-        h_0_1 = self.expect_2s(self.h_nn, 0)
-        C0h = sp.empty_like(self.C[0])
-        for s in xrange(self.q[0]):
-            for t in xrange(self.q[1]):
-                C0h[s,t] = self.A[0][s].dot(self.A[1][t])
-        C0h *= h_0_1
-        C0 = self.C[0] - C0h
+        KLh = mm.H(self.u_gnd_l.K_left - l0 * mm.adot(self.u_gnd_l.K_left, self.r[0]))
+        K2 = self.K[2] - r1 * mm.adot(self.l[1], self.K[2])
+        
+        C1 = self.C[1] - self.h_expect[1] * self.AA1
+        C0 = self.C[0] - self.h_expect[0] * self.AA0
         
         for s in xrange(self.q[1]):
             try:
-                B1[s] = self.A[1][s].dot(r1_i.dot_left(K2))
+                B1[s] = A1[s].dot(r1_i.dot_left(K2))
             except AttributeError:
-                B1[s] = self.A[1][s].dot(K2.dot(r1_i))
-            
-            B1[s] += l0_i.dot(KLh.dot(self.A[1][s]))
+                B1[s] = A1[s].dot(K2.dot(r1_i))
             
             for t in xrange(self.q[2]):
                 try:
-                    B1[s] += C1[s, t].dot(self.r[2].dot(r1_i.dot_left(mm.H(self.A[2][t]))))
+                    B1[s] += C1[s, t].dot(r2.dot(r1_i.dot_left(mm.H(A2[t]))))
                 except AttributeError:
-                    B1[s] += C1[s, t].dot(self.r[2].dot(mm.H(self.A[2][t]).dot(r1_i)))                    
+                    B1[s] += C1[s, t].dot(r2.dot(mm.H(A2[t]).dot(r1_i)))                    
                 
+            B1sbit = KLh.dot(A1[s])
+                            
             for t in xrange(self.q[0]):
-                B1[s] += l0_i.dot(mm.H(self.A[0][t]).dot(self.l[0].dot(C0[t,s])))
+                B1sbit += mm.H(A0[t]).dot(l0.dot(C0[t,s]))
+                
+            B1[s] += l0_i.dot(B1sbit)
            
         rb = sp.zeros_like(self.r[0])
         for s in xrange(self.q[1]):
-            rb += B1[s].dot(self.r[1].dot(mm.H(B1[s])))
-        eta = sp.sqrt(mm.adot(self.l[0], rb))
+            rb += B1[s].dot(r1.dot(mm.H(B1[s])))
+        eta = sp.sqrt(mm.adot(l0, rb))
                 
         return B1, eta
 
