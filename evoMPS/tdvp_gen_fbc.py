@@ -22,6 +22,7 @@ import tdvp_uniform as uni
 def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
+       en_save_as=None, en_every=5,
        save_every=10, save_as=None, counter_start=0,
        csv_file=None,
        tol=0):
@@ -36,6 +37,9 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
         data = prev_op_data
     else:
         data = []
+        
+    if (not en_save_as is None):
+        enf = open(en_save_as, "a")
         
     #TODO: Load existing data in the opf file!
         
@@ -106,13 +110,22 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
                 else:
                     opf.write("\t".join(map(str, row)) + "\n")
                     opf.flush()
-                
+                    
+        if (not en_save_as is None) and ((counter_start + i) % en_every == 0):
+            op_range = range(-10, sfbc.N + 10)
+            row = map(lambda n: sfbc.expect_2s(sfbc.h_nn, n).real, op_range)
+            enf.write("\t".join(map(str, row)) + "\n")
+            enf.flush()
+            
         if eta.real < tol:
             print "Tolerance reached!"
             break
             
     if not op_save_as is None:
         opf.close()
+        
+    if (not en_save_as is None):
+        enf.close()
         
     if not csv_file is None:
         csvf.close()
