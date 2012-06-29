@@ -504,6 +504,62 @@ class EvoMPS_TDVP_GenFBC:
             x += sqrt_l_inv.dot(x_part)
 
         return x
+        
+    def calc_B1(self):
+        B1 = sp.empty_like(self.A[1])
+        
+        try:
+            r1_i = self.r[1].inv()
+        except AttributeError:
+            r1_i = mm.invmh(self.r[1])
+            
+        try:
+            l0_i = self.l[0].inv()
+        except AttributeError:
+            l0_i = mm.invmh(self.l[0])
+        
+        KLh = mm.H(self.u_gnd_l.K_left - self.l[0] * mm.adot(self.u_gnd_l.K_left, self.r[0]))
+        K2 = self.K[2] - self.r[1] * mm.adot(self.l[1], self.K[2])
+        
+        h_1_2 = self.expect_2s(self.h_nn, 1)
+        C1h = sp.empty_like(self.C[1])
+        for s in xrange(self.q[1]):
+            for t in xrange(self.q[2]):
+                C1h[s,t] = self.A[1][s].dot(self.A[2][t])
+        C1h *= h_1_2
+        C1 = self.C[1] - C1h
+
+        h_0_1 = self.expect_2s(self.h_nn, 0)
+        C0h = sp.empty_like(self.C[0])
+        for s in xrange(self.q[0]):
+            for t in xrange(self.q[1]):
+                C0h[s,t] = self.A[0][s].dot(self.A[1][t])
+        C0h *= h_0_1
+        C0 = self.C[0] - C0h
+        
+        for s in xrange(self.q[1]):
+            try:
+                B1[s] = self.A[1][s].dot(r1_i.dot_left(K2))
+            except AttributeError:
+                B1[s] = self.A[1][s].dot(K2.dot(r1_i))
+            
+            B1[s] += l0_i.dot(KLh.dot(self.A[1][s]))
+            
+            for t in xrange(self.q[2]):
+                try:
+                    B1[s] += C1[s, t].dot(self.r[2].dot(r1_i.dot_left(mm.H(self.A[2][t]))))
+                except AttributeError:
+                    B1[s] += C1[s, t].dot(self.r[2].dot(mm.H(self.A[2][t]).dot(r1_i)))                    
+                
+            for t in xrange(self.q[0]):
+                B1[s] += l0_i.dot(mm.H(self.A[0][t]).dot(self.l[0].dot(C0[t,s])))
+           
+        rb = sp.zeros_like(self.r[0])
+        for s in xrange(self.q[1]):
+            rb += B1[s].dot(self.r[1].dot(mm.H(B1[s])))
+        eta = sp.sqrt(mm.adot(self.l[0], rb))
+                
+        return B1, eta
 
     def calc_B(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
@@ -513,7 +569,12 @@ class EvoMPS_TDVP_GenFBC:
         with x* the parameter matrices satisfying the Euler-Lagrange equations
         as closely as possible.
         """
-        if self.q[n] * self.D[n] - self.D[n - 1] > 0:
+        if n == 1:
+            B1, eta1 = self.calc_B1()
+            if set_eta:
+                self.eta[1] = eta1
+            return B1
+        elif self.q[n] * self.D[n] - self.D[n - 1] > 0:
             l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
 
             Vsh = self.calc_Vsh(n, r_sqrt)
