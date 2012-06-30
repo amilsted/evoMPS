@@ -30,55 +30,76 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
     else:
         data = []
         
+    endata = []
     if (not en_save_as is None):
-        enf = open(en_save_as, "a")
-        
-    #TODO: Load existing data in the opf file!
+        try:
+            endata = sp.genfromtxt(en_save_as).tolist()
+        except:
+            print "No previous  en-data, or error loading!"
+            pass
+        enf = open(en_save_as, "a")        
         
     if not op_save_as is None:
+        try:
+            data = sp.genfromtxt(op_save_as).tolist()
+        except:
+            print "No previous  op-data, or error loading!"
+            pass
         opf = open(op_save_as, "a")
         
     if not csv_file is None:
         csvf = open(csv_file, "a")
 
-    for i in xrange(steps):
-        if RK4:
-            h, eta = sfbc.take_step_RK4(tau)
-        else:
-            h, eta = sfbc.take_step(tau)
-
-        etas = sfbc.eta[1:].copy()
-        
-        #Basic dynamic expansion:
+    for i in xrange(counter_start, steps):
         rewrite_opf = False
-        if autogrow and sfbc.N < autogrow_max_N:
-            if etas[0] > sfbc.eta_uni * 10:
-                rewrite_opf = True
-                sfbc.grow_left(autogrow_amount)
-                for row in data:
-                    for j in range(autogrow_amount):
-                        row.insert(0, 0)
+        if i > counter_start:
+            if RK4:
+                eta = sfbc.take_step_RK4(tau)
+            else:
+                eta = sfbc.take_step(tau)
 
-            if etas[-1] > sfbc.eta_uni * 10:
-                rewrite_opf = True
-                sfbc.grow_right(autogrow_amount)
-                for row in data:
-                    for j in range(autogrow_amount):
-                        row.append(0)
+            etas = sfbc.eta[1:].copy()
+        
+            #Basic dynamic expansion:
+            if autogrow and sfbc.N < autogrow_max_N:
+                if etas[0] > sfbc.eta_uni * 10:
+                    rewrite_opf = True
+                    sfbc.grow_left(autogrow_amount)
+                    for row in data:
+                        for j in range(autogrow_amount):
+                            row.insert(0, 0)
+                    for row in endata:
+                        for j in range(autogrow_amount):
+                            row.insert(0, 0)
+    
+                if etas[-1] > sfbc.eta_uni * 10:
+                    rewrite_opf = True
+                    sfbc.grow_right(autogrow_amount)
+                    for row in data:
+                        for j in range(autogrow_amount):
+                            row.append(0)
+                    for row in endata:
+                        for j in range(autogrow_amount):
+                            row.append(0)
 
-        sfbc.restore_RCF(dbg=dbg)
-        if force_calc_lr:
-            sfbc.calc_l()
-            sfbc.calc_r()
+            sfbc.restore_RCF(dbg=dbg)
+            if force_calc_lr:
+                sfbc.calc_l()
+                sfbc.calc_r()
+        else:            
+            eta = 0
+            etas = sp.zeros(1)
             
-        if not save_as is None and (((counter_start + i) % save_every == 0)
+        h = sfbc.update() #now we are measuring the stepped state
+            
+        if not save_as is None and ((i % save_every == 0)
                                     or i == steps - 1):
-            sfbc.save_state(save_as + "_%u" % (counter_start + i))
+            sfbc.save_state(save_as + "_%u" % i)
 
         norm_uni = mm.adot(sfbc.u_gnd_r.l, sfbc.u_gnd_r.r).real
         h_uni = sfbc.u_gnd_r.h.real / norm_uni
-        line = "\t".join(map(str, (counter_start + i, eta.real, h.real - h_uni, 
-                                  (h - h_prev).real)))
+        line = "\t".join(map(str, (i, eta.real, h.real - h_uni, 
+                                  (h - h_prev).real, sfbc.grown_left, sfbc.grown_right)))
         print line
         print etas.real
         #print sfbc.h_expect.real
@@ -89,7 +110,7 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
 
         h_prev = h
 
-        if (not op is None) and ((counter_start + i) % op_every == 0):
+        if (not op is None) and (i % op_every == 0):
             op_range = range(-10, sfbc.N + 10)
             row = map(lambda n: sfbc.expect_1s(op, n).real, op_range)
             data.append(row)
@@ -106,10 +127,18 @@ def go(sfbc, tau, steps, dbg=False, force_calc_lr=False, RK4=False,
                     
         if (not en_save_as is None):
             row = sfbc.h_expect.real.tolist()
-            enf.write("\t".join(map(str, row)) + "\n")
-            enf.flush()
+            endata.append(row)
+            if rewrite_opf:
+                enf.close()
+                enf = open(en_save_as, "w")
+                for row in endata:
+                    enf.write("\t".join(map(str, row)) + "\n")
+                enf.flush()
+            else:
+                enf.write("\t".join(map(str, row)) + "\n")
+                enf.flush()
             
-        if eta.real < tol:
+        if i > counter_start and eta.real < tol:
             print "Tolerance reached!"
             break
             
@@ -691,7 +720,6 @@ class EvoMPS_TDVP_GenFBC:
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
-        h = self.update()
 
         eta_tot = 0
 
@@ -707,7 +735,7 @@ class EvoMPS_TDVP_GenFBC:
 
             B_prev = B
 
-        return h, eta_tot
+        return eta_tot
 
 
     def take_step_RK4(self, dtau):
@@ -720,8 +748,6 @@ class EvoMPS_TDVP_GenFBC:
         equation.
         """
         #self.Restore_RCF()
-
-        h = self.update()
         
         def upd():
             #self.Restore_RCF()
@@ -789,7 +815,7 @@ class EvoMPS_TDVP_GenFBC:
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
 
-        return h, eta_tot
+        return eta_tot
 
     def add_noise(self, fac, n_i=-1, n_f=-1):
         """Adds some random noise of a given order to the state matrices A
