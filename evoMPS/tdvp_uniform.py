@@ -4,18 +4,6 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
-TODO:
-    - Think about whether it is better to move back to RCF before
-      applying B, since B does *right* gauge fixing. Then we would
-      switch back to symm. form before calculating the next B.
-       0. Restore RCF if needed
-       1. RCF to SCF (with 4th root of l etc.)
-       2. Calc B
-       3. SCF to RCF (can do this quickly?)
-       4. Apply B (take step)
-    - Also, find out what happens in theory when this is *not* done...
-      Should cause the gauge choice to drift... right?
-
 """
 import numpy as np
 import scipy as sp

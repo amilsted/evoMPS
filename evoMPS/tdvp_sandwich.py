@@ -11,13 +11,15 @@ import nullspace as ns
 import matmul as mm
 import tdvp_uniform as uni
 
-def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
+def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
        en_save_as=None,
+       append_saved=True,
        save_every=10, save_as=None, counter_start=0,
        csv_file=None,
-       tol=0):
+       tol=0,
+       print_eta_n=False):
     """A simple integration loop for testing"""
     h_prev = 0
 
@@ -28,39 +30,56 @@ def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
         
     endata = []
     if (not en_save_as is None):
-        try:
-            endata = sp.genfromtxt(en_save_as).tolist()
-        except:
-            print "No previous  en-data, or error loading!"
-            pass
-        enf = open(en_save_as, "a")        
+        if append_saved:
+            try:
+                endata = sp.genfromtxt(en_save_as).tolist()
+            except:
+                print "No previous  en-data, or error loading!"
+                pass
+            enf = open(en_save_as, "a")
+        else:
+            enf = open(en_save_as, "w")
         
     if not op_save_as is None:
-        try:
-            data = sp.genfromtxt(op_save_as).tolist()
-        except:
-            print "No previous  op-data, or error loading!"
-            pass
-        opf = open(op_save_as, "a")
+        if append_saved:
+            try:
+                data = sp.genfromtxt(op_save_as).tolist()
+            except:
+                print "No previous  op-data, or error loading!"
+                pass
+            opf = open(op_save_as, "a")
+        else:
+            opf = open(op_save_as, "w")
         
     if not csv_file is None:
-        csvf = open(csv_file, "a")
+        if append_saved:
+            csvf = open(csv_file, "a")
+        else:
+            csvf = open(csv_file, "w")
+        
+    header = "\t".join(["Step", "eta", "E_nonuniform", "E - E_prev", "grown_left", 
+                        "grown_right"])
+    print header
+    print
+    if not csv_file is None:
+        csvf.write(header + "\n")
 
     for i in xrange(counter_start, steps):
         rewrite_opf = False
         if i > counter_start:
             if RK4:
-                eta = sfbc.take_step_RK4(tau)
+                eta = sim.take_step_RK4(tau)
             else:
-                eta = sfbc.take_step(tau)
+                eta = sim.take_step(tau)
 
-            etas = sfbc.eta[1:].copy()
+            etas = sim.eta[1:].copy()
         
             #Basic dynamic expansion:
-            if autogrow and sfbc.N < autogrow_max_N:
-                if etas[0] > sfbc.eta_uni * 10:
+            if autogrow and sim.N < autogrow_max_N:
+                if etas[0] > sim.eta_uni * 10:
                     rewrite_opf = True
-                    sfbc.grow_left(autogrow_amount)
+                    print "Growing left by: %u" % autogrow_amount
+                    sim.grow_left(autogrow_amount)
                     for row in data:
                         for j in range(autogrow_amount):
                             row.insert(0, 0)
@@ -68,9 +87,10 @@ def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
                         for j in range(autogrow_amount):
                             row.insert(0, 0)
     
-                if etas[-1] > sfbc.eta_uni * 10:
+                if etas[-1] > sim.eta_uni * 10:
                     rewrite_opf = True
-                    sfbc.grow_right(autogrow_amount)
+                    print "Growing right by: %u" % autogrow_amount
+                    sim.grow_right(autogrow_amount)
                     for row in data:
                         for j in range(autogrow_amount):
                             row.append(0)
@@ -82,29 +102,31 @@ def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
             eta = 0
             etas = sp.zeros(1)
             
-        h = sfbc.update() #now we are measuring the stepped state
+        h = sim.update() #now we are measuring the stepped state
             
         if not save_as is None and ((i % save_every == 0)
                                     or i == steps - 1):
-            sfbc.save_state(save_as + "_%u" % i)
+            sim.save_state(save_as + "_%u" % i)
 
-        norm_uni = mm.adot(sfbc.u_gnd_r.l, sfbc.u_gnd_r.r).real
-        h_uni = sfbc.u_gnd_r.h.real / norm_uni
-        line = "\t".join(map(str, (i, eta.real, h.real, h_uni, 
-                                  (h - h_prev).real, sfbc.grown_left, sfbc.grown_right)))
+        if i % 20 == 0:
+            print header
+            
+        line = "\t".join(map(str, (i, eta.real, h.real, (h - h_prev).real, 
+                                   sim.grown_left, sim.grown_right)))
         print line
-        print etas.real
-        #print sfbc.h_expect.real
+        if print_eta_n:
+            print "eta_n:"
+            print etas.real
+        
         if not csv_file is None:
             csvf.write(line + "\n")
             csvf.flush()
-            #csvf.write(str(etas.real) + "\n")
 
         h_prev = h
 
         if (not op is None) and (i % op_every == 0):
-            op_range = range(-10, sfbc.N + 10)
-            row = map(lambda n: sfbc.expect_1s(op, n).real, op_range)
+            op_range = range(-10, sim.N + 10)
+            row = map(lambda n: sim.expect_1s(op, n).real, op_range)
             data.append(row)
             if not op_save_as is None:
                 if rewrite_opf:
@@ -118,7 +140,7 @@ def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
                     opf.flush()
                     
         if (not en_save_as is None):
-            row = sfbc.h_expect.real.tolist()
+            row = sim.h_expect.real.tolist()
             endata.append(row)
             if rewrite_opf:
                 enf.close()
@@ -143,9 +165,9 @@ def go(sfbc, tau, steps, force_calc_lr=False, RK4=False,
     if not csv_file is None:
         csvf.close()
 
-    return data
+    return data, endata
 
-class EvoMPS_TDVP_GenFBC:
+class EvoMPS_TDVP_Sandwich:
     odr = 'C'
     typ = sp.complex128
 
@@ -195,14 +217,10 @@ class EvoMPS_TDVP_GenFBC:
         if (self.D.ndim != 1) or (self.q.ndim != 1):
             raise NameError('D and q must be 1-dimensional!')
 
-
         #Don't do anything pointless
         self.D[0] = self.u_gnd_l.D
         self.D[self.N + 1] = self.u_gnd_l.D
 
-        #self.TrimD()
-
-        print self.D
 
         self.l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
@@ -278,6 +296,9 @@ class EvoMPS_TDVP_GenFBC:
         return self.u_gnd_l.h_nn(s, t, u, v)
         
     def gen_h_matrix(self):
+        """Generates a matrix form for h_nn, which can speed up parts of the
+        algorithm by avoiding excess loops and python calls.
+        """
         self.h_nn_mat = sp.zeros((self.N + 1, self.q.max(), self.q.max(), 
                                   self.q.max(), self.q.max()), dtype=sp.complex128)
         for n in xrange(self.N + 1):
@@ -1406,13 +1427,18 @@ class EvoMPS_TDVP_GenFBC:
         
         sp.save(file_name, tosave)
 
-    def load_state(self, file_name):
+    def load_state(self, file_name, autogrow=False):
         toload = sp.load(file_name)
         
         try:
             if toload.shape[0] != 9:
                 print "Error loading state: Bad data!"
                 return
+                
+            if autogrow and toload[0].shape[0] != self.A.shape[0]:
+                newN = toload[0].shape[0] - 3
+                print "Changing N to: %u" % newN
+                self.grow_left(newN - self.N)
                 
             if toload[0].shape != self.A.shape:
                 print "Cannot load state: Dimension mismatch!"

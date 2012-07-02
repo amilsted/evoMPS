@@ -103,7 +103,13 @@ else:
     print "Only S = 1 or S = 1/2 are supported!"
     exit()
 
-D = 32
+def Splus(s, t):
+    return x_ss(s, t) + 1.j * y_ss(s, t)
+
+def Sminus(s, t):
+    return x_ss(s, t) - 1.j * y_ss(s, t)
+
+D = 16
 
 
 s = tdvp.EvoMPS_TDVP_Uniform(D, q)
@@ -131,14 +137,11 @@ realstep = 0.01
 
 """
 Now set the tolerance for the imaginary time evolution.
-When the change in the energy falls below this level, the
+When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
 tol_im = 1E-10
-total_steps = 100
-
-s.itr_atol = 1E-12
-s.itr_rtol = 1E-11
+total_steps = 1000
 
 """
 The following handles loading the ground state from a file.
@@ -202,6 +205,9 @@ if __name__ == "__main__":
     print
     
     s.symm_gauge = True
+    
+    s.itr_atol = 1E-12
+    s.itr_rtol = 1E-11
     
     for i in xrange(total_steps):
         T[i] = t
@@ -269,7 +275,7 @@ if __name__ == "__main__":
         
         row.append(str(1.j * sp.conj(step)))
         
-        if i > 2 and max(1E-14, abs(dE * Jx)) < s.itr_rtol * 10:
+        if i > 2 and max(1E-13, abs(dE * Jx)) < s.itr_rtol * 10:
             s.itr_atol = abs(dE * Jx) / 50
             s.itr_rtol = abs(dE * Jx) / 50    
         

@@ -14,10 +14,12 @@ many-particle quantum systems using matrix product states
 
 It can be used to efficiently find ground states and simulate dynamics.
 
-The evoMPS implementation assumes a nearest-neighbour Hamiltonian and either
+The evoMPS implementation assumes a nearest-neighbour Hamiltonian one of the 
+following situations:
 
-* a finite lattice with open boundary conditions or
-* spatially uniform states on an infinite lattice.
+* states on a finite chain with open boundary conditions
+* spatially uniform states on an infinite chain
+* otherwise uniform states with a localized nonuniformity on an infinite chain
 
 It is based on algorithms published by: 
 
@@ -29,7 +31,13 @@ It is based on algorithms published by:
 * Frank Verstraete
 
 and available on arxiv.org under arXiv:1103.0936v2 [cond-mat.str-el]
-<http://arxiv.org/abs/1103.0936v2>.
+<http://arxiv.org/abs/1103.0936v2>. The algorithm for handling localized
+nonuniformities on infinite chains was developed by:
+
+* Ashley Milsted
+* Tobias J. Osborne
+* Frank Verstraete
+* Jutho Haegeman
 
 For details, see doc/implementation_details.pdf and the source code itself,
 which I endeavour to annotate thoroughly.
