@@ -56,12 +56,36 @@ Usage
 The evoMPS algorithms are presented as python classes to be used in a script.
 Some example scripts can be found in the "examples" directory.
 
-Essentially, the user defines a site Hilbert space dimension
-and a nearest-neighbour Hamiltonian (as a python function
-or "callable") in terms of local Hilbert space matrix elements,
-then carries out a series of small time steps (numerically
-integrating the "Schrödinger equation" for the MPS parameters), calculating
-expectation values or other quantities after each step as desired.
+Essentially, the user defines a spin chain Hilbert space
+and a nearest-neighbour Hamiltonian and then carries out a series of small 
+time steps (numerically integrating the "Schrödinger equation" for the MPS parameters)::
+
+    sim = EvoMPS_TDVP_Uniform(bond_dim, local_hilb_dim)
+    
+    sim.h_nn = my_hamiltonian
+    
+    for i in range(max_steps).
+        sim.update()
+        
+        my_exp_val = sim.expect_1s(my_op)
+        
+        sim.take_step(dtau)
+
+Operators, including the Hamiltonian, are defined as python callables (functions)
+like this::
+
+    def pauli_z(s, t):
+        if s == t:
+            return (-1.0)**s
+        else:
+            return 0
+
+The content of the function is up to the user. Using a Numpy ndarray is also easy::
+
+    def pauli_z(s, t):
+        return pauli_z_matrix[s, t]
+
+Calculating expectation values or other quantities can be done after each step as desired.
 
 Switching between imaginary time evolution (for finding the ground state)
 and real time evolution is as easy as multiplying the time step size by a factor of i!
