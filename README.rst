@@ -8,7 +8,7 @@ Quantum many-particle dynamics in 1D with matrix product states
 Introduction
 ------------
 
-evoMPS simulates time-evolution (real or imaginary time) of one-dimensional 
+evoMPS simulates time-evolution (real or imaginary) of one-dimensional 
 many-particle quantum systems using matrix product states
 (MPS) and the time dependent variational principle (TDVP).
 

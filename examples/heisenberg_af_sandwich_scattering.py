@@ -106,5 +106,5 @@ if __name__ == "__main__":
     op = sp.array(op)
     
     plt.imshow(op, origin="lower", interpolation="none", 
-               aspect="auto", extent=(-10, sim.N + 9, 0, op.shape[0]- 1))
+               aspect="auto", extent=(-10, sim.N + 9, 0, op.shape[0] - 1))
     plt.show()

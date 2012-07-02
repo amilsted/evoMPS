@@ -11,9 +11,9 @@ HOW TO USE:
     1. Run heisenberg_af_uniform to find the uniform ground state.
     2. Run this script to solve the impurity problem.
 
-NOTE: Depending on the bond dimension (set in heisenberg_af_uniform.py),
+NOTE: Depending on the bond dimension D (set in heisenberg_af_uniform.py),
       N may need to be adjusted in order to accurately represent the ground
-      state.
+      state. D=64 leads to fairly rapid convergence with N=101.
 """
 
 import evoMPS.tdvp_sandwich as sw
@@ -23,17 +23,17 @@ import matplotlib.pyplot as plt
 """
 The number of sites in the nonuniform region:
 """
-N = 161
+N = 101
+
+"""
+The impurity position:
+"""
+imp_pos = 51
 
 """
 The "impurity factor" lambda.
 """
 lam = -2
-
-"""
-The impurity position:
-"""
-imp_pos = 81
 
 """
 State tolerance target:

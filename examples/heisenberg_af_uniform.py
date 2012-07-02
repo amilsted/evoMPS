@@ -113,7 +113,7 @@ def Sminus(s, t):
 """
 The bond dimension:
 """
-D = 16
+D = 64
 
 """
 Initialize the simulation object:
