@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 """
 The number of sites in the nonuniform region:
 """
-N = 101
+N = 161
 
 """
 The "impurity factor" lambda.
@@ -33,12 +33,12 @@ lam = -2
 """
 The impurity position:
 """
-imp_pos = 51
+imp_pos = 81
 
 """
 State tolerance target:
 """
-tol = 1E-10
+tol = 1E-6
 
 """
 Maximum steps:

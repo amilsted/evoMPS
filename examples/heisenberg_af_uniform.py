@@ -109,12 +109,16 @@ def Splus(s, t):
 def Sminus(s, t):
     return x_ss(s, t) - 1.j * y_ss(s, t)
 
+
+"""
+The bond dimension:
+"""
 D = 16
 
-
+"""
+Initialize the simulation object:
+"""
 s = tdvp.EvoMPS_TDVP_Uniform(D, q)
-
-
 s.h_nn = h_nn
 
 """

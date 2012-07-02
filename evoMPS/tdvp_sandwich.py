@@ -15,6 +15,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
        en_save_as=None,
+       entropy_save_as=None,
        append_saved=True,
        save_every=10, save_as=None, counter_start=0,
        csv_file=None,
@@ -39,6 +40,18 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             enf = open(en_save_as, "a")
         else:
             enf = open(en_save_as, "w")
+            
+    Sdata = []
+    if (not entropy_save_as is None):
+        if append_saved:
+            try:
+                Sdata = sp.genfromtxt(entropy_save_as).tolist()
+            except:
+                print "No previous  entropy-data, or error loading!"
+                pass
+            Sf = open(entropy_save_as, "a")
+        else:
+            Sf = open(entropy_save_as, "w")
         
     if not op_save_as is None:
         if append_saved:
@@ -80,22 +93,24 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                     rewrite_opf = True
                     print "Growing left by: %u" % autogrow_amount
                     sim.grow_left(autogrow_amount)
-                    for row in data:
-                        for j in range(autogrow_amount):
+                    for j in range(autogrow_amount):
+                        for row in data:                        
                             row.insert(0, 0)
-                    for row in endata:
-                        for j in range(autogrow_amount):
+                        for row in endata:
+                            row.insert(0, 0)
+                        for row in Sdata:
                             row.insert(0, 0)
     
                 if etas[-1] > sim.eta_uni * 10:
                     rewrite_opf = True
                     print "Growing right by: %u" % autogrow_amount
                     sim.grow_right(autogrow_amount)
-                    for row in data:
-                        for j in range(autogrow_amount):
+                    for j in range(autogrow_amount):
+                        for row in data:
                             row.append(0)
-                    for row in endata:
-                        for j in range(autogrow_amount):
+                        for row in endata:
+                            row.append(0)
+                        for row in Sdata:
                             row.append(0)
 
         else:            
@@ -108,7 +123,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                                     or i == steps - 1):
             sim.save_state(save_as + "_%u" % i)
 
-        if i % 20 == 0:
+        if i % 20 == 19:
             print header
             
         line = "\t".join(map(str, (i, eta.real, h.real, (h - h_prev).real, 
@@ -151,6 +166,19 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             else:
                 enf.write("\t".join(map(str, row)) + "\n")
                 enf.flush()
+                
+        if (not entropy_save_as is None):
+            row = sim.S_hc.real.tolist()
+            Sdata.append(row)
+            if rewrite_opf:
+                Sf.close()
+                Sf = open(entropy_save_as, "w")
+                for row in Sdata:
+                    Sf.write("\t".join(map(str, row)) + "\n")
+                Sf.flush()
+            else:
+                Sf.write("\t".join(map(str, row)) + "\n")
+                Sf.flush()
             
         if i > counter_start and eta.real < tol:
             print "Tolerance reached!"
@@ -162,10 +190,13 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     if (not en_save_as is None):
         enf.close()
         
+    if (not entropy_save_as is None):
+        Sf.close()
+        
     if not csv_file is None:
         csvf.close()
 
-    return data, endata
+    return data, endata, Sdata
 
 class EvoMPS_TDVP_Sandwich:
     odr = 'C'
@@ -318,6 +349,9 @@ class EvoMPS_TDVP_Sandwich:
         Makes use only of the nearest-neighbour hamiltonian, and of the A's.
 
         C[n] depends on A[n] and A[n + 1].
+        
+        This calculation can be significantly faster if a matrix form for h_nn
+        is available. See gen_h_matrix().
 
         """
         if self.h_nn is None:
@@ -1104,6 +1138,10 @@ class EvoMPS_TDVP_Sandwich:
         #self.r[self.N] = mm.mmul(G_nm1, self.r[self.N], mm.H(G_nm1))
         #self.r[self.N + 1] = self.r[self.N]
         self.u_gnd_r.l[:] = mm.mmul(mm.H(G_nm1_i), self.u_gnd_r.l, G_nm1_i)
+        
+        self.S_hc = sp.zeros((self.N), dtype=sp.complex128)
+        for n in xrange(1, self.N + 1):
+            self.S_hc[n-1] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
 
     def restore_RCF(self, dbg=False):
         if dbg:

@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 """
 Steps to simulate:
 """
-steps = 201
+steps = 300
 
 """
 Step size:
@@ -94,14 +94,17 @@ if __name__ == "__main__":
     if load_step > 0:
         sim.load_state("data/" + base_name + "_%u.npy" % load_step)
     
-    opdata, endata = sw.go(sim, dt*1.j, steps, RK4=True, 
-                           autogrow=not use_damping, autogrow_amount=4,
-                           op=Sz, op_save_as=base_name + "_Sz.txt", op_every=1,
-                           en_save_as=base_name + "_h.txt",
-                           append_saved=False,
-                           #save_as="data/" + base_name, save_every=10,
-                           counter_start=load_step,
-                           csv_file=base_name + ".csv")
-           
-    plt.imshow(sp.array(opdata))
+    op, en, S = sw.go(sim, dt*1.j, steps, RK4=True, 
+                      autogrow=not use_damping, autogrow_amount=4,
+                      op=Sz, op_save_as=base_name + "_Sz.txt", op_every=1,
+                      en_save_as=base_name + "_h.txt",
+                      append_saved=False,
+                      #save_as="data/" + base_name, save_every=10,
+                      counter_start=load_step,
+                      csv_file=base_name + ".csv")
+                           
+    op = sp.array(op)
+    
+    plt.imshow(op, origin="lower", interpolation="none", 
+               aspect="auto", extent=(-10, sim.N + 9, 0, op.shape[0]- 1))
     plt.show()

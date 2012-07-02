@@ -115,7 +115,7 @@ realstep = 0.01
 
 """
 Now set the tolerance for the imaginary time evolution.
-When the change in the energy falls below this level, the
+When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
 tol_im = 1E-10
