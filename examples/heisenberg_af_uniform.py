@@ -201,9 +201,9 @@ if __name__ == "__main__":
     """
     print "Bond dimensions: " + str(s.D)
     print
-    col_heads = ["Step", "t", "eta", "Restore CF?", "energy: h/J", 
+    col_heads = ["Step", "t", "eta", "energy: h/J", 
                  "difference", 
-                 "sig_x", "sig_y", "sig_z", "conv_l", "conv_r", 
+                 "Sx", "Sy", "Sz", "entr.","conv_l", "conv_r", 
                  "Next step"]
     print "\t".join(col_heads)
     print
@@ -244,6 +244,9 @@ if __name__ == "__main__":
         row.append("%.3g" % Sx[i].real)
         row.append("%.3g" % Sy[i].real)
         row.append("%.3g" % Sz[i].real)
+        
+        entr = s.S_hc
+        row.append("%.3g" % entr.real)
         
         row.append(str(s.conv_l))
         row.append(str(s.conv_r))

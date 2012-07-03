@@ -179,7 +179,7 @@ if __name__ == "__main__":
     print "Bond dimensions: " + str(s.D)
     print
     col_heads = ["Step", "t", "eta", "H", "dH", 
-                 "sig_x", "sig_y", "sig_z",
+                 "sig_x", "sig_y", "sig_z", "entr.",
                  "Next step"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
@@ -215,6 +215,9 @@ if __name__ == "__main__":
         row.append("%.3g" % Sx[i].real)
         row.append("%.3g" % Sy[i].real)
         row.append("%.3g" % Sz[i].real)
+        
+        entr = s.S_hc
+        row.append("%.3g" % entr.real)
         
         """
         Switch to real time evolution if we have the ground state.
