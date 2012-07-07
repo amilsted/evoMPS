@@ -1,5 +1,6 @@
 from distutils.core import setup, Extension
 from evoMPS.version import __version__
+import numpy as np
 
 try:
     from Cython.Distutils import build_ext
@@ -37,5 +38,6 @@ setup(name='evoMPS',
       packages = ['evoMPS'],
       requires = ["scipy (>=0.7)"],
       cmdclass = {"build_ext": build_ext},
+      include_dirs = [np.get_include()],
       ext_modules = ext_modules
       )
