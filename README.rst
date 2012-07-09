@@ -55,6 +55,11 @@ Usage
 
 The evoMPS algorithms are presented as python classes to be used in a script.
 Some example scripts can be found in the "examples" directory.
+To run an example script without installing the evoMPS modules, copy it to the base 
+directory first e.g. under Windows::
+    
+    copy examples\transverse_ising_uniform.py .
+    python transverse_ising_uniform.py
 
 Essentially, the user defines a spin chain Hilbert space
 and a nearest-neighbour Hamiltonian and then carries out a series of small 
