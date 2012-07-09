@@ -14,8 +14,10 @@ if use_cython:
     ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.py"]),
                    Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.pyx"]),
                    Extension("evoMPS.tdvp_uniform", ["evoMPS/tdvp_uniform.py"])]
+    cmdclass = {"build_ext": build_ext}
 else:
     ext_modules = []
+    cmdclass = {}
 
 setup(name='evoMPS',
       version=__version__,
@@ -37,7 +39,7 @@ setup(name='evoMPS',
       ],      
       packages = ['evoMPS'],
       requires = ["scipy (>=0.7)"],
-      cmdclass = {"build_ext": build_ext},
+      cmdclass = cmdclass,
       include_dirs = [np.get_include()],
       ext_modules = ext_modules
       )
