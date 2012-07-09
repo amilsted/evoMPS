@@ -1,5 +1,6 @@
-Installation Instructions
-=========================
+===================
+ Installing evoMPS
+===================
 
 Obtaining the Latest Software
 -----------------------------
@@ -10,6 +11,15 @@ GitHub <http://github.com/amilsted/evoMPS>.
 
 Prerequisites
 -------------
+
+On Windows, an easy way to obtain everything required is to download and
+install a numerics-oriented Python distribution such as
+
+* pythonxy <http://www.pythonxy.com> (open source and a free download of 32-bit binaries)
+* enthought python distribution <http://www.enthought.com/products/epd.php> (free for academic use, with optimized linear algerba, 64-bit available)
+
+The full installation of either of these includes everything you need.
+Otherwise, the following are required:
 
 * Python 2 <http://www.python.org> (tested on Python 2.7)
 * Numpy <http://numpy.scipy.org> (tested on 1.6.1)
@@ -30,13 +40,13 @@ To run the included examples, the following is also required:
 Building and Installation
 -------------------------
 
-To install the evoMPS package, go to the source directory and run:
+To install the evoMPS package, go to the source directory and run::
 
-python setup.py install
+    python setup.py install
 
-Alternatively, to install for the current user only, run:
+Alternatively, to install for the current user only, run::
 
-python setup.py install --user
+    python setup.py install --user 
 
 Installation is not strictly necessary, as scripts using evoMPS can
 also be run from the base source directory.
@@ -45,8 +55,8 @@ Getting Started
 ---------------
 
 Examples have been provided in the examples/ subdirectory. After installing
-evoMPS as described above, they can be run using e.g.:
+evoMPS as described above, they can be run using e.g.::
 
-python transverse_ising.py
+    python transverse_ising.py
 
 To run an example without installing, copy it to the base source directory first.
