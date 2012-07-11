@@ -16,8 +16,10 @@ import math as ma
 
 try:
     import tdvp_common as tc
+    import allclose as ac
 except ImportError:
     tc = None
+    ac = None
     print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
         
 #This class allows us to use scipy's bicgstab implementation
@@ -61,9 +63,43 @@ class PPInvOp:
         
         
         if not self.p == 0:
-            QEQ *= np.exp(1.j * self.p)
+            QEQ *= sp.exp(1.j * self.p)
         
         res = x - QEQ
+        
+        return res.ravel()
+        
+class Excite_H_Op:
+    tdvp = None
+    l = None
+    r = None
+    A = None
+    p = 0
+    
+    shape = (0)
+    
+    dtype = None
+    
+    left = False
+    
+    def __init__(self, tdvp, p=0):
+        self.tdvp = tdvp
+        self.l = tdvp.l
+        self.r = tdvp.r
+        self.p = 0
+        
+        self.D = tdvp.D
+        self.q = tdvp.q
+        
+        d = (self.q - 1) * self.D**2
+        self.shape = (d, d)
+        
+        self.dtype = np.dtype(tdvp.typ)
+    
+    def matvec(self, v):
+        x = v.reshape((self.D, (self.q - 1)*self.D))
+        
+        res = self.tdvp.calc_BHB(x, self.p)
         
         return res.ravel()
 
@@ -123,10 +159,10 @@ class EvoMPS_TDVP_Uniform:
         self.D = D
         self.q = q
         
-        self.A = np.empty((q, D, D), dtype=self.typ, order=self.odr)
-        self.AA = np.empty((q, q, D, D), dtype=self.typ, order=self.odr)
+        self.A = np.zeros((q, D, D), dtype=self.typ, order=self.odr)
+        self.AA = np.zeros((q, q, D, D), dtype=self.typ, order=self.odr)
         
-        self.C = np.empty((q, q, D, D), dtype=self.typ, order=self.odr)
+        self.C = np.zeros((q, q, D, D), dtype=self.typ, order=self.odr)
         
         self.K = np.ones_like(self.A[0])
         self.K_left = None
@@ -136,7 +172,7 @@ class EvoMPS_TDVP_Uniform:
         self.conv_l = True
         self.conv_r = True
         
-        self.tmp = np.empty_like(self.A[0])
+        self.tmp = np.zeros_like(self.A[0])
            
     def _eps_r_noop_dense_A(self, x, out):
         """The right epsilon map, optimized for efficiency.
@@ -202,14 +238,19 @@ class EvoMPS_TDVP_Uniform:
             
         return out
         
-    def eps_l(self, x, out=None):
+    def eps_l(self, x, A1=None, A2=None, out=None):
         if out is None:
             out = np.zeros_like(self.A[0])
         else:
             out.fill(0.)
             
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+            
         for s in xrange(self.q):
-            out += m.mmul(m.H(self.A[s]), x, self.A[s])        
+            out += m.mmul(m.H(A2[s]), x, A1[s])
             
         return out
         
@@ -251,10 +292,9 @@ class EvoMPS_TDVP_Uniform:
                                 subres += opval * self.AA[s, t]
                     res += m.mmul(subres, x, m.H(self.AA[u, v]))
         else:
-            AAuvH = np.empty_like(self.A[0])
             for u in xrange(self.q):
                 for v in xrange(self.q):
-                    AAuvH = m.H(m.mmul(A3[u], A4[v]), out=AAuvH)
+                    AAuvH = m.H(A3[u].dot(A4[v]))
                     subres = np.zeros_like(self.A[0])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
@@ -288,34 +328,45 @@ class EvoMPS_TDVP_Uniform:
         print "Left ok?: " + str(np.allclose(self.eps_l(self.l), self.l))
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
         
-    def _calc_lr(self, x, eps, tmp, max_itr=2000, rtol=1E-14, atol=1E-14):
+    def _calc_lr(self, x, eps, tmp, max_itr=100, tol_val=1E-14, tol_vec=1E-15):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
            
            The contents of the starting vector x is modifed.
            
            Why do we require more iterations for larger q and D?
-        """
-        norm = la.fblas.dznrm2 #NOTE: assuming complex128
-        #allclose = np.allclose
+        """        
+        try:
+            norm = la.get_blas_funcs("nrm2", [x])
+        except ValueError:
+            norm = np.linalg.norm
+            
+        try:
+            allclose = ac.allclose_mat
+        except:
+            allclose = np.allclose
+            print "Falling back to numpy allclose()!"
+            
+        l = x.size #we will scale x so that stuff doesn't get too small
         
-        x *= 1/norm(x.ravel())
+        x *= l / norm(x.ravel())
         for i in xrange(max_itr):
             eps(x, out=tmp)
-            ev = norm(tmp.ravel())
+            ev = norm(tmp.ravel()) / l
             tmp *= (1 / ev)
-            #if allclose(tmp, x, atol=atol, rtol=rtol): #allclose is SLOW!
-            if norm((tmp - x).ravel()) < atol:
+            #if norm((tmp - x).ravel()) < tol_vec * self.D**2:
+            if allclose(tmp, x, tol_val, tol_val):
+                print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()))
                 x[:] = tmp
                 break
             x[:] = tmp
-        
+                    
         #re-scale
-        if not abs(ev - 1) < atol:
+        if not abs(ev - 1) < tol_val:
             self.A *= 1 / ma.sqrt(ev)
             if self.sanity_checks:
-                ev = norm(eps(x, out=tmp).ravel())
-                if not abs(ev - 1) < atol:
+                ev = norm(eps(x, out=tmp).ravel()) / l
+                if not abs(ev - 1) < tol_val:
                     print "Sanity check failed: Largest ev after re-scale = %g" % ev
         
         return x, i < max_itr - 1, i
@@ -330,14 +381,14 @@ class EvoMPS_TDVP_Uniform:
         self.l, self.conv_l, self.itr_l = self._calc_lr(self.l, 
                                                         self._eps_l_noop_dense_A, 
                                                         tmp, 
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
+                                                        tol_val=self.itr_atol, 
+                                                        tol_vec=self.itr_atol/10)
         
         self.r, self.conv_r, self.itr_r = self._calc_lr(self.r, 
                                                         self._eps_r_noop_dense_A, 
                                                         tmp, 
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
+                                                        tol_val=self.itr_atol, 
+                                                        tol_vec=self.itr_atol/10)
         #normalize eigenvectors:
 
         if self.symm_gauge:
@@ -542,8 +593,8 @@ class EvoMPS_TDVP_Uniform:
             res = out.ravel()
             x = x.ravel()
         
-        res, info = las.bicgstab(op, x, x0=res, maxiter=1000, 
-                                 tol=self.itr_rtol)
+        res, info = las.bicgstab(op, x, x0=res, maxiter=2000, 
+                                 tol=self.itr_rtol) #tol: norm( b - A*x ) / norm( b )
         
         if info > 0:
             print "Warning: Did not converge on solution for ppinv!"
@@ -551,10 +602,10 @@ class EvoMPS_TDVP_Uniform:
         #Test
         if self.sanity_checks:
             RHS_test = op.matvec(res)
-            if not np.allclose(RHS_test, x, rtol=self.itr_rtol*self.check_fac,
-                                atol=self.itr_atol*self.check_fac):
+            d = la.norm(RHS_test - x) / la.norm(x)
+            if not d < self.itr_rtol*self.check_fac:
                 print "Sanity check failed: Bad ppinv solution! Off by: " + str(
-                        la.norm(RHS_test - x))
+                        d)
         
         res = res.reshape((self.D, self.D))
         
@@ -714,9 +765,10 @@ class EvoMPS_TDVP_Uniform:
 
         return B
         
-    def update(self):
+    def update(self, restore_CF=True):
         self.calc_lr()
-        self.restore_CF()
+        if restore_CF:
+            self.restore_CF()
         self.calc_AA()
         self.calc_C()
         self.calc_K()
@@ -765,19 +817,108 @@ class EvoMPS_TDVP_Uniform:
             
         self.A = A0 - dtau /6 * B_fin
             
-    def calc_BHB(self, x):
-        assert False
+    def calc_BHB(self, x, p): 
+        """For a good approx. ground state, H should be Hermitian pos. semi-def.
         
-        B = self.B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
+        FIXME: Not Hermitian or pos. def.!
+        """
+        B = self.get_B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
-        rVsh = self.Vsh.copy()
+        A = self.A
+        l = self.l
+        r = self.r
+        l_sqrt = self.l_sqrt
+        l_sqrt_i = self.l_sqrt_i
+        r_sqrt = self.r_sqrt
+        r_sqrt_i = self.r_sqrt_i
+        
+        K_r = self.K
+        K_l = self.K_left
+        
+        V = sp.zeros((self.Vsh.shape[0], self.Vsh.shape[2], self.Vsh.shape[1]), dtype=self.typ)
         for s in xrange(self.q):
-            rVsh[s] = self.r_sqrt_i.dot(rVsh[s])
+            V[s] = m.H(self.Vsh[s])
         
-        res = self.l_sqrt.dot(self.eps_r_2ss(self.r, op=self.h_nn, A1=B, A3=rVsh))
-        
-        return None
+        Vri = sp.zeros_like(V)
+        for s in xrange(self.q):
+            Vri[s] = r_sqrt_i.dot_left(V[s])
+
+        Vr = sp.zeros_like(V)
+        for s in xrange(self.q):
+            Vr[s] = r_sqrt.dot_left(V[s])
             
+        x = self.eps_l(l, A1=B)      
+        x = x - m.adot(x, r) * l
+        M = self.calc_PPinv(x, p=-p, left=True)
+        if self.sanity_checks:
+            x2 = M - sp.exp(-1.j * p) * self.eps_l(M)
+            if not sp.allclose(x, x2, rtol=self.itr_rtol*self.check_fac,
+                               atol=self.itr_atol*self.check_fac):
+                print "Sanity Fail in calc_BHB! Bad M."
+        Mh = m.H(M)
+        
+        def h_nn(s,t,u,v):
+            return self.h_nn(s,t,u,v) - self.h
+        
+        res = l_sqrt.dot(
+               self.eps_r_2s(r, op=h_nn, A1=B, A3=Vri) #1
+               + sp.exp(+1.j * p) * self.eps_r_2s(r, op=h_nn, A2=B, A3=Vri) #3
+              )
+        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r_2s(r, op=h_nn, A3=Vri))) #10
+              
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                for u in xrange(self.q):
+                    for v in xrange(self.q):
+                        res += h_nn(s,t,u,v) * l_sqrt_i.dot(m.H(A[u]).dot(
+                                 l.dot(A[s].dot(B[t].dot(m.H(Vr[v])))) #2
+                                 + sp.exp(-1.j * p) * l.dot(B[s].dot(A[t].dot(m.H(Vr[v])))) #4
+                                 + sp.exp(-2.j * p) * Mh.dot(A[s].dot(A[t].dot(m.H(Vr[v]))))) #12
+                               )
+              
+        res += l_sqrt.dot(self.eps_r(K_r, A1=B, A2=Vri)) #5
+        
+        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r_sqrt, A1=B, A2=V))) #6
+        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r(K_r, A2=Vri))) #8
+        
+        x1 = sp.exp(+1.j * p) * self.eps_r(K_r, A1=B) #7
+        x2 = sp.exp(+1.j * p) * self.eps_r_2s(r, op=h_nn, A1=B) #9
+        x3 = sp.exp(+2.j * p) * self.eps_r_2s(r, op=h_nn, A2=B) #11
+        
+        x = x1 + x2 + x3
+        x = x - m.adot(l, x) * r
+        x_pi = self.calc_PPinv(x, p=p)
+        if self.sanity_checks:
+            x2 = x_pi - sp.exp(+1.j * p) * self.eps_r(x_pi)
+            if not sp.allclose(x, x2, rtol=self.itr_rtol*self.check_fac,
+                               atol=self.itr_atol*self.check_fac):
+                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % la.norm((x - x2).ravel())
+        
+        res += l_sqrt.dot(self.eps_r(x_pi, A2=Vri))
+        
+        if self.sanity_checks:
+            expval = m.adot(x, res)
+            if expval < 0:
+                print "Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")"
+            if not abs(expval.imag) < self.itr_atol:
+                print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
+        
+        return res
+    
+    def excite_top_triv(self, p, k=6, tol=1E-6, max_itr=None, which='SM'):
+        op = Excite_H_Op(self, p)
+        
+        self.calc_K_l()
+        self.calc_l_r_roots()
+        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        
+        w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
+                      maxiter=max_itr, tol=tol)
+        
+        return w
+        
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
         d = 1.0
@@ -1080,8 +1221,8 @@ class EvoMPS_TDVP_Uniform:
         
         realnorm = la.norm(oldA.real)
         imagnorm = la.norm(oldA.imag)
-        realfac = (realnorm / (self.q * oldD**2))
-        imagfac = (imagnorm / (self.q * oldD**2))
+        realfac = (realnorm / (self.q * oldD**2)) * 100.
+        imagfac = (imagnorm / (self.q * oldD**2)) * 0.
 #        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
         m.randomize_cmplx(self.A[:, :oldD, oldD:], a=0, b=realfac, aj=0, bj=imagfac)
         m.randomize_cmplx(self.A[:, oldD:, :oldD], a=0, b=realfac, aj=0, bj=imagfac)

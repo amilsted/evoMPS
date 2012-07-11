@@ -48,4 +48,4 @@ cdef class EvoMPS_TDVP_Uniform:
     cpdef calc_AA(self)
     
     @cython.locals(i = cython.int)
-    cpdef _calc_lr(self, x, e, tmp, int max_itr=*, rtol=*, atol=*)
+    cpdef _calc_lr(self, x, e, tmp, int max_itr=*, float tol_val=*, float tol_vec=*)

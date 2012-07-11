@@ -45,11 +45,6 @@ def h_nn(s, t, u, v):
     if s != u and t == v:
         res += -h
         
-#    if t == v:
-#        res += 0
-#    else:
-#        res += -h
-        
     return res
     
 def z_ss(s, t):
@@ -97,7 +92,7 @@ s.h_nn = h_nn
 """
 Set the initial Hamiltonian parameters.
 """
-h = 0.7
+h = -2.00
 J = 1.00
 
 """
@@ -118,7 +113,7 @@ Now set the tolerance for the imaginary time evolution.
 When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-10
+tol_im = 7E-6
 total_steps = 1000
 
 """

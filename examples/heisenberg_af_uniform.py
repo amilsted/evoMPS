@@ -113,7 +113,7 @@ def Sminus(s, t):
 """
 The bond dimension:
 """
-D = 64
+D = 512
 
 """
 Initialize the simulation object:
@@ -144,7 +144,7 @@ Now set the tolerance for the imaginary time evolution.
 When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-10
+tol_im = 1E-7
 total_steps = 1000
 
 """
@@ -158,7 +158,7 @@ grnd_fname_fmt = "heis_af_uni_D%d_q%d_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy"
 grnd_fname = grnd_fname_fmt % (D, q, Jx, Jy, Jz, tol_im, step)
 
 load_state = True
-expand = False
+expand = True
 real_time = False
 
 if load_state:
@@ -175,6 +175,8 @@ if load_state:
        loaded = False
 else:
     loaded = False
+    
+#tol_im = 1E-7
         
 if __name__ == "__main__":    
     step = 0.1
@@ -210,8 +212,8 @@ if __name__ == "__main__":
     
     s.symm_gauge = True
     
-    s.itr_atol = 1E-12
-    s.itr_rtol = 1E-11
+    s.itr_atol = 1E-2
+    s.itr_rtol = 1E-10
     
     for i in xrange(total_steps):
         T[i] = t
@@ -260,7 +262,7 @@ if __name__ == "__main__":
             if not loaded:
                 s.save_state(grnd_fname)
             
-            if i > 0:
+            if loaded or i > 0:
                 D = D * 2
                 print "***MOVING TO D = " + str(D) + "***"
                 s.expand_D(D)
