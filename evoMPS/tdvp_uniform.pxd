@@ -22,6 +22,8 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public float itr_rtol
     cdef public float itr_atol
     
+    cdef public int pow_itr_max
+    
     cdef public object h_nn
     cdef public object h_nn_cptr
     
