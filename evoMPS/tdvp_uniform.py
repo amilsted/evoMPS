@@ -40,7 +40,7 @@ class PPInvOp:
         self.tdvp = tdvp
         self.l = tdvp.l
         self.r = tdvp.r
-        self.p = 0
+        self.p = p
         self.left = left
         
         self.D = tdvp.D
@@ -54,18 +54,14 @@ class PPInvOp:
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        if self.left:
-            xE = self.tdvp._eps_l_noop_dense_A(x, self.out)
-            QEQ = xE - m.H(self.l) * m.adot(self.r, x)
+        if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
+            Ehx = self.tdvp._eps_l_noop_dense_A(x, self.out)
+            QEQhx = sp.exp(-1.j * self.p) * (Ehx - self.l * m.adot(self.r, x))
+            res = x - QEQhx
         else:
             Ex = self.tdvp._eps_r_noop_dense_A(x, self.out)
-            QEQ = Ex - self.r * m.adot(self.l, x)        
-        
-        
-        if not self.p == 0:
-            QEQ *= sp.exp(1.j * self.p)
-        
-        res = x - QEQ
+            QEQx = sp.exp(1.j * self.p) * (Ex - self.r * m.adot(self.l, x))
+            res = x - QEQx
         
         return res.ravel()
         
@@ -573,12 +569,8 @@ class EvoMPS_TDVP_Uniform:
         
         op = PPInvOp(self, p, left)
         
-        if left:
-            res = m.H(out).ravel()
-            x = m.H(x).ravel()
-        else:
-            res = out.ravel()
-            x = x.ravel()
+        res = out.ravel()
+        x = x.ravel()
         
         res, info = las.bicgstab(op, x, x0=res, maxiter=2000, 
                                  tol=self.itr_rtol) #tol: norm( b - A*x ) / norm( b )
@@ -595,9 +587,18 @@ class EvoMPS_TDVP_Uniform:
                         d)
         
         res = res.reshape((self.D, self.D))
-        
-        if left:
-            res = m.H(res)
+            
+        if self.sanity_checks and self.D < 16:
+            pinvE = self.pinvE_brute(p)
+            
+            if left:
+                res_brute = (x.reshape((1, self.D**2)).conj().dot(pinvE)).ravel().conj().reshape((self.D, self.D))
+                #res_brute = (pinvE.T.dot(x)).reshape((self.D, self.D))
+            else:
+                res_brute = pinvE.dot(x).reshape((self.D, self.D))
+            
+            if not np.allclose(res, res_brute):
+                print "Sanity Fail in calc_PPinv (left: %s): Bad brute check! Off by: %g" % (str(left), la.norm(res - res_brute))
         
         out[:] = res
         
@@ -631,7 +632,7 @@ class EvoMPS_TDVP_Uniform:
             for t in xrange(self.q):
                 lH += m.mmul(m.H(self.AA[s, t]), self.l, self.C[s, t])
         
-        h = m.adot(lH, self.r)
+        h = m.adot(self.r, lH)
         
         lHQ = lH - self.l * h
         
@@ -639,7 +640,7 @@ class EvoMPS_TDVP_Uniform:
         
         if self.sanity_checks:
             xE = self.eps_l(self.K_left)
-            QEQ = xE - self.l * m.adot(self.K_left, self.r)
+            QEQ = xE - self.l * m.adot(self.r, self.K_left)
             res = self.K_left - QEQ
             if not np.allclose(res, lHQ):
                 print "Sanity check failed: Bad K_left!"
@@ -803,6 +804,21 @@ class EvoMPS_TDVP_Uniform:
             
         self.A = A0 - dtau /6 * B_fin
             
+    def pinvE_brute(self, p):
+        E = np.zeros((self.D**2, self.D**2), dtype=self.typ)
+        A = self.A
+        for s in xrange(self.q):
+            E += np.kron(A[s], A[s].conj())
+        
+        l = np.asarray(self.l)
+        r = np.asarray(self.r)
+        
+        QEQ = E - r.reshape((self.D**2, 1)).dot(l.reshape((1, self.D**2)).conj())
+        
+        EyemE = np.eye(self.D**2, dtype=self.typ) - sp.exp(1.j * p) * QEQ
+        
+        return la.inv(EyemE)
+            
     def calc_BHB(self, x, p): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         
@@ -848,28 +864,12 @@ class EvoMPS_TDVP_Uniform:
             
         y = self.eps_l(l, A1=B)  
         
-        if False:
-            yvec = y.reshape((1, self.D**2)).conj()
-            y2 = np.zeros_like(yvec)
-            lvec = sp.asarray(l).reshape((1, self.D**2)).conj()
-            for s in xrange(self.q):
-                y2 += lvec.dot(sp.kron(B[s], A[s].conj()))
-            print sp.allclose(yvec, y2)
-            
-            b = sp.rand(self.D, self.D) + 1.j*sp.rand(self.D, self.D)
-            
-            print sp.inner(y2.ravel(), b.ravel())
-            print m.adot(y2.conj(), b)
-            print sp.trace(y.dot(b))
-            print m.adot(y, b)
-        
-        y = y - m.adot(y, r) * l #should just = y due to gauge-fixing
+        y = y - m.adot(r, y) * l #should just = y due to gauge-fixing
         M = self.calc_PPinv(y, p=-p, left=True)
         if self.sanity_checks:
-            y2 = M - sp.exp(-1.j * p) * self.eps_l(M)
-            if not sp.allclose(y, y2, rtol=self.itr_rtol*self.check_fac,
-                               atol=self.itr_atol*self.check_fac):
-                print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % la.norm((y - y2).ravel())
+            y2 = M - sp.exp(+1.j * p) * self.eps_l(M)
+            if not sp.allclose(y, y2):
+                print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
         
         def h_nn(s,t,u,v):
@@ -881,12 +881,6 @@ class EvoMPS_TDVP_Uniform:
                self.eps_r_2s(r, op=h_nn, A1=B, A3=Vri) #1 OK
                + sp.exp(+1.j * p) * self.eps_r_2s(r, op=h_nn, A2=B, A3=Vri) #3 OK with 4
               )
-        
-        #tst = sp.trace(l.dot(self.eps_r_2s(r, op=h_nn, A1=B, A3=B)))
-        #tst2 = sp.trace(res.dot(m.H(x)))
-        #tst3 = sp.trace(l.dot(self.eps_r_2s(r, op=h_nn, A1=B, A3=Vri).dot(l_sqrt_i.dot_left(m.H(x)))))
-        #print np.allclose(tst, tst2)
-        #print np.allclose(tst2, tst3)
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r_2s(r, op=h_nn, A3=Vri))) #10
               
@@ -916,16 +910,16 @@ class EvoMPS_TDVP_Uniform:
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi)
             if not sp.allclose(y, y2):
-                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % la.norm((y - y2).ravel())
+                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         
         res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri))
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
-            print "expval = " + str(expval)
+            #print "expval = " + str(expval)
             if expval < 0:
                 print "Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")"
-            if not abs(expval.imag) < 1E-4:
+            if not abs(expval.imag) < 1E-9:
                 print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
         
         return res
@@ -937,19 +931,45 @@ class EvoMPS_TDVP_Uniform:
         self.calc_l_r_roots()
         self.Vsh = self.calc_Vsh(self.r_sqrt)
         
-        w, W = las.eigsh(op, which=which, k=k, return_eigenvectors=True, 
+        w, W = las.eigs(op, which=which, k=k, return_eigenvectors=True, 
                       maxiter=max_itr, tol=tol)
                       
-        for i in xrange(w.shape[0]):
-            Wi = W[:, i]
-            Wi2 = op.matvec(Wi)
-            print w[i]
-            print m.adot(Wi, Wi)
-            print np.allclose(Wi2, Wi * w[i])
-            print m.adot(Wi2, Wi) / m.adot(Wi, Wi)
+#        for i in xrange(w.shape[0]):
+#            Wi = W[:, i]
+#            Wi2 = op.matvec(Wi)
+#            print w[i]
+#            print m.adot(Wi, Wi)
+#            print np.allclose(Wi2, Wi * w[i])
+#            print m.adot(Wi2, Wi) / m.adot(Wi, Wi)
         
         return w
+    
+    def excite_top_triv_brute(self, p):
+        op = Excite_H_Op(self, p)
         
+        self.calc_K_l()
+        self.calc_l_r_roots()
+        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        
+        x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
+        y = np.empty_like(x)
+        
+        H = np.empty((x.shape[0], x.shape[0]), dtype=self.typ)
+        
+        for i in xrange(x.shape[0]):
+            x.fill(0)
+            x[i] = 1
+            for j in xrange(x.shape[0]):
+                y.fill(0)
+                y[j] = 1
+                
+                H[j, i] = y.dot(op.matvec(x))
+               
+        print np.allclose(H, m.H(H))
+               
+        return la.eigvalsh(H), H
+        
+    
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
         d = 1.0
