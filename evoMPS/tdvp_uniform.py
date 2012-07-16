@@ -973,24 +973,16 @@ class EvoMPS_TDVP_Uniform:
         
         return res
     
-    def excite_top_triv(self, p, k=6, tol=1E-6, max_itr=None, which='SM'):
+    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, which='SM'):
         op = Excite_H_Op(self, p)
         
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = self.calc_Vsh(self.r_sqrt)
         
-        w, W = las.eigs(op, which=which, k=k, return_eigenvectors=True, 
+        w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
                       maxiter=max_itr, tol=tol)
-                      
-#        for i in xrange(w.shape[0]):
-#            Wi = W[:, i]
-#            Wi2 = op.matvec(Wi)
-#            print w[i]
-#            print m.adot(Wi, Wi)
-#            print np.allclose(Wi2, Wi * w[i])
-#            print m.adot(Wi2, Wi) / m.adot(Wi, Wi)
-        
+                          
         return w
     
     def excite_top_triv_brute(self, p):
@@ -1003,20 +995,21 @@ class EvoMPS_TDVP_Uniform:
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         y = np.empty_like(x)
         
-        H = np.empty((x.shape[0], x.shape[0]), dtype=self.typ)
+        H = np.zeros((x.shape[0], x.shape[0]), dtype=self.typ)
         
+        #Only fill the lower triangle
         for i in xrange(x.shape[0]):
             x.fill(0)
             x[i] = 1
-            for j in xrange(x.shape[0]):
+            for j in xrange(i + 1):
                 y.fill(0)
                 y[j] = 1
                 
-                H[j, i] = y.dot(op.matvec(x))
+                H[i, j] = x.dot(op.matvec(y))
+
+        #print np.allclose(H, m.H(H))
                
-        print np.allclose(H, m.H(H))
-               
-        return la.eigvalsh(H), H
+        return la.eigvalsh(H)
         
     
     def find_min_h(self, B, dtau_init, tol=5E-2):
