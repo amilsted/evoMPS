@@ -23,24 +23,13 @@ except ImportError:
     print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
         
 #This class allows us to use scipy's bicgstab implementation
-class PPInvOp:
-    tdvp = None
-    l = None
-    r = None
-    A = None
-    p = 0
-    
-    shape = (0)
-    
-    dtype = None
-    
-    left = False
-    
-    def __init__(self, tdvp, p=0, left=False):
+class PPInvOp:    
+    def __init__(self, tdvp, p, left, A1, A2, r):
         self.tdvp = tdvp
-        self.A = tdvp.A
+        self.A1 = A1
+        self.A2 = A2
         self.l = tdvp.l
-        self.r = tdvp.r
+        self.r = r
         self.p = p
         self.left = left
         
@@ -56,30 +45,19 @@ class PPInvOp:
         x = v.reshape((self.D, self.D))
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = self.tdvp._eps_l_noop_dense(x, self.A, self.A, self.out)
+            Ehx = self.tdvp._eps_l_noop_dense(x, self.A1, self.A2, self.out)
             QEQhx = sp.exp(-1.j * self.p) * (Ehx - self.l * m.adot(self.r, x))
             res = x - QEQhx
         else:
-            Ex = self.tdvp._eps_r_noop_dense(x, self.A, self.A, self.out)
+            Ex = self.tdvp._eps_r_noop_dense(x, self.A1, self.A2, self.out)
             QEQx = sp.exp(1.j * self.p) * (Ex - self.r * m.adot(self.l, x))
             res = x - QEQx
         
         return res.ravel()
         
 class Excite_H_Op:
-    tdvp = None
-    l = None
-    r = None
-    A = None
-    p = 0
-    
-    shape = (0)
-    
-    dtype = None
-    
-    left = False
-    
-    def __init__(self, tdvp, p=0):
+    def __init__(self, tdvp, donor, p):
+        self.donor = donor
         self.tdvp = tdvp
         self.p = p
         
@@ -94,7 +72,7 @@ class Excite_H_Op:
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
         
-        res = self.tdvp.calc_BHB(x, self.p)
+        res = self.tdvp.calc_BHB(x, self.p, self.donor)
         
         return res.ravel()
 
@@ -371,7 +349,7 @@ class EvoMPS_TDVP_Uniform:
         if not abs(ev - 1) < atol:
             self.A *= 1 / ma.sqrt(ev)
             if self.sanity_checks:
-                ev = norm(eps(x, out=tmp).ravel()) / l
+                ev = norm(eps(x, A, A, tmp).ravel()) / l
                 if not abs(ev - 1) < atol:
                     print "Sanity check failed: Largest ev after re-scale = %g" % ev
         
@@ -605,11 +583,20 @@ class EvoMPS_TDVP_Uniform:
                             if h != 0:
                                 self.C[s, t] += h * self.AA[u, v]
     
-    def calc_PPinv(self, x, p=0, out=None, left=False):
+    def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None):
         if out is None:
             out = np.ones_like(self.A[0])
+            
+        if A1 is None:
+            A1 = self.A
+            
+        if A2 is None:
+            A2 = self.A
+            
+        if r is None:
+            r = self.r
         
-        op = PPInvOp(self, p, left)
+        op = PPInvOp(self, p, left, A1, A2, r)
         
         res = out.ravel()
         x = x.ravel()
@@ -861,55 +848,62 @@ class EvoMPS_TDVP_Uniform:
         
         return la.inv(EyemE)
             
-    def calc_BHB(self, x, p): 
+    def calc_BHB(self, x, p, donor): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         """
-        B = self.get_B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
+        A = self.A
+        A_ = donor.A
+        
+        #AA = self.AA
+        AA_ = donor.AA
+        
+        l = self.l
+        r_ = donor.r
+        
+        l_sqrt = self.l_sqrt
+        l_sqrt_i = self.l_sqrt_i
+        
+        r__sqrt = donor.r_sqrt
+        r__sqrt_i = donor.r_sqrt_i
+        
+        K__r = donor.K
+        K_l = self.K_left        
+        
+        B = donor.get_B_from_x(x, donor.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
         if self.sanity_checks:
-            tst = self.eps_r(self.r, A1=B)
+            tst = donor.eps_r(r_, A1=B)
             if not np.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
         
-        A = self.A
-        AA = self.AA
-        l = self.l
-        r = self.r
-        l_sqrt = self.l_sqrt
-        l_sqrt_i = self.l_sqrt_i
-        r_sqrt = self.r_sqrt
-        r_sqrt_i = self.r_sqrt_i
+        V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
+        for s in xrange(donor.q):
+            V_[s] = m.H(donor.Vsh[s])
         
-        K_r = self.K
-        K_l = self.K_left
-        
-        V = sp.zeros((self.Vsh.shape[0], self.Vsh.shape[2], self.Vsh.shape[1]), dtype=self.typ)
-        for s in xrange(self.q):
-            V[s] = m.H(self.Vsh[s])
-        
-        Vri = sp.zeros_like(V)
-        for s in xrange(self.q):
-            Vri[s] = r_sqrt_i.dot_left(V[s])
+        Vri_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vri_[s] = r__sqrt_i.dot_left(V_[s])
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
             for s in xrange(self.q):
-                B2[s] = l_sqrt_i.dot(x.dot(Vri[s]))
+                B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
             if not sp.allclose(B, B2, rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity Fail in calc_BHB! Bad Vri!"
 
-        Vr = sp.zeros_like(V)
-        for s in xrange(self.q):
-            Vr[s] = r_sqrt.dot_left(V[s])
+        Vr_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vr_[s] = r__sqrt.dot_left(V_[s])
             
         y = self.eps_l(l, A1=B)  
         
-        y = y - m.adot(r, y) * l #should just = y due to gauge-fixing
-        M = self.calc_PPinv(y, p=-p, left=True)
+        if donor is self:
+            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_)
         #print m.adot(r, M)
         if self.sanity_checks:
-            y2 = M - sp.exp(+1.j * p) * self.eps_l(M)
+            y2 = M - sp.exp(+1.j * p) * self.eps_l(M, A1=A_)
             if not sp.allclose(y, y2):
                 print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
@@ -923,45 +917,46 @@ class EvoMPS_TDVP_Uniform:
         res = sp.zeros((x.shape[0], self.D))
         
         res = l_sqrt.dot(
-               self.eps_r_2s(r, op=h_nn, A1=B, A3=Vri) #1 OK
-               + sp.exp(+1.j * p) * self.eps_r_2s(r, op=h_nn, A2=B, A3=Vri) #3 OK with 4
+               donor.eps_r_2s(r_, op=h_nn, A1=B, A3=Vri_) #1 OK
+               + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=h_nn, A2=B, A3=Vri_, A4=A_) #3 OK with 4
               )
         
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r_2s(r, op=h_nn, A3=Vri))) #10
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r_2s(r_, op=h_nn, A3=Vri_))) #10
         
         exp = sp.exp
         H = m.H
         for s in xrange(self.q):
             for t in xrange(self.q):
                 middle = (l.dot(A[s].dot(B[t])) #2 OK
-                          + exp(-1.j * p) * l.dot(B[s].dot(A[t])) #4 OK with 3
-                          + exp(-2.j * p) * Mh.dot(AA[s, t]) #12
+                          + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
+                          + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
                          )
                 for u in xrange(self.q):
                     for v in xrange(self.q):
                         res += h_nn(u,v,s,t) * l_sqrt_i.dot(H(A[u]).dot(middle
-                               )).dot(H(Vr[v]))
+                               )).dot(H(Vr_[v]))
               
-        res += l_sqrt.dot(self.eps_r(K_r, A1=B, A2=Vri)) #5 OK
+        res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
         
-        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r_sqrt, A1=B, A2=V))) #6  -> small imag. contrib..
+        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6  -> small imag. contrib..
         
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r(K_r, A2=Vri))) #8
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
         
-        y1 = sp.exp(+1.j * p) * self.eps_r(K_r, A1=B) #7
-        y2 = sp.exp(+1.j * p) * self.eps_r_2s(r, op=h_nn, A1=B) #9
-        y3 = sp.exp(+2.j * p) * self.eps_r_2s(r, op=h_nn, A2=B) #11
+        y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
+        y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=B) #9
+        y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=A, A2=B) #11
         
         y = y1 + y2 + y3
-        y = y - m.adot(l, y) * r
-        y_pi = self.calc_PPinv(y, p=p) #complex phase screwing this up?
+        if donor is self:
+            y = y - m.adot(l, y) * r_
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_) #complex phase screwing this up?
         #print m.adot(l, y_pi)
         if self.sanity_checks:
-            y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi)
+            y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi, A2=A_)
             if not sp.allclose(y, y2):
                 print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         
-        res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri))
+        res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
@@ -974,7 +969,7 @@ class EvoMPS_TDVP_Uniform:
         return res
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, which='SM'):
-        op = Excite_H_Op(self, p)
+        op = Excite_H_Op(self, self, p)
         
         self.calc_K_l()
         self.calc_l_r_roots()
@@ -986,7 +981,7 @@ class EvoMPS_TDVP_Uniform:
         return w
     
     def excite_top_triv_brute(self, p):
-        op = Excite_H_Op(self, p)
+        op = Excite_H_Op(self, self, p)
         
         self.calc_K_l()
         self.calc_l_r_roots()
@@ -1010,8 +1005,20 @@ class EvoMPS_TDVP_Uniform:
         #print np.allclose(H, m.H(H))
                
         return la.eigvalsh(H)
+
+    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, which='SM'):
+        op = Excite_H_Op(self, donor, p)
         
-    
+        self.calc_K_l()
+        self.calc_l_r_roots()
+        donor.calc_l_r_roots()
+        donor.Vsh = donor.calc_Vsh(donor.r_sqrt)
+        
+        w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
+                      maxiter=max_itr, tol=tol)
+                          
+        return w
+            
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
         d = 1.0
