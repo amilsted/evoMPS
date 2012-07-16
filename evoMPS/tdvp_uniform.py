@@ -38,6 +38,7 @@ class PPInvOp:
     
     def __init__(self, tdvp, p=0, left=False):
         self.tdvp = tdvp
+        self.A = tdvp.A
         self.l = tdvp.l
         self.r = tdvp.r
         self.p = p
@@ -55,11 +56,11 @@ class PPInvOp:
         x = v.reshape((self.D, self.D))
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = self.tdvp._eps_l_noop_dense_A(x, self.out)
+            Ehx = self.tdvp._eps_l_noop_dense(x, self.A, self.A, self.out)
             QEQhx = sp.exp(-1.j * self.p) * (Ehx - self.l * m.adot(self.r, x))
             res = x - QEQhx
         else:
-            Ex = self.tdvp._eps_r_noop_dense_A(x, self.out)
+            Ex = self.tdvp._eps_r_noop_dense(x, self.A, self.A, self.out)
             QEQx = sp.exp(1.j * self.p) * (Ex - self.r * m.adot(self.l, x))
             res = x - QEQx
         
@@ -153,14 +154,13 @@ class EvoMPS_TDVP_Uniform:
         
         self.tmp = np.zeros_like(self.A[0])
            
-    def _eps_r_noop_dense_A(self, x, out):
+    def _eps_r_noop_dense(self, x, A1, A2, out):
         """The right epsilon map, optimized for efficiency.
         """
-        A = self.A
         out.fill(0)
         dot = np.dot
         for s in xrange(self.q):
-            out += dot(A[s], dot(x, A[s].conj().T))
+            out += dot(A1[s], dot(x, A2[s].conj().T))
         
         return out
         
@@ -207,14 +207,13 @@ class EvoMPS_TDVP_Uniform:
                         out += tmp
         return out
         
-    def _eps_l_noop_dense_A(self, x, out):
+    def _eps_l_noop_dense(self, x, A1, A2, out):
         """The left epsilon map, optimized for efficiency.
         """
-        A = self.A
         out.fill(0)
         dot = np.dot
         for s in xrange(self.q):
-            out += dot(A[s].conj().T, dot(x, A[s]))
+            out += dot(A1[s].conj().T, dot(x, A2[s]))
             
         return out
         
@@ -351,12 +350,13 @@ class EvoMPS_TDVP_Uniform:
             print "Falling back to numpy allclose()!"
             
         l = x.size #we will scale x so that stuff doesn't get too small
+        A = self.A
         
         x *= l / norm(x.ravel())
         tmp[:] = x
         for i in xrange(max_itr):
             x[:] = tmp
-            eps(x, out=tmp)
+            eps(x, A, A, tmp)
             ev = norm(tmp.ravel()) / l
             tmp *= (1 / ev)
             #if norm((tmp - x).ravel()) < tol_vec * self.D**2:
@@ -385,14 +385,14 @@ class EvoMPS_TDVP_Uniform:
         self.r = np.asarray(self.r)
         
         self.l, self.conv_l, self.itr_l = self._calc_lr(self.l, 
-                                                        self._eps_l_noop_dense_A, 
+                                                        self._eps_l_noop_dense, 
                                                         tmp, 
                                                         max_itr=self.pow_itr_max,
                                                         rtol=self.itr_atol, 
                                                         atol=self.itr_atol)
         
         self.r, self.conv_r, self.itr_r = self._calc_lr(self.r, 
-                                                        self._eps_r_noop_dense_A, 
+                                                        self._eps_r_noop_dense, 
                                                         tmp, 
                                                         max_itr=self.pow_itr_max,
                                                         rtol=self.itr_atol, 
