@@ -110,6 +110,7 @@ class EvoMPS_TDVP_Uniform:
         
         self.h_nn = None    
         self.h_nn_cptr = None
+        self.h_nn_mat = None
         
         self.symm_gauge = False
         
@@ -182,15 +183,16 @@ class EvoMPS_TDVP_Uniform:
         res : ndarray
             The resulting matrix.
         """
-        if out is None:
-            out = np.zeros_like(self.A[0])
-        else:
-            out.fill(0.)
-            
+           
         if A1 is None:
             A1 = self.A
         if A2 is None:
             A2 = self.A
+
+        if out is None:
+            out = np.zeros((A1.shape[1], A2.shape[1]), dtype=self.typ)
+        else:
+            out.fill(0.)
             
         if op is None:
             for s in xrange(self.q):
@@ -248,8 +250,6 @@ class EvoMPS_TDVP_Uniform:
         #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
         
     def eps_r_2s(self, x, op, A1=None, A2=None, A3=None, A4=None):
-        res = np.zeros_like(self.A[0])
-        
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -259,20 +259,45 @@ class EvoMPS_TDVP_Uniform:
         if A4 is None:
             A4 = self.A
             
+        res = np.zeros((A1.shape[1], A3.shape[1]), dtype=self.typ)
+        zeros_like = np.zeros_like
+        zeros = np.zeros
+        
         if (A1 is self.A) and (A2 is self.A) and (A3 is self.A) and (A4 is self.A):
             for u in xrange(self.q):
                 for v in xrange(self.q):
-                    subres = np.zeros_like(self.A[0])
+                    subres = zeros_like(A1[0])
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             opval = op(u, v, s, t)
                             if opval != 0:
                                 subres += opval * self.AA[s, t]
                     res += m.mmul(subres, x, m.H(self.AA[u, v]))
+        elif (A1 is self.A) and (A2 is self.A):
+            for u in xrange(self.q):
+                for v in xrange(self.q):
+                    subres = zeros_like(self.A[0])
+                    for s in xrange(self.q):
+                        for t in xrange(self.q):
+                            opval = op(u, v, s, t)
+                            if opval != 0:
+                                subres += opval * self.AA[s, t]
+                    AAuvH = m.H(A3[u].dot(A4[v]))
+                    res += m.mmul(subres, x, AAuvH)
+        elif (A3 is self.A) and (A4 is self.A):
+            for u in xrange(self.q):
+                for v in xrange(self.q):
+                    subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
+                    for s in xrange(self.q):
+                        for t in xrange(self.q):
+                            opval = op(u, v, s, t)
+                            if opval != 0:
+                                subres += opval * A1[s].dot(A2[t])
+                    res += m.mmul(subres, x, m.H(self.AA[u, v]))
         else:
             for u in xrange(self.q):
                 for v in xrange(self.q):
-                    subres = np.zeros_like(self.A[0])
+                    subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
                     for s in xrange(self.q):
                         for t in xrange(self.q):
                             opval = op(u, v, s, t)
@@ -336,11 +361,11 @@ class EvoMPS_TDVP_Uniform:
             tmp *= (1 / ev)
             #if norm((tmp - x).ravel()) < tol_vec * self.D**2:
             if allclose(tmp, x, rtol, atol):
-                print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+                #print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
                 x[:] = tmp
                 break            
-        else:
-            print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+#        else:
+#            print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
                     
         #re-scale
         if not abs(ev - 1) < atol:
@@ -549,9 +574,26 @@ class EvoMPS_TDVP_Uniform:
         else:
             return
     
+    def gen_h_matrix(self):
+        """Generates a matrix form for h_nn, which can speed up parts of the
+        algorithm by avoiding excess loops and python calls.
+        """
+        self.h_nn_mat = sp.zeros((self.q, self.q, self.q, self.q), dtype=sp.complex128)
+        q = self.q
+        for u in xrange(q):
+            for v in xrange(q):
+                for s in xrange(q):
+                    for t in xrange(q):
+                        self.h_nn_mat[s, t, u, v] = self.h_nn(s, t, u, v)    
+    
     def calc_C(self):
         if not tc is None and not self.h_nn_cptr is None:
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
+        elif not self.h_nn_mat is None:
+            res = sp.tensordot(self.AA, self.h_nn_mat, ((0, 1), (2, 3)))
+            res = sp.rollaxis(res, 3)
+            res = sp.rollaxis(res, 3)
+            self.C[:] = res
         else:
             self.C.fill(0)
             
@@ -821,8 +863,6 @@ class EvoMPS_TDVP_Uniform:
             
     def calc_BHB(self, x, p): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
-        
-        FIXME: Not Hermitian or pos. def.!
         """
         B = self.get_B_from_x(x, self.Vsh, self.l_sqrt_i, self.r_sqrt_i)
         
@@ -832,6 +872,7 @@ class EvoMPS_TDVP_Uniform:
                 print "Sanity check failed: Gauge-fixing violation!"
         
         A = self.A
+        AA = self.AA
         l = self.l
         r = self.r
         l_sqrt = self.l_sqrt
@@ -866,6 +907,7 @@ class EvoMPS_TDVP_Uniform:
         
         y = y - m.adot(r, y) * l #should just = y due to gauge-fixing
         M = self.calc_PPinv(y, p=-p, left=True)
+        #print m.adot(r, M)
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * self.eps_l(M)
             if not sp.allclose(y, y2):
@@ -873,7 +915,10 @@ class EvoMPS_TDVP_Uniform:
         Mh = m.H(M)
         
         def h_nn(s,t,u,v):
-            return self.h_nn(s,t,u,v) - self.h.real
+            h = self.h_nn(s,t,u,v)
+            if s == u and t == v:
+                h -= self.h.real
+            return h
         
         res = sp.zeros((x.shape[0], self.D))
         
@@ -883,16 +928,19 @@ class EvoMPS_TDVP_Uniform:
               )
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(self.eps_r_2s(r, op=h_nn, A3=Vri))) #10
-              
+        
+        exp = sp.exp
+        H = m.H
         for s in xrange(self.q):
             for t in xrange(self.q):
+                middle = (l.dot(A[s].dot(B[t])) #2 OK
+                          + exp(-1.j * p) * l.dot(B[s].dot(A[t])) #4 OK with 3
+                          + exp(-2.j * p) * Mh.dot(AA[s, t]) #12
+                         )
                 for u in xrange(self.q):
                     for v in xrange(self.q):
-                        res += h_nn(s,t,u,v) * l_sqrt_i.dot(m.H(A[u]).dot(
-                                 l.dot(A[s].dot(B[t].dot(m.H(Vr[v])))) #2 OK
-                                 + sp.exp(-1.j * p) * l.dot(B[s].dot(A[t].dot(m.H(Vr[v])))) #4 OK with 3
-                                 + sp.exp(-2.j * p) * Mh.dot(A[s].dot(A[t].dot(m.H(Vr[v])))) #12
-                               ))
+                        res += h_nn(u,v,s,t) * l_sqrt_i.dot(H(A[u]).dot(middle
+                               )).dot(H(Vr[v]))
               
         res += l_sqrt.dot(self.eps_r(K_r, A1=B, A2=Vri)) #5 OK
         
@@ -907,6 +955,7 @@ class EvoMPS_TDVP_Uniform:
         y = y1 + y2 + y3
         y = y - m.adot(l, y) * r
         y_pi = self.calc_PPinv(y, p=p) #complex phase screwing this up?
+        #print m.adot(l, y_pi)
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi)
             if not sp.allclose(y, y2):
