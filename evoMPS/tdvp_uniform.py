@@ -51,7 +51,7 @@ class EOp:
     
 
 class PPInvOp:    
-    def __init__(self, tdvp, p, left, A1, A2, r):
+    def __init__(self, tdvp, p, left, pseudo, A1, A2, r):
         self.tdvp = tdvp
         self.A1 = A1
         self.A2 = A2
@@ -59,6 +59,7 @@ class PPInvOp:
         self.r = r
         self.p = p
         self.left = left
+        self.pseudo = pseudo
         
         self.D = tdvp.D
         
@@ -73,12 +74,18 @@ class PPInvOp:
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
             Ehx = self.tdvp._eps_l_noop_dense(x, self.A1, self.A2, self.out)
-            QEQhx = sp.exp(-1.j * self.p) * (Ehx - self.l * m.adot(self.r, x))
-            res = x - QEQhx
+            if self.pseudo:
+                QEQhx = Ehx - self.l * m.adot(self.r, x)
+                res = x - sp.exp(-1.j * self.p) * QEQhx
+            else:
+                res = x - sp.exp(-1.j * self.p) * Ehx
         else:
             Ex = self.tdvp._eps_r_noop_dense(x, self.A1, self.A2, self.out)
-            QEQx = sp.exp(1.j * self.p) * (Ex - self.r * m.adot(self.l, x))
-            res = x - QEQx
+            if self.pseudo:
+                QEQx = Ex - self.r * m.adot(self.l, x)
+                res = x - sp.exp(1.j * self.p) * QEQx
+            else:
+                res = x - sp.exp(1.j * self.p) * Ex
         
         return res.ravel()
         
@@ -639,7 +646,7 @@ class EvoMPS_TDVP_Uniform:
                             if h != 0:
                                 self.C[s, t] += h * self.AA[u, v]
     
-    def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None):
+    def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, pseudo=True):
         if out is None:
             out = np.ones_like(self.A[0])
             
@@ -652,7 +659,7 @@ class EvoMPS_TDVP_Uniform:
         if r is None:
             r = self.r
         
-        op = PPInvOp(self, p, left, A1, A2, r)
+        op = PPInvOp(self, p, left, pseudo, A1, A2, r)
         
         res = out.ravel()
         x = x.ravel()
@@ -674,7 +681,7 @@ class EvoMPS_TDVP_Uniform:
         res = res.reshape((self.D, self.D))
             
         if self.sanity_checks and self.D < 16:
-            pinvE = self.pinvE_brute(p, A1, A2, r)
+            pinvE = self.pinvE_brute(p, A1, A2, r, pseudo)
             
             if left:
                 res_brute = (x.reshape((1, self.D**2)).conj().dot(pinvE)).ravel().conj().reshape((self.D, self.D))
@@ -889,7 +896,7 @@ class EvoMPS_TDVP_Uniform:
             
         self.A = A0 - dtau /6 * B_fin
             
-    def pinvE_brute(self, p, A1, A2, r):
+    def pinvE_brute(self, p, A1, A2, r, pseudo=True):
         E = np.zeros((self.D**2, self.D**2), dtype=self.typ)
 
         for s in xrange(self.q):
@@ -898,7 +905,10 @@ class EvoMPS_TDVP_Uniform:
         l = np.asarray(self.l)
         r = np.asarray(r)
         
-        QEQ = E - r.reshape((self.D**2, 1)).dot(l.reshape((1, self.D**2)).conj())
+        if pseudo:
+            QEQ = E - r.reshape((self.D**2, 1)).dot(l.reshape((1, self.D**2)).conj())
+        else:
+            QEQ = E
         
         EyemE = np.eye(self.D**2, dtype=self.typ) - sp.exp(1.j * p) * QEQ
         
@@ -910,7 +920,6 @@ class EvoMPS_TDVP_Uniform:
         A = self.A
         A_ = donor.A
         
-        #AA = self.AA
         AA_ = donor.AA
         
         l = self.l
@@ -923,7 +932,9 @@ class EvoMPS_TDVP_Uniform:
         r__sqrt_i = donor.r_sqrt_i
         
         K__r = donor.K
-        K_l = self.K_left        
+        K_l = self.K_left
+        
+        pseudo = donor is self
         
         B = donor.get_B_from_x(x, donor.Vsh, l_sqrt_i, r__sqrt_i)
         
@@ -954,9 +965,9 @@ class EvoMPS_TDVP_Uniform:
             
         y = self.eps_l(l, A1=B)  
         
-        if donor is self:
+        if pseudo:
             y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_)
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo)
         #print m.adot(r, M)
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * self.eps_l(M, A1=A_)
@@ -994,7 +1005,7 @@ class EvoMPS_TDVP_Uniform:
               
         res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
         
-        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6  -> small imag. contrib..
+        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
         
@@ -1003,9 +1014,9 @@ class EvoMPS_TDVP_Uniform:
         y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=A, A2=B) #11
         
         y = y1 + y2 + y3
-        if donor is self:
+        if pseudo:
             y = y - m.adot(l, y) * r_
-        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_) #complex phase screwing this up?
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo)
         #print m.adot(l, y_pi)
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi, A2=A_)
@@ -1067,7 +1078,7 @@ class EvoMPS_TDVP_Uniform:
         opE = EOp(donor, self.A, donor.A, False)
         ev = las.eigs(opE, which='LM', k=1)
         donor.A *= ev[0] / abs(ev[0])
-        donor.update() #needed?
+        #donor.update()
         
         op = Excite_H_Op(self, donor, p)
         
