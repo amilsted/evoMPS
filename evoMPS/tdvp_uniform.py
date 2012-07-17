@@ -341,9 +341,12 @@ class EvoMPS_TDVP_Uniform:
            eigenvalue.
            
            The contents of the starting vector x is modifed.
-           
-           Why do we require more iterations for larger q and D?
         """        
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+                        
         try:
             norm = la.get_blas_funcs("nrm2", [x])
         except ValueError:
@@ -354,11 +357,6 @@ class EvoMPS_TDVP_Uniform:
         except:
             allclose = np.allclose
             print "Falling back to numpy allclose()!"
-        
-        if A1 is None:
-            A1 = self.A
-        if A2 is None:
-            A2 = self.A
         
         n = x.size #we will scale x so that stuff doesn't get too small
         
@@ -378,18 +376,29 @@ class EvoMPS_TDVP_Uniform:
         else:
             print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
             
+        ev = abs(ev)
+
 #        opE = EOp(self, A1, A2, x is self.l)
-#        ev, eV = las.eigs(opE, which='LM', k=1, v0=x.ravel())
-#        print ev
+#        x *= n / norm(x.ravel())
+#        ev, eV = las.eigs(opE, which='LM', k=10, v0=x.ravel())
+#        print ev * ev.conj()
 #        ev = ev[0]
-#        x[:] = eV[:, 0].reshape(self.D, self.D)
-#        x *= 1/norm(x.ravel())
+#        x[:] = eV[:, 0].reshape(self.D, self.D)        
+#        
+#        #remove any additional phase factor
+#        x *= 1 / sp.sqrt((x / m.H(x)).mean())
+#        #x[:] = sp.sqrt(x * m.H(x))
+#        print norm((x - m.H(x)).ravel())
+#        
+#        x *= n / norm(x.ravel())
+#        
 #        i = 0
+#        ev = abs(ev)
 #        if self.sanity_checks:
 #            y = eps(x, A1, A2, tmp)
-#            diff = norm(x.ravel()-y.ravel()/ev)
-#            print diff
-#        ev = abs(ev)
+#            diff = norm(x.ravel()-y.ravel()/ev)/norm(x.ravel())
+#            if diff > 1E-10:
+#                print "Sanity check failed: Bad eigenevector, off by %g" % diff        
                     
         if rescale and not abs(ev - 1) < atol:
             A1 *= 1 / sp.sqrt(ev)
