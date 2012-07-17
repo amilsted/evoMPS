@@ -22,7 +22,34 @@ except ImportError:
     ac = None
     print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
         
-#This class allows us to use scipy's bicgstab implementation
+
+class EOp:
+    def __init__(self, tdvp, A1, A2, left):
+        self.tdvp = tdvp
+        self.A1 = A1
+        self.A2 = A2
+        
+        self.D = tdvp.D
+        
+        self.shape = (self.D**2, self.D**2)
+        
+        self.dtype = np.dtype(tdvp.typ)
+        
+        self.out = np.empty_like(tdvp.r)
+        
+        if left:
+            self.eps = tdvp._eps_l_noop_dense
+        else:
+            self.eps = tdvp._eps_r_noop_dense
+    
+    def matvec(self, v):
+        x = v.reshape((self.D, self.D))
+
+        Ex = self.eps(x, self.A1, self.A2, self.out)
+        
+        return Ex.ravel()
+    
+
 class PPInvOp:    
     def __init__(self, tdvp, p, left, A1, A2, r):
         self.tdvp = tdvp
@@ -37,7 +64,7 @@ class PPInvOp:
         
         self.shape = (self.D**2, self.D**2)
         
-        self.dtype = tdvp.typ
+        self.dtype = np.dtype(tdvp.typ)
         
         self.out = np.empty_like(self.l)
     
@@ -85,7 +112,7 @@ class EvoMPS_TDVP_Uniform:
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
         
-        self.pow_itr_max = 100
+        self.pow_itr_max = 200
         
         self.h_nn = None    
         self.h_nn_cptr = None
@@ -308,7 +335,8 @@ class EvoMPS_TDVP_Uniform:
         print "Left ok?: " + str(np.allclose(self.eps_l(self.l), self.l))
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
         
-    def _calc_lr(self, x, eps, tmp, max_itr=100, rtol=1E-14, atol=1E-14):
+    def _calc_lr(self, x, eps, tmp, A1=None, A2=None, rescale=True,
+                 max_itr=200, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
            
@@ -326,32 +354,51 @@ class EvoMPS_TDVP_Uniform:
         except:
             allclose = np.allclose
             print "Falling back to numpy allclose()!"
-            
-        l = x.size #we will scale x so that stuff doesn't get too small
-        A = self.A
         
-        x *= l / norm(x.ravel())
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+        
+        n = x.size #we will scale x so that stuff doesn't get too small
+        
+        x *= n / norm(x.ravel())
         tmp[:] = x
         for i in xrange(max_itr):
             x[:] = tmp
-            eps(x, A, A, tmp)
-            ev = norm(tmp.ravel()) / l
-            tmp *= (1 / ev)
-            #if norm((tmp - x).ravel()) < tol_vec * self.D**2:
-            if allclose(tmp, x, rtol, atol):
-                #print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+            eps(x, A1, A2, tmp)            
+            ev_mag = norm(tmp.ravel()) / n
+            ev = tmp.mean() / x.mean()
+            tmp *= (1 / ev_mag)
+#            if norm((tmp - x).ravel()) < tol_vec * self.D**2:
+            if allclose(tmp, x, rtol, atol):                
+                print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
                 x[:] = tmp
                 break            
-#        else:
-#            print (i, ev, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+        else:
+            print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+            
+#        opE = EOp(self, A1, A2, x is self.l)
+#        ev, eV = las.eigs(opE, which='LM', k=1, v0=x.ravel())
+#        print ev
+#        ev = ev[0]
+#        x[:] = eV[:, 0].reshape(self.D, self.D)
+#        x *= 1/norm(x.ravel())
+#        i = 0
+#        if self.sanity_checks:
+#            y = eps(x, A1, A2, tmp)
+#            diff = norm(x.ravel()-y.ravel()/ev)
+#            print diff
+#        ev = abs(ev)
                     
-        #re-scale
-        if not abs(ev - 1) < atol:
-            self.A *= 1 / ma.sqrt(ev)
+        if rescale and not abs(ev - 1) < atol:
+            A1 *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
-                ev = norm(eps(x, A, A, tmp).ravel()) / l
+                if not A1 is A2:
+                    print "Sanity check failed: Re-scaling with A1 <> A2!"
+                ev = eps(x, A1, A2, tmp).mean() / x.mean()
                 if not abs(ev - 1) < atol:
-                    print "Sanity check failed: Largest ev after re-scale = %g" % ev
+                    print "Sanity check failed: Largest ev after re-scale = " + str(ev)
         
         return x, i < max_itr - 1, i
     
@@ -618,7 +665,7 @@ class EvoMPS_TDVP_Uniform:
         res = res.reshape((self.D, self.D))
             
         if self.sanity_checks and self.D < 16:
-            pinvE = self.pinvE_brute(p)
+            pinvE = self.pinvE_brute(p, A1, A2, r)
             
             if left:
                 res_brute = (x.reshape((1, self.D**2)).conj().dot(pinvE)).ravel().conj().reshape((self.D, self.D))
@@ -833,14 +880,14 @@ class EvoMPS_TDVP_Uniform:
             
         self.A = A0 - dtau /6 * B_fin
             
-    def pinvE_brute(self, p):
+    def pinvE_brute(self, p, A1, A2, r):
         E = np.zeros((self.D**2, self.D**2), dtype=self.typ)
-        A = self.A
+
         for s in xrange(self.q):
-            E += np.kron(A[s], A[s].conj())
+            E += np.kron(A1[s], A2[s].conj())
         
         l = np.asarray(self.l)
-        r = np.asarray(self.r)
+        r = np.asarray(r)
         
         QEQ = E - r.reshape((self.D**2, 1)).dot(l.reshape((1, self.D**2)).conj())
         
@@ -869,7 +916,7 @@ class EvoMPS_TDVP_Uniform:
         K__r = donor.K
         K_l = self.K_left        
         
-        B = donor.get_B_from_x(x, donor.Vsh, self.l_sqrt_i, self.r_sqrt_i)
+        B = donor.get_B_from_x(x, donor.Vsh, l_sqrt_i, r__sqrt_i)
         
         if self.sanity_checks:
             tst = donor.eps_r(r_, A1=B)
@@ -1007,6 +1054,12 @@ class EvoMPS_TDVP_Uniform:
         return la.eigvalsh(H)
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, which='SM'):
+        #Phase-alignment
+        opE = EOp(donor, self.A, donor.A, False)
+        ev = las.eigs(opE, which='LM', k=1)
+        donor.A *= ev[0] / abs(ev[0])
+        donor.update() #needed?
+        
         op = Excite_H_Op(self, donor, p)
         
         self.calc_K_l()
