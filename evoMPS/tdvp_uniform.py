@@ -102,11 +102,13 @@ class Excite_H_Op:
         self.shape = (d, d)
         
         self.dtype = np.dtype(tdvp.typ)
+        
+        self.prereq = (tdvp.calc_BHB_prereq(donor))
     
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
         
-        res = self.tdvp.calc_BHB(x, self.p, self.donor)
+        res = self.tdvp.calc_BHB(x, self.p, self.donor, *self.prereq)
         
         return res.ravel()
 
@@ -252,7 +254,6 @@ class EvoMPS_TDVP_Uniform:
         for s in xrange(self.q):
             for t in xrange(self.q):
                 AA[s, t] = dot(A[s], A[t])
-                #Use dot() because A[s] is always a dense matrix
         
         #Note: This could be cythonized, calling BLAS from C    
         
@@ -260,7 +261,7 @@ class EvoMPS_TDVP_Uniform:
         #AA = np.array([dot(A[s], A[t]) for s in xrange(self.q) for t in xrange(self.q)])
         #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
         
-    def eps_r_2s(self, x, op, A1=None, A2=None, A3=None, A4=None):
+    def eps_r_2s(self, x, op, A1=None, A2=None, A3=None, A4=None, C34=None, C=None):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -270,41 +271,69 @@ class EvoMPS_TDVP_Uniform:
         if A4 is None:
             A4 = self.A
             
+        if op is self.h_nn and C is None:
+            C = self.C
+            op = None
+            
         res = np.zeros((A1.shape[1], A3.shape[1]), dtype=self.typ)
         zeros_like = np.zeros_like
         zeros = np.zeros
         
         if (A1 is self.A) and (A2 is self.A) and (A3 is self.A) and (A4 is self.A):
-            for u in xrange(self.q):
-                for v in xrange(self.q):
-                    subres = zeros_like(A1[0])
-                    for s in xrange(self.q):
-                        for t in xrange(self.q):
-                            opval = op(u, v, s, t)
-                            if opval != 0:
-                                subres += opval * self.AA[s, t]
-                    res += m.mmul(subres, x, m.H(self.AA[u, v]))
+            if op is None and not C is None:
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        res += C[s, t].dot(x.dot(m.H(self.AA[s, t])))
+            else:
+                for u in xrange(self.q):
+                    for v in xrange(self.q):
+                        subres = zeros_like(A1[0])
+                        for s in xrange(self.q):
+                            for t in xrange(self.q):
+                                opval = op(u, v, s, t)
+                                if opval != 0:
+                                    subres += opval * self.AA[s, t]
+                        res += subres.dot(x.dot(m.H(self.AA[u, v])))
         elif (A1 is self.A) and (A2 is self.A):
-            for u in xrange(self.q):
-                for v in xrange(self.q):
-                    subres = zeros_like(self.A[0])
-                    for s in xrange(self.q):
-                        for t in xrange(self.q):
-                            opval = op(u, v, s, t)
-                            if opval != 0:
-                                subres += opval * self.AA[s, t]
-                    AAuvH = m.H(A3[u].dot(A4[v]))
-                    res += m.mmul(subres, x, AAuvH)
-        elif (A3 is self.A) and (A4 is self.A):
-            for u in xrange(self.q):
-                for v in xrange(self.q):
-                    subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
-                    for s in xrange(self.q):
-                        for t in xrange(self.q):
-                            opval = op(u, v, s, t)
-                            if opval != 0:
-                                subres += opval * A1[s].dot(A2[t])
-                    res += m.mmul(subres, x, m.H(self.AA[u, v]))
+            if op is None and not C is None:
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        AAstH = m.H(A3[s].dot(A4[t]))
+                        res += C[s, t].dot(x.dot(AAstH))
+            elif op is None and not C34 is None:
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        res += self.AA[s, t].dot(x.dot(m.H(C34[s, t])))
+            else:
+                for u in xrange(self.q):
+                    for v in xrange(self.q):
+                        subres = zeros_like(self.A[0])
+                        for s in xrange(self.q):
+                            for t in xrange(self.q):
+                                opval = op(u, v, s, t)
+                                if opval != 0:
+                                    subres += opval * self.AA[s, t]
+                        AAuvH = m.H(A3[u].dot(A4[v]))
+                        res += subres.dot(x.dot(AAuvH))
+        elif (op is None and not C34 is None) or (A3 is self.A) and (A4 is self.A):
+            if op is None and not C34 is None:
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        res += A1[s].dot(A2[t]).dot(x.dot(m.H(C34[s, t])))
+            elif op is None and not C is None:
+                for s in xrange(self.q):
+                    for t in xrange(self.q):
+                        res += A1[s].dot(A2[t]).dot(x.dot(m.H(C[s, t])))
+            else:
+                for u in xrange(self.q):
+                    for v in xrange(self.q):
+                        subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
+                        for s in xrange(self.q):
+                            for t in xrange(self.q):
+                                opval = op(u, v, s, t)
+                                if opval != 0:
+                                    subres += opval * A1[s].dot(A2[t])
+                        res += subres.dot(x.dot(m.H(self.AA[u, v])))
         else:
             for u in xrange(self.q):
                 for v in xrange(self.q):
@@ -315,7 +344,7 @@ class EvoMPS_TDVP_Uniform:
                             if opval != 0:
                                 subres += opval * A1[s].dot(A2[t])
                     AAuvH = m.H(A3[u].dot(A4[v]))
-                    res += m.mmul(subres, x, AAuvH)
+                    res += subres.dot(x.dot(AAuvH))
                     
         return res
 
@@ -631,10 +660,7 @@ class EvoMPS_TDVP_Uniform:
         if not tc is None and not self.h_nn_cptr is None:
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
         elif not self.h_nn_mat is None:
-            res = sp.tensordot(self.AA, self.h_nn_mat, ((0, 1), (2, 3)))
-            res = sp.rollaxis(res, 3)
-            res = sp.rollaxis(res, 3)
-            self.C[:] = res
+            self.C[:] = sp.tensordot(self.h_nn_mat, self.AA, ((2, 3), (0, 1)))
         else:
             self.C.fill(0)
             
@@ -680,7 +706,7 @@ class EvoMPS_TDVP_Uniform:
         
         res = res.reshape((self.D, self.D))
             
-        if self.sanity_checks and self.D < 16:
+        if False and self.sanity_checks and self.D < 16:
             pinvE = self.pinvE_brute(p, A1, A2, r, pseudo)
             
             if left:
@@ -913,14 +939,77 @@ class EvoMPS_TDVP_Uniform:
         EyemE = np.eye(self.D**2, dtype=self.typ) - sp.exp(1.j * p) * QEQ
         
         return la.inv(EyemE)
+        
+    def calc_BHB_prereq(self, donor):
+        l = self.l
+        r_ = donor.r
+        r__sqrt = donor.r_sqrt
+        r__sqrt_i = donor.r_sqrt_i
+        A_ = donor.A
+        AA_ = donor.AA
+                    
+#        def h_nn(s,t,u,v):
+#            h = self.h_nn(s,t,u,v)
+#            if s == u and t == v:
+#                h -= self.h.real
+#            return h
+#        h_nn = np.vectorize(h_nn, otypes=[self.typ])
+#        h_nn_mat = np.fromfunction(h_nn, (self.q, self.q, self.q, self.q), dtype=self.typ)
+        eyed = np.eye(self.q**2)
+        eyed = eyed.reshape((self.q, self.q, self.q, self.q))
+        h_nn_mat = self.h_nn_mat - self.h.real * eyed
+        def h_nn(s,t,u,v):
+            return h_nn_mat[s,t,u,v]
             
-    def calc_BHB(self, x, p, donor): 
+        V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
+        for s in xrange(donor.q):
+            V_[s] = m.H(donor.Vsh[s])
+        
+        Vri_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vri_[s] = r__sqrt_i.dot_left(V_[s])
+            
+        Vr_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vr_[s] = r__sqrt.dot_left(V_[s])
+            
+        C_AhlA = np.empty_like(self.C)
+        for u in xrange(self.q):
+            for s in xrange(self.q):
+                C_AhlA[u, s] = m.H(self.A[u]).dot(l.dot(self.A[s]))
+        C_AhlA = sp.tensordot(h_nn_mat, C_AhlA, ((2, 0), (0, 1)))
+        
+        C_A_Vrh_ = np.empty((self.q, self.q, A_.shape[1], Vr_.shape[1]), dtype=self.typ)
+        for t in xrange(self.q):
+            for v in xrange(self.q):
+                C_A_Vrh_[t, v] = A_[t].dot(m.H(Vr_[v]))
+        C_A_Vrh_ = sp.tensordot(h_nn_mat, C_A_Vrh_, ((1, 3), (0, 1)))
+                
+        C_Vri_A_ = np.empty((self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                C_Vri_A_[s, t] = Vri_[s].dot(A_[t])
+        C_Vri_A_ = sp.tensordot(h_nn_mat, C_Vri_A_, ((2, 3), (0, 1)))
+        
+        C = sp.tensordot(h_nn_mat, self.AA, ((2, 3), (0, 1)))
+        #C = self.C.copy()
+        #C -= self.h.real * self.AA
+
+        C_ = sp.tensordot(h_nn_mat, AA_, ((2, 3), (0, 1)))
+        #C_ = donor.C.copy()
+        #C_ -= self.h.real * AA_
+        
+        rhs10 = donor.eps_r_2s(r_, op=None, A3=Vri_, C34=C_Vri_A_)
+        
+        return h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
+            
+    def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         """
+        print "called!"
+        
         A = self.A
         A_ = donor.A
-        
-        AA_ = donor.AA
         
         l = self.l
         r_ = donor.r
@@ -942,14 +1031,6 @@ class EvoMPS_TDVP_Uniform:
             tst = donor.eps_r(r_, A1=B)
             if not np.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
-        
-        V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
-        for s in xrange(donor.q):
-            V_[s] = m.H(donor.Vsh[s])
-        
-        Vri_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vri_[s] = r__sqrt_i.dot_left(V_[s])
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
@@ -958,10 +1039,6 @@ class EvoMPS_TDVP_Uniform:
             if not sp.allclose(B, B2, rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity Fail in calc_BHB! Bad Vri!"
-
-        Vr_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vr_[s] = r__sqrt.dot_left(V_[s])
             
         y = self.eps_l(l, A1=B)  
         
@@ -975,33 +1052,21 @@ class EvoMPS_TDVP_Uniform:
                 print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
         
-        def h_nn(s,t,u,v):
-            h = self.h_nn(s,t,u,v)
-            if s == u and t == v:
-                h -= self.h.real
-            return h
-        
-        res = sp.zeros((x.shape[0], self.D))
-        
+
         res = l_sqrt.dot(
-               donor.eps_r_2s(r_, op=h_nn, A1=B, A3=Vri_) #1 OK
-               + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=h_nn, A2=B, A3=Vri_, A4=A_) #3 OK with 4
+               donor.eps_r_2s(r_, op=None, A1=B, A3=Vri_, C34=C_Vri_A_) #1 OK
+               + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=None, A2=B, A3=Vri_, A4=A_, C34=C_Vri_A_) #3 OK with 4
               )
         
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r_2s(r_, op=h_nn, A3=Vri_))) #10
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
         exp = sp.exp
         H = m.H
         for s in xrange(self.q):
             for t in xrange(self.q):
-                middle = (l.dot(A[s].dot(B[t])) #2 OK
-                          + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
-                          + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
-                         )
-                for u in xrange(self.q):
-                    for v in xrange(self.q):
-                        res += h_nn(u,v,s,t) * l_sqrt_i.dot(H(A[u]).dot(middle
-                               )).dot(H(Vr_[v]))
+                res += l_sqrt_i.dot(C_AhlA[t, s].dot(B[s])).dot(H(Vr_[t])) #2 OK
+                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
+                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
               
         res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
         
@@ -1010,8 +1075,8 @@ class EvoMPS_TDVP_Uniform:
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
         
         y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
-        y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=B) #9
-        y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=A, A2=B) #11
+        y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=None, A1=B, C34=C_) #9
+        y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=None, A1=A, A2=B, C34=C_) #11
         
         y = y1 + y2 + y3
         if pseudo:
@@ -1036,23 +1101,22 @@ class EvoMPS_TDVP_Uniform:
         return res
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, which='SM'):
-        op = Excite_H_Op(self, self, p)
-        
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = self.calc_Vsh(self.r_sqrt)
         
+        op = Excite_H_Op(self, self, p)
         w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
                       maxiter=max_itr, tol=tol)
                           
         return w
     
     def excite_top_triv_brute(self, p):
-        op = Excite_H_Op(self, self, p)
-        
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = self.calc_Vsh(self.r_sqrt)
+        
+        op = Excite_H_Op(self, self, p)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         y = np.empty_like(x)
@@ -1079,14 +1143,13 @@ class EvoMPS_TDVP_Uniform:
         ev = las.eigs(opE, which='LM', k=1)
         donor.A *= ev[0] / abs(ev[0])
         #donor.update()
-        
-        op = Excite_H_Op(self, donor, p)
-        
+
         self.calc_K_l()
         self.calc_l_r_roots()
         donor.calc_l_r_roots()
         donor.Vsh = donor.calc_Vsh(donor.r_sqrt)
         
+        op = Excite_H_Op(self, donor, p)
         w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
                       maxiter=max_itr, tol=tol)
                           
