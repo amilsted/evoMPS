@@ -18,32 +18,20 @@ import evoMPS.tdvp_uniform as tdvp
 First, we define our Hamiltonian and some observables.
 """
 
-def h_ext(s, t):
-    """The single-site Hamiltonian representing the external field.
-    
-    -h * sigmaX_s,t.
-    
-    The global variable h determines the strength.
-    """
-    if s == t:
-        return 0
-    else:
-        return -h        
-
 def h_nn(s, t, u, v):
     """The nearest neighbour Hamiltonian representing the interaction.
 
-    -J * sigmaZ_n_s,t * sigmaZ_n+1_u,v.
+    -J * sigmaX_n_s,t * sigmaX_n+1_u,v - h * sigmaZ_s,t
     
     The global variable J determines the strength.
     """
     res = 0
     
-    if s == u and t == v:
-        res = -J * (-1)**s * (-1)**t
+    if s != u and t != v:
+        res = -J
         
-    if s != u and t == v:
-        res += -h
+    if s == u and t == v:
+        res += -h * (-1)**s
         
     return res
     
@@ -92,20 +80,20 @@ s.h_nn = h_nn
 """
 Set the initial Hamiltonian parameters.
 """
-h = -2.00
+h = -0.50
 J = 1.00
 
 """
 We're going to simulate a quench after we find the ground state.
 Set the new J parameter for the real time evolution here.
 """
-J_real = 2
+J_real = 0.25
 
 """
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.1
+step = 0.05
 realstep = 0.01
 
 """
@@ -113,8 +101,8 @@ Now set the tolerance for the imaginary time evolution.
 When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 7E-6
-total_steps = 1000
+tol_im = 1E-10
+total_steps = 20000
 
 """
 The following handles loading the ground state from a file.
@@ -122,9 +110,12 @@ The ground state will be saved automatically when it is declared found.
 If this script is run again with the same settings, an existing
 ground state will be loaded, if present.
 """
-grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy"
 
-grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
+broken_left = False
+
+grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground_%u.npy"
+
+grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))
 
 expand = False
 
@@ -145,7 +136,7 @@ else:
     real_time = False
     
 s.sanity_checks = True
-s.symm_gauge = False
+s.symm_gauge = True
 
 if __name__ == "__main__":
     """
@@ -204,7 +195,7 @@ if __name__ == "__main__":
         Compute obserables!
         """
         
-        Sx[i] = s.expect_1s(x_ss) #Spin observables for site 3.
+        Sx[i] = s.expect_1s(x_ss) 
         Sy[i] = s.expect_1s(y_ss)
         Sz[i] = s.expect_1s(z_ss)
         row.append("%.3g" % Sx[i].real)
@@ -231,6 +222,12 @@ if __name__ == "__main__":
             loaded = False
         elif loaded or (not real_time and i > 1 and eta < tol_im):
             real_time = True
+            
+            if abs(h/J) < 1:
+                broken_left = Sx[i] > 0
+                print "Broken left: " + str(broken_left)
+            
+            grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))  
             
             s.save_state(grnd_fname)
             J = J_real
