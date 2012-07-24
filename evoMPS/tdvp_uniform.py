@@ -104,9 +104,14 @@ class Excite_H_Op:
         self.dtype = np.dtype(tdvp.typ)
         
         self.prereq = (tdvp.calc_BHB_prereq(donor))
+        
+        self.calls = 0
     
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
+        
+        self.calls += 1
+        print "Calls: %u" % self.calls
         
         res = self.tdvp.calc_BHB(x, self.p, self.donor, *self.prereq)
         
@@ -406,11 +411,11 @@ class EvoMPS_TDVP_Uniform:
             tmp *= (1 / ev_mag)
 #            if norm((tmp - x).ravel()) < tol_vec * self.D**2:
             if allclose(tmp, x, rtol, atol):                
-                print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+                #print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
                 x[:] = tmp
                 break            
-        else:
-            print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+#        else:
+#            print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
             
         ev = abs(ev)
 
@@ -945,6 +950,7 @@ class EvoMPS_TDVP_Uniform:
         r_ = donor.r
         r__sqrt = donor.r_sqrt
         r__sqrt_i = donor.r_sqrt_i
+        A = self.A
         A_ = donor.A
         AA_ = donor.AA
                     
@@ -976,7 +982,7 @@ class EvoMPS_TDVP_Uniform:
         C_AhlA = np.empty_like(self.C)
         for u in xrange(self.q):
             for s in xrange(self.q):
-                C_AhlA[u, s] = m.H(self.A[u]).dot(l.dot(self.A[s]))
+                C_AhlA[u, s] = m.H(A[u]).dot(l.dot(A[s]))
         C_AhlA = sp.tensordot(h_nn_mat, C_AhlA, ((2, 0), (0, 1)))
         
         C_A_Vrh_ = np.empty((self.q, self.q, A_.shape[1], Vr_.shape[1]), dtype=self.typ)
@@ -1005,11 +1011,13 @@ class EvoMPS_TDVP_Uniform:
             
     def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
-        """
-        print "called!"
         
+        FIXME: We appear to have a bug wrt. the old, slow code.
+               Problem case: S=1 Heisenberg.
+        """        
         A = self.A
         A_ = donor.A
+        AA_ = donor.AA
         
         l = self.l
         r_ = donor.r
@@ -1052,27 +1060,108 @@ class EvoMPS_TDVP_Uniform:
                 print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
         
+        if False:
+            res = l_sqrt.dot(
+                   donor.eps_r_2s(r_, op=h_nn, A1=B, A3=Vri_) #1 OK
+                   + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=h_nn, A2=B, A3=Vri_, A4=A_) #3 OK with 4
+                  )
+                  
+            print m.adot(x, res)
+            
+            res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r_2s(r_, op=h_nn, A3=Vri_))) #10
+            
+            print m.adot(x, res)
+            
+            exp = sp.exp
+            H = m.H
+            for s in xrange(self.q):
+                for t in xrange(self.q):
+                    middle = (l.dot(A[s].dot(B[t])) #2 OK
+                              + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
+                              + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
+                             )
+                    for u in xrange(self.q):
+                        for v in xrange(self.q):
+                            res += h_nn(u,v,s,t) * l_sqrt_i.dot(H(A[u]).dot(middle
+                                   )).dot(H(Vr_[v]))
+                                   
+            print m.adot(x, res)
+                  
+            res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
+            
+            print m.adot(x, res)
+            
+            res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
+            
+            print m.adot(x, res)
+            
+            res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
+            
+            print m.adot(x, res)
+            
+            y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
+            y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=B) #9
+            y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=A, A2=B) #11
+            
+            y = y1 + y2 + y3
+            if pseudo:
+                y = y - m.adot(l, y) * r_
+            y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo)
+            #print m.adot(l, y_pi)
+            if self.sanity_checks:
+                y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi, A2=A_)
+                if not sp.allclose(y, y2):
+                    print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+            
+            res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
+            
+            print m.adot(x, res)
 
         res = l_sqrt.dot(
                donor.eps_r_2s(r_, op=None, A1=B, A3=Vri_, C34=C_Vri_A_) #1 OK
                + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=None, A2=B, A3=Vri_, A4=A_, C34=C_Vri_A_) #3 OK with 4
               )
+              
+        print m.adot(x, res)
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
+        print m.adot(x, res)
+        
+#        exp = sp.exp
+#        H = m.H
+#        for s in xrange(self.q):
+#            for t in xrange(self.q):
+#                res += l_sqrt_i.dot(C_AhlA[t, s].dot(B[s])).dot(H(Vr_[t])) #2 OK
+#                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
+#                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
+
         exp = sp.exp
         H = m.H
         for s in xrange(self.q):
             for t in xrange(self.q):
-                res += l_sqrt_i.dot(C_AhlA[t, s].dot(B[s])).dot(H(Vr_[t])) #2 OK
-                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
-                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
+                middle = (l.dot(A[s].dot(B[t])) #2 OK
+                          + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
+                          + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
+                         )
+                for u in xrange(self.q):
+                    for v in xrange(self.q):
+                        res += h_nn_mat[u,v,s,t] * l_sqrt_i.dot(H(A[u]).dot(middle
+                               )).dot(H(Vr_[v]))
               
+        print m.adot(x, res)
+        
         res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
+        
+        print m.adot(x, res)
         
         res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
         
+        print m.adot(x, res)
+        
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
+        
+        print m.adot(x, res)
         
         y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
         y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=None, A1=B, C34=C_) #9
@@ -1090,6 +1179,8 @@ class EvoMPS_TDVP_Uniform:
         
         res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
         
+        print m.adot(x, res)
+        
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
             #print "expval = " + str(expval)
@@ -1099,6 +1190,15 @@ class EvoMPS_TDVP_Uniform:
                 print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
         
         return res
+    
+    def _prepare_excite_op_top_triv(self, p):
+        self.calc_K_l()
+        self.calc_l_r_roots()
+        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        
+        op = Excite_H_Op(self, self, p)
+
+        return op        
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, which='SM'):
         self.calc_K_l()
@@ -1138,11 +1238,20 @@ class EvoMPS_TDVP_Uniform:
         return la.eigvalsh(H)
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, which='SM'):
+        self.gen_h_matrix()
+        donor.gen_h_matrix()
+        self.calc_lr()
+        self.restore_CF()
+        donor.calc_lr()
+        donor.restore_CF()
+        
         #Phase-alignment
         opE = EOp(donor, self.A, donor.A, False)
         ev = las.eigs(opE, which='LM', k=1)
         donor.A *= ev[0] / abs(ev[0])
-        #donor.update()
+        
+        self.update()
+        donor.update()
 
         self.calc_K_l()
         self.calc_l_r_roots()
