@@ -998,12 +998,8 @@ class EvoMPS_TDVP_Uniform:
         C_Vri_A_ = sp.tensordot(h_nn_mat, C_Vri_A_, ((2, 3), (0, 1)))
         
         C = sp.tensordot(h_nn_mat, self.AA, ((2, 3), (0, 1)))
-        #C = self.C.copy()
-        #C -= self.h.real * self.AA
 
         C_ = sp.tensordot(h_nn_mat, AA_, ((2, 3), (0, 1)))
-        #C_ = donor.C.copy()
-        #C_ -= self.h.real * AA_
         
         rhs10 = donor.eps_r_2s(r_, op=None, A3=Vri_, C34=C_Vri_A_)
         
@@ -1011,13 +1007,9 @@ class EvoMPS_TDVP_Uniform:
             
     def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
-        
-        FIXME: We appear to have a bug wrt. the old, slow code.
-               Problem case: S=1 Heisenberg.
         """        
         A = self.A
         A_ = donor.A
-        AA_ = donor.AA
         
         l = self.l
         r_ = donor.r
@@ -1059,109 +1051,27 @@ class EvoMPS_TDVP_Uniform:
             if not sp.allclose(y, y2):
                 print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
-        
-        if False:
-            res = l_sqrt.dot(
-                   donor.eps_r_2s(r_, op=h_nn, A1=B, A3=Vri_) #1 OK
-                   + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=h_nn, A2=B, A3=Vri_, A4=A_) #3 OK with 4
-                  )
-                  
-            print m.adot(x, res)
-            
-            res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r_2s(r_, op=h_nn, A3=Vri_))) #10
-            
-            print m.adot(x, res)
-            
-            exp = sp.exp
-            H = m.H
-            for s in xrange(self.q):
-                for t in xrange(self.q):
-                    middle = (l.dot(A[s].dot(B[t])) #2 OK
-                              + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
-                              + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
-                             )
-                    for u in xrange(self.q):
-                        for v in xrange(self.q):
-                            res += h_nn(u,v,s,t) * l_sqrt_i.dot(H(A[u]).dot(middle
-                                   )).dot(H(Vr_[v]))
-                                   
-            print m.adot(x, res)
-                  
-            res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
-            
-            print m.adot(x, res)
-            
-            res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
-            
-            print m.adot(x, res)
-            
-            res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
-            
-            print m.adot(x, res)
-            
-            y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
-            y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=B) #9
-            y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=h_nn, A1=A, A2=B) #11
-            
-            y = y1 + y2 + y3
-            if pseudo:
-                y = y - m.adot(l, y) * r_
-            y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo)
-            #print m.adot(l, y_pi)
-            if self.sanity_checks:
-                y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi, A2=A_)
-                if not sp.allclose(y, y2):
-                    print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
-            
-            res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
-            
-            print m.adot(x, res)
 
         res = l_sqrt.dot(
                donor.eps_r_2s(r_, op=None, A1=B, A3=Vri_, C34=C_Vri_A_) #1 OK
                + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=None, A2=B, A3=Vri_, A4=A_, C34=C_Vri_A_) #3 OK with 4
               )
-              
-        print m.adot(x, res)
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
-        print m.adot(x, res)
-        
-#        exp = sp.exp
-#        H = m.H
-#        for s in xrange(self.q):
-#            for t in xrange(self.q):
-#                res += l_sqrt_i.dot(C_AhlA[t, s].dot(B[s])).dot(H(Vr_[t])) #2 OK
-#                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
-#                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
-
         exp = sp.exp
         H = m.H
         for s in xrange(self.q):
             for t in xrange(self.q):
-                middle = (l.dot(A[s].dot(B[t])) #2 OK
-                          + exp(-1.j * p) * l.dot(B[s].dot(A_[t])) #4 OK with 3
-                          + exp(-2.j * p) * Mh.dot(AA_[s, t]) #12
-                         )
-                for u in xrange(self.q):
-                    for v in xrange(self.q):
-                        res += h_nn_mat[u,v,s,t] * l_sqrt_i.dot(H(A[u]).dot(middle
-                               )).dot(H(Vr_[v]))
-              
-        print m.adot(x, res)
+                res += l_sqrt_i.dot(C_AhlA[s, t].dot(B[s])).dot(H(Vr_[t])) #2 OK
+                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
+                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
         
         res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
         
-        print m.adot(x, res)
-        
         res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
         
-        print m.adot(x, res)
-        
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
-        
-        print m.adot(x, res)
         
         y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
         y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=None, A1=B, C34=C_) #9
@@ -1178,8 +1088,6 @@ class EvoMPS_TDVP_Uniform:
                 print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         
         res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
-        
-        print m.adot(x, res)
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
@@ -1200,16 +1108,18 @@ class EvoMPS_TDVP_Uniform:
 
         return op        
     
-    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, which='SM'):
+    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None,
+                        which='SM', return_eigenvectors=False):
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = self.calc_Vsh(self.r_sqrt)
         
         op = Excite_H_Op(self, self, p)
-        w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
-                      maxiter=max_itr, tol=tol)
+        res = las.eigsh(op, which=which, k=k, v0=v0,
+                         return_eigenvectors=return_eigenvectors, 
+                         maxiter=max_itr, tol=tol)
                           
-        return w
+        return res
     
     def excite_top_triv_brute(self, p):
         self.calc_K_l()
@@ -1237,7 +1147,8 @@ class EvoMPS_TDVP_Uniform:
                
         return la.eigvalsh(H)
 
-    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, which='SM'):
+    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
+                           which='SM', return_eigenvectors=False):
         self.gen_h_matrix()
         donor.gen_h_matrix()
         self.calc_lr()
@@ -1259,10 +1170,11 @@ class EvoMPS_TDVP_Uniform:
         donor.Vsh = donor.calc_Vsh(donor.r_sqrt)
         
         op = Excite_H_Op(self, donor, p)
-        w = las.eigsh(op, which=which, k=k, return_eigenvectors=False, 
-                      maxiter=max_itr, tol=tol)
-                          
-        return w
+        res = las.eigsh(op, which=which, k=k, v0=v0,
+                        return_eigenvectors=return_eigenvectors, 
+                        maxiter=max_itr, tol=tol)
+                
+        return res
             
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
