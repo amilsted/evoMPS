@@ -25,6 +25,7 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public int pow_itr_max
     
     cdef public object h_nn
+    cdef public object h_nn_mat
     cdef public object h_nn_cptr
     
     cdef public bint symm_gauge
@@ -42,12 +43,13 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public float S_hc
     
     cdef public object A, l, r, K, K_left
-    cdef object AA, C, tmp
-    cdef object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
-    cdef object Vsh, x
+    cdef public object AA, C, Vsh
+    cdef public object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
+    cdef object x, tmp
     
     @cython.locals(s = cython.int, t = cython.int)
     cpdef calc_AA(self)
     
     @cython.locals(i = cython.int)
-    cpdef _calc_lr(self, x, e, tmp, int max_itr=*, float tol_val=*, float tol_vec=*)
+    cpdef _calc_lr(self, x, e, tmp, A1=*, A2=*, bint rescale=*,
+                   int max_itr=*, float rtol=*, float atol=*)

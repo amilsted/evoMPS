@@ -126,7 +126,7 @@ class EvoMPS_TDVP_Uniform:
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
         
-        self.pow_itr_max = 200
+        self.pow_itr_max = 1000
         
         self.h_nn = None    
         self.h_nn_cptr = None
@@ -377,7 +377,7 @@ class EvoMPS_TDVP_Uniform:
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
         
     def _calc_lr(self, x, eps, tmp, A1=None, A2=None, rescale=True,
-                 max_itr=200, rtol=1E-14, atol=1E-14):
+                 max_itr=1000, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
            
@@ -452,26 +452,51 @@ class EvoMPS_TDVP_Uniform:
         
         return x, i < max_itr - 1, i
     
-    def calc_lr(self):        
+    def calc_lr(self, reset=False, auto_reset=True):
         tmp = np.empty_like(self.tmp)
 
         self.l = np.asarray(self.l)
 
         self.r = np.asarray(self.r)
         
-        self.l, self.conv_l, self.itr_l = self._calc_lr(self.l, 
+        self.conv_l = False
+        if reset:
+            i = 1
+        else:            
+            i = 0
+        while not self.conv_l and i < 2:
+            if i > 0:
+                print "RESETTING l!"
+                self.l.fill(1)
+            self.l, self.conv_l, self.itr_l = self._calc_lr(self.l, 
                                                         self._eps_l_noop_dense, 
                                                         tmp, 
                                                         max_itr=self.pow_itr_max,
                                                         rtol=self.itr_atol, 
                                                         atol=self.itr_atol)
+            i += 1
+            if not auto_reset:
+                break
         
-        self.r, self.conv_r, self.itr_r = self._calc_lr(self.r, 
+        self.conv_r = False
+        if reset:
+            i = 1
+        else:            
+            i = 0
+        while not self.conv_r and i < 2:
+            if i > 0:
+                print "RESETTING r!"
+                self.r.fill(1)        
+            self.r, self.conv_r, self.itr_r = self._calc_lr(self.r, 
                                                         self._eps_r_noop_dense, 
                                                         tmp, 
                                                         max_itr=self.pow_itr_max,
                                                         rtol=self.itr_atol, 
                                                         atol=self.itr_atol)
+            i += 1
+            if not auto_reset:
+                break
+            
         #normalize eigenvectors:
 
         if self.symm_gauge:
@@ -1188,8 +1213,8 @@ class EvoMPS_TDVP_Uniform:
         h_min = self.h
         A_min = self.A.copy()
         
-        l_min = np.array(self.l, copy=True)
-        r_min = np.array(self.r, copy=True)
+        #l_min = np.array(self.l, copy=True)
+        #r_min = np.array(self.r, copy=True)
         
         itr = 0
         while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
@@ -1197,11 +1222,12 @@ class EvoMPS_TDVP_Uniform:
             for s in xrange(self.q):
                 self.A[s] = A_min[s] -d * dtau * B[s]
             
-            self.l[:] = l_min
-            self.r[:] = r_min
+            #self.l[:] = l_min
+            #self.r[:] = r_min
             
-            self.calc_lr()
+            self.calc_lr(reset=True)
             self.calc_AA()
+            self.calc_C()
             
             self.h = self.expect_2s(self.h_nn)
             
@@ -1213,8 +1239,8 @@ class EvoMPS_TDVP_Uniform:
                 #self.restore_CF()
                 h_min = self.h
                 A_min[:] = self.A
-                l_min[:] = self.l
-                r_min[:] = self.r
+                #l_min[:] = self.l
+                #r_min[:] = self.r
                 
                 dtau = min(dtau * 1.1, dtau_init * 10)
                 
@@ -1247,8 +1273,11 @@ class EvoMPS_TDVP_Uniform:
                 for s in xrange(self.q):
                     self.A[s] = A0[s] - tau * B[s]
                 
-                self.calc_lr()
+                self.l.fill(1)
+                self.r.fill(1)
+                self.calc_lr(reset=False, auto_reset=False)
                 self.calc_AA()
+                self.calc_C()
                 
                 h = self.expect_2s(self.h_nn)
                 
@@ -1262,6 +1291,16 @@ class EvoMPS_TDVP_Uniform:
                 return res
         
         A0 = self.A.copy()
+        
+        try:
+            self.l = self.l.A
+        except:
+            pass
+        
+        try:
+            self.r = self.r.A
+        except:
+            pass
         
         if skipIfLower:
             if f(dtau_init) < self.h.real:
@@ -1285,7 +1324,9 @@ class EvoMPS_TDVP_Uniform:
                                tol=tol,
                                maxiter=20)
         
-        self.A = A0
+        self.A[:] = A0
+        self.l.fill(1)
+        self.r.fill(1)
         
         return tau_opt
         
@@ -1296,6 +1337,8 @@ class EvoMPS_TDVP_Uniform:
             self.A[s] = A0[s] - dtau * B[s]
         
         self.calc_lr()
+        self.calc_AA()
+        self.calc_C()
         
         h = self.expect_2s(self.h_nn)
         
