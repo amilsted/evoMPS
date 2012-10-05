@@ -15,8 +15,6 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public int q
     cdef public int D
 
-    #odr = 'C'
-    #typ = sp.complex128
     cdef public float eps
     
     cdef public float itr_rtol
@@ -45,11 +43,18 @@ cdef class EvoMPS_TDVP_Uniform:
     cdef public object A, l, r, K, K_left
     cdef public object AA, C, Vsh
     cdef public object l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
-    cdef object x, tmp
+    cdef object x, tmp, l_before_CF, r_before_CF, gemm
+    cdef public object typ
     
     @cython.locals(s = cython.int, t = cython.int)
     cpdef calc_AA(self)
     
-    @cython.locals(i = cython.int)
-    cpdef _calc_lr(self, x, e, tmp, A1=*, A2=*, bint rescale=*,
+    @cython.locals(i = cython.int, n = cython.int, ev_mag = cython.double, ev = cython.double)
+    cpdef _calc_lr(self, x, tmp, bint calc_l=*, A1=*, A2=*, bint rescale=*,
                    int max_itr=*, float rtol=*, float atol=*)
+                   
+    @cython.locals(s = cython.int)
+    cpdef _eps_r_noop_dense(self, x, A1, A2, out)
+    
+    @cython.locals(s = cython.int)
+    cpdef _eps_l_noop_dense(self, x, A1, A2, out)

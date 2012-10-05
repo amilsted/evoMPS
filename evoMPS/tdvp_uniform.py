@@ -118,15 +118,22 @@ class Excite_H_Op:
         return res.ravel()
 
 class EvoMPS_TDVP_Uniform:
-    odr = 'C'
-    typ = np.complex128
+    odr = 'C'    
         
-    def __init__(self, D, q):
+    def __init__(self, D, q, typ=None):
+        
+        if typ is None:
+            self.typ = np.complex128
+           
+        try:
+            self.gemm = la.get_blas_funcs('gemm', dtype=self.typ)
+        except:
+            self.gemm = None
         
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
         
-        self.pow_itr_max = 1000
+        self.pow_itr_max = 2000
         
         self.h_nn = None    
         self.h_nn_cptr = None
@@ -143,7 +150,7 @@ class EvoMPS_TDVP_Uniform:
         
         self.eta = 0
         
-        self._init_arrays(D, q)
+        self._init_arrays(D, q)        
         
         #self.A.fill(0)
         #for s in xrange(q):
@@ -168,6 +175,8 @@ class EvoMPS_TDVP_Uniform:
         
         self.l = np.ones_like(self.A[0])
         self.r = np.ones_like(self.A[0])
+        self.l_before_CF = self.l
+        self.r_before_CF = self.r
         self.conv_l = True
         self.conv_r = True
         
@@ -229,10 +238,16 @@ class EvoMPS_TDVP_Uniform:
     def _eps_l_noop_dense(self, x, A1, A2, out):
         """The left epsilon map, optimized for efficiency.
         """
-        out.fill(0)
+        out.fill(0)        
+        #gemm = self.gemm
+        
+        #if gemm is None:
         dot = np.dot
         for s in xrange(self.q):
             out += dot(A1[s].conj().T, dot(x, A2[s]))
+        #else:
+        #    for s in xrange(self.q):
+        #        out += gemm(1, A1[s], gemm(1, x, A2[s]), 0, None, 2, 0, False)
             
         return out
         
@@ -376,7 +391,7 @@ class EvoMPS_TDVP_Uniform:
         print "Left ok?: " + str(np.allclose(self.eps_l(self.l), self.l))
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
         
-    def _calc_lr(self, x, eps, tmp, A1=None, A2=None, rescale=True,
+    def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
@@ -405,19 +420,20 @@ class EvoMPS_TDVP_Uniform:
         tmp[:] = x
         for i in xrange(max_itr):
             x[:] = tmp
-            eps(x, A1, A2, tmp)            
+            if calc_l:
+                self._eps_l_noop_dense(x, A1, A2, tmp)
+            else:
+                self._eps_r_noop_dense(x, A1, A2, tmp)
             ev_mag = norm(tmp.ravel()) / n
-            ev = tmp.mean() / x.mean()
+            ev = (tmp.mean() / x.mean()).real
             tmp *= (1 / ev_mag)
-#            if norm((tmp - x).ravel()) < tol_vec * self.D**2:
-            if allclose(tmp, x, rtol, atol):                
-                #print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
+            if norm((tmp - x).ravel()) < atol + rtol * n:
+#            if allclose(tmp, x, rtol, atol):                
+                #print (i, ev, ev_mag, norm((tmp - x).ravel())/n, atol, rtol)
                 x[:] = tmp
                 break            
 #        else:
 #            print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
-            
-        ev = abs(ev)
 
 #        opE = EOp(self, A1, A2, x is self.l)
 #        x *= n / norm(x.ravel())
@@ -446,34 +462,40 @@ class EvoMPS_TDVP_Uniform:
             if self.sanity_checks:
                 if not A1 is A2:
                     print "Sanity check failed: Re-scaling with A1 <> A2!"
-                ev = eps(x, A1, A2, tmp).mean() / x.mean()
+                if calc_l:
+                    self._eps_l_noop_dense(x, A1, A2, tmp)
+                else:
+                    self._eps_r_noop_dense(x, A1, A2, tmp)
+                ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < atol:
                     print "Sanity check failed: Largest ev after re-scale = " + str(ev)
         
         return x, i < max_itr - 1, i
     
-    def calc_lr(self, reset=False, auto_reset=True):
+    def calc_lr(self, reset=False, auto_reset=False):
         tmp = np.empty_like(self.tmp)
-
-        self.l = np.asarray(self.l)
-
-        self.r = np.asarray(self.r)
+        
+        #Make sure...
+        self.l_before_CF = np.asarray(self.l_before_CF)
+        self.r_before_CF = np.asarray(self.r_before_CF)
         
         self.conv_l = False
         if reset:
             i = 1
         else:            
             i = 0
-        while not self.conv_l and i < 2:
+        while not self.conv_l and i < 2: #Turns out resetting is almost always worse than just doing more iterations
             if i > 0:
                 print "RESETTING l!"
-                self.l.fill(1)
-            self.l, self.conv_l, self.itr_l = self._calc_lr(self.l, 
-                                                        self._eps_l_noop_dense, 
+                self.l_before_CF += self.l_before_CF.max().real / 100
+            self.l, self.conv_l, self.itr_l = self._calc_lr(self.l_before_CF, 
                                                         tmp, 
+                                                        calc_l=True,
                                                         max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_atol, 
+                                                        rtol=self.itr_rtol, 
                                                         atol=self.itr_atol)
+                                                        
+            self.l_before_CF = self.l.copy()
             i += 1
             if not auto_reset:
                 break
@@ -486,13 +508,15 @@ class EvoMPS_TDVP_Uniform:
         while not self.conv_r and i < 2:
             if i > 0:
                 print "RESETTING r!"
-                self.r.fill(1)        
-            self.r, self.conv_r, self.itr_r = self._calc_lr(self.r, 
-                                                        self._eps_r_noop_dense, 
+                self.r_before_CF += self.r_before_CF.max().real / 100
+            self.r, self.conv_r, self.itr_r = self._calc_lr(self.r_before_CF, 
                                                         tmp, 
+                                                        calc_l=False,
                                                         max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_atol, 
+                                                        rtol=self.itr_rtol, 
                                                         atol=self.itr_atol)
+                                                        
+            self.r_before_CF = self.r.copy()
             i += 1
             if not auto_reset:
                 break
@@ -678,16 +702,16 @@ class EvoMPS_TDVP_Uniform:
         """Generates a matrix form for h_nn, which can speed up parts of the
         algorithm by avoiding excess loops and python calls.
         """
-        self.h_nn_mat = sp.zeros((self.q, self.q, self.q, self.q), dtype=sp.complex128)
+        self.h_nn_mat = sp.zeros((self.q, self.q, self.q, self.q), dtype=self.typ)
         q = self.q
         for u in xrange(q):
             for v in xrange(q):
                 for s in xrange(q):
                     for t in xrange(q):
-                        self.h_nn_mat[s, t, u, v] = self.h_nn(s, t, u, v)    
+                        self.h_nn_mat[s, t, u, v] = self.h_nn(s, t, u, v)   
     
     def calc_C(self):
-        if not tc is None and not self.h_nn_cptr is None:
+        if not tc is None and not self.h_nn_cptr is None and np.iscomplexobj(self.C):
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
         elif not self.h_nn_mat is None:
             self.C[:] = sp.tensordot(self.h_nn_mat, self.AA, ((2, 3), (0, 1)))
@@ -1173,7 +1197,7 @@ class EvoMPS_TDVP_Uniform:
         return la.eigvalsh(H)
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
-                           which='SM', return_eigenvectors=False):
+                           which='SM', return_eigenvectors=False, lobpcg=False):
         self.gen_h_matrix()
         donor.gen_h_matrix()
         self.calc_lr()
@@ -1182,9 +1206,15 @@ class EvoMPS_TDVP_Uniform:
         donor.restore_CF()
         
         #Phase-alignment
-        opE = EOp(donor, self.A, donor.A, False)
-        ev = las.eigs(opE, which='LM', k=1)
-        donor.A *= ev[0] / abs(ev[0])
+        if self.D == 1:
+            ev = 0
+            for s in xrange(self.q):
+                ev += self.A[s] * donor.A[s].conj()
+            donor.A *= ev / abs(ev)
+        else:
+            opE = EOp(donor, self.A, donor.A, False)
+            ev = las.eigs(opE, which='LM', k=1)
+            donor.A *= ev[0] / abs(ev[0])
         
         self.update()
         donor.update()
@@ -1195,12 +1225,24 @@ class EvoMPS_TDVP_Uniform:
         donor.Vsh = donor.calc_Vsh(donor.r_sqrt)
         
         op = Excite_H_Op(self, donor, p)
-        res = las.eigsh(op, which=which, k=k, v0=v0,
-                        return_eigenvectors=return_eigenvectors, 
-                        maxiter=max_itr, tol=tol)
+                
+        if lobpcg:  #This seems to cope with real problems only... :(       
+            if v0 is None:
+                v0 = np.ones(((self.q - 1) * self.D**2, k), self.typ)
+                
+            if len(v0.shape) == 1:
+                v0_1 = v0
+                v0 = np.ones(((self.q - 1) * self.D**2, k), self.typ)
+                v0[:, 0] = v0_1
+    
+            res = las.lobpcg(op, v0, largest=False,  verbosityLevel=1)
+        else:
+            res = las.eigsh(op, which=which, k=k, v0=v0,
+                            return_eigenvectors=return_eigenvectors, 
+                            maxiter=max_itr, tol=tol)
                 
         return res
-            
+        
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
         d = 1.0
@@ -1283,31 +1325,45 @@ class EvoMPS_TDVP_Uniform:
         
     def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
                          taus=[], hs=[], trybracket=True):
+        
+        if len(taus) == 0:
+            ls = []
+            rs = []
+        else:
+            ls = [self.l.copy()] * len(taus)
+            rs = [self.r.copy()] * len(taus)
+        
         def f(tau, *args):
             if tau == 0:
-                return self.h.real
-                
+                print (0, "tau=0")
+                return self.h.real                
             try:
                 i = taus.index(tau)
+                print (tau, hs[i], hs[i] - self.h.real, "from stored")
                 return hs[i]
             except ValueError:
                 for s in xrange(self.q):
                     self.A[s] = A0[s] - tau * B[s]
                 
-                self.l.fill(1)
-                self.r.fill(1)
-                self.calc_lr(reset=False, auto_reset=False)
+                if len(taus) > 0:
+                    nearest_tau_ind = abs(np.array(taus) - tau).argmin()
+                    self.l = ls[nearest_tau_ind]
+                    self.r = rs[nearest_tau_ind]
+
+                self.calc_lr(auto_reset=False)
                 self.calc_AA()
                 self.calc_C()
                 
                 h = self.expect_2s(self.h_nn)
                 
-                print (tau, h.real)
+                print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
                 
                 res = h.real
                 
                 taus.append(tau)
                 hs.append(res)
+                ls.append(self.l.copy())
+                rs.append(self.r.copy())
                 
                 return res
         
@@ -1359,6 +1415,11 @@ class EvoMPS_TDVP_Uniform:
         self.r = r0
         self.AA = AA0
         self.C = C0
+        
+        #hopefully optimize next calc_lr
+        nearest_tau_ind = abs(np.array(taus) - tau_opt).argmin()
+        self.l_before_CF = ls[nearest_tau_ind]
+        self.r_before_CF = rs[nearest_tau_ind]
         
         return tau_opt, h_min
         
@@ -1426,6 +1487,9 @@ class EvoMPS_TDVP_Uniform:
         taus = []
         hs = []
         
+        lb0 = self.l_before_CF.copy()
+        rb0 = self.r_before_CF.copy()
+        
         if skipIfLower:
             stepRedH, h = self.step_reduces_h(B_CG, dtau_init)
             taus.append(dtau_init)
@@ -1436,23 +1500,27 @@ class EvoMPS_TDVP_Uniform:
         else:
             if brent:
                 tau, h_min = self.find_min_h_brent(B_CG, dtau_init, taus=taus, hs=hs,
-                                            trybracket=False)
+                                                   trybracket=False)
             else:
                 tau = self.find_min_h(B_CG, dtau_init)
         
-        if tau < 0:
-            print "RESET due to negative dtau!"
-            B_CG = B
-            tau, h_min = self.find_min_h_brent(B_CG, dtau_init)
+#        if tau < 0:
+#            print "RESET due to negative dtau!"
+#            B_CG = B
+#            tau, h_min = self.find_min_h_brent(B_CG, dtau_init)
             
         if self.h.real < h_min:
             print "RESET due to energy rise!"
             B_CG = B
-            tau, h_min = self.find_min_h_brent(B_CG, dtau_init)
+            self.l_before_CF = lb0
+            self.r_before_CF = rb0
+            tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
-        if self.h.real < h_min:
-            print "RESET FAILED: Setting tau=0!"
-            tau = 0
+            if self.h.real < h_min:
+                print "RESET FAILED: Setting tau=0!"
+                self.l_before_CF = lb0
+                self.r_before_CF = rb0
+                tau = 0
         
         return B_CG, B, x, eta, tau
         
@@ -1499,7 +1567,7 @@ class EvoMPS_TDVP_Uniform:
         
         np.save(file, tosave)
         
-    def load_state(self, file, expand=False, expand_q=False):
+    def load_state(self, file, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
         state = np.load(file)
         
         newA = state[0]
@@ -1515,6 +1583,8 @@ class EvoMPS_TDVP_Uniform:
 
             self.l = np.asarray(newl)
             self.r = np.asarray(newr)
+            self.l_before_CF = self.l
+            self.r_before_CF = self.r
                 
             return True
         elif expand and (len(newA.shape) == 3) and (newA.shape[0] == 
@@ -1525,9 +1595,11 @@ class EvoMPS_TDVP_Uniform:
             self._init_arrays(savedD, self.q)
             self.A[:] = newA
             self.l = newl
-            self.r = newr
+            self.r = newr            
             self.K[:] = newK
-            self.expand_D(newD)
+            self.expand_D(newD, refac, imfac)
+            self.l_before_CF = self.l
+            self.r_before_CF = self.r
             print "EXPANDED!"
         elif expand_q and (len(newA.shape) == 3) and (newA.shape[0] <= 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
@@ -1540,7 +1612,23 @@ class EvoMPS_TDVP_Uniform:
             self.r = newr
             self.K[:] = newK
             self.expand_q(newQ)
+            self.l_before_CF = self.l
+            self.r_before_CF = self.r
             print "EXPANDED in q!"
+        elif shrink_q and (len(newA.shape) == 3) and (newA.shape[0] >= 
+        self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
+        == self.A.shape[1]):
+            newQ = self.q
+            savedQ = newA.shape[0]
+            self._init_arrays(self.D, savedQ)
+            self.A[:] = newA
+            self.l = newl
+            self.r = newr
+            self.K[:] = newK
+            self.shrink_q(newQ)
+            self.l_before_CF = self.l
+            self.r_before_CF = self.r
+            print "SHRUNK in q!"
         else:
             return False
             
@@ -1563,8 +1651,27 @@ class EvoMPS_TDVP_Uniform:
         
         self.A.fill(0)
         self.A[:oldq, :, :] = oldA
+        
+    def shrink_q(self, newq):
+        if newq > self.q:
+            return False
+        
+        oldA = self.A
+        oldK = self.K
+        
+        oldl = self.l
+        oldr = self.r
+        
+        self._init_arrays(self.D, newq) 
+        
+        self.l = oldl
+        self.r = oldr
+        self.K = oldK
+        
+        self.A.fill(0)
+        self.A[:] = oldA[:newq, :, :]
             
-    def expand_D(self, newD):
+    def expand_D(self, newD, refac=100, imfac=0):
         """Expands the bond dimension in a simple way.
         
         New matrix entries are (mostly) randomized.
@@ -1581,10 +1688,10 @@ class EvoMPS_TDVP_Uniform:
         
         self._init_arrays(newD, self.q)
         
-        realnorm = la.norm(oldA.real)
-        imagnorm = la.norm(oldA.imag)
-        realfac = (realnorm / (self.q * oldD**2)) * 100.
-        imagfac = (imagnorm / (self.q * oldD**2)) * 0.
+        realnorm = la.norm(oldA.real.ravel())
+        imagnorm = la.norm(oldA.imag.ravel())
+        realfac = (realnorm / oldA.size) * refac
+        imagfac = (imagnorm / oldA.size) * imfac
 #        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
         m.randomize_cmplx(self.A[:, :oldD, oldD:], a=0, b=realfac, aj=0, bj=imagfac)
         m.randomize_cmplx(self.A[:, oldD:, :oldD], a=0, b=realfac, aj=0, bj=imagfac)
