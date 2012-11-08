@@ -38,7 +38,8 @@ cpdef calc_C(np.ndarray[DTYPE_t, ndim=4, mode="c"] AA,
     
     cdef DTYPE_t h
     
-    for s in prange(q1, nogil=True):
+    #for s in prange(q1, nogil=True):
+    for s in range(q1):
         for t in range(q2):
             for u in range(q1):
                 for v in range(q2):
