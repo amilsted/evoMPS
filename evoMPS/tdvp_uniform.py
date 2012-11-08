@@ -14,6 +14,8 @@ import nullspace as ns
 import matmul as m
 import math as ma
 
+import time
+
 try:
     import tdvp_common as tc
     import allclose as ac
@@ -134,6 +136,7 @@ class EvoMPS_TDVP_Uniform:
         self.itr_atol = 1E-14
         
         self.pow_itr_max = 2000
+        self.ev_use_arpack = False
         
         self.h_nn = None    
         self.h_nn_cptr = None
@@ -390,7 +393,72 @@ class EvoMPS_TDVP_Uniform:
         print "Sledgehammer:"
         print "Left ok?: " + str(np.allclose(self.eps_l(self.l), self.l))
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
+    
+    def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
+                        max_itr=1000, tol=1E-14):
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
+                        
+        try:
+            norm = la.get_blas_funcs("nrm2", [x])
+        except ValueError:
+            norm = np.linalg.norm
+    
+        n = x.size #we will scale x so that stuff doesn't get too small
         
+        #start = time.clock()
+        opE = EOp(self, A1, A2, calc_l)
+        x *= n / norm(x.ravel())
+        try:
+            ev, eV = las.eigsh(opE, which='LM', k=1, v0=x.ravel(), maxiter=max_itr, tol=tol)
+            conv = True
+        except las.ArpackNoConvergence as e:
+            ev = e.eigenvalues
+            eV = e.eigenvectors
+            conv = False
+            
+        #print ev2
+        #print ev2 * ev2.conj()
+        ev = np.real_if_close(ev[0])
+        ev = np.asscalar(ev)
+        eV = eV[:, 0]
+        
+        #remove any additional phase factor
+        eVmean = eV.mean()
+        eV *= np.sqrt(np.conj(eVmean) / eVmean)
+        
+        if eV.mean() < 0:
+            eV *= -1
+
+        eV = eV.reshape(self.D, self.D)
+        
+        eV *= n / norm(eV.ravel())
+        
+        x[:] = eV
+        
+        #print "splinalg: %g" % (time.clock() - start)   
+        
+        #print "Herm? %g" % norm((eV - m.H(eV)).ravel())
+        #print "Norm of diff: %g" % norm((eV - x).ravel())
+        #print "Norms: (%g, %g)" % (norm(eV.ravel()), norm(x.ravel()))
+                    
+        if rescale and not abs(ev - 1) < tol:
+            A1 *= 1 / sp.sqrt(ev)
+            if self.sanity_checks:
+                if not A1 is A2:
+                    print "Sanity check failed: Re-scaling with A1 <> A2!"
+                if calc_l:
+                    self._eps_l_noop_dense(x, A1, A2, tmp)
+                else:
+                    self._eps_r_noop_dense(x, A1, A2, tmp)
+                ev = tmp.mean() / x.mean()
+                if not abs(ev - 1) < tol:
+                    print "Sanity check failed: Largest ev after re-scale = " + str(ev)
+        
+        return x, conv
+                
     def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
@@ -408,14 +476,14 @@ class EvoMPS_TDVP_Uniform:
         except ValueError:
             norm = np.linalg.norm
             
-        try:
-            allclose = ac.allclose_mat
-        except:
-            allclose = np.allclose
-            print "Falling back to numpy allclose()!"
+#        try:
+#            allclose = ac.allclose_mat
+#        except:
+#            allclose = np.allclose
+#            print "Falling back to numpy allclose()!"
         
         n = x.size #we will scale x so that stuff doesn't get too small
-        
+
         x *= n / norm(x.ravel())
         tmp[:] = x
         for i in xrange(max_itr):
@@ -434,28 +502,6 @@ class EvoMPS_TDVP_Uniform:
                 break            
 #        else:
 #            print (i, ev, ev_mag, norm((tmp - x).ravel())/norm(x.ravel()), atol, rtol)
-
-#        opE = EOp(self, A1, A2, x is self.l)
-#        x *= n / norm(x.ravel())
-#        ev, eV = las.eigs(opE, which='LM', k=10, v0=x.ravel())
-#        print ev * ev.conj()
-#        ev = ev[0]
-#        x[:] = eV[:, 0].reshape(self.D, self.D)        
-#        
-#        #remove any additional phase factor
-#        x *= 1 / sp.sqrt((x / m.H(x)).mean())
-#        #x[:] = sp.sqrt(x * m.H(x))
-#        print norm((x - m.H(x)).ravel())
-#        
-#        x *= n / norm(x.ravel())
-#        
-#        i = 0
-#        ev = abs(ev)
-#        if self.sanity_checks:
-#            y = eps(x, A1, A2, tmp)
-#            diff = norm(x.ravel()-y.ravel()/ev)/norm(x.ravel())
-#            if diff > 1E-10:
-#                print "Sanity check failed: Bad eigenevector, off by %g" % diff        
                     
         if rescale and not abs(ev - 1) < atol:
             A1 *= 1 / sp.sqrt(ev)
@@ -479,47 +525,34 @@ class EvoMPS_TDVP_Uniform:
         self.l_before_CF = np.asarray(self.l_before_CF)
         self.r_before_CF = np.asarray(self.r_before_CF)
         
-        self.conv_l = False
-        if reset:
-            i = 1
-        else:            
-            i = 0
-        while not self.conv_l and i < 2: #Turns out resetting is almost always worse than just doing more iterations
-            if i > 0:
-                print "RESETTING l!"
-                self.l_before_CF += self.l_before_CF.max().real / 100
+        if self.ev_use_arpack:
+            self.l, self.conv_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
+                                                   calc_l=True,
+                                                   max_itr=self.pow_itr_max,
+                                                   tol=self.itr_rtol)
+        else:
             self.l, self.conv_l, self.itr_l = self._calc_lr(self.l_before_CF, 
-                                                        tmp, 
-                                                        calc_l=True,
-                                                        max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
-                                                        
-            self.l_before_CF = self.l.copy()
-            i += 1
-            if not auto_reset:
-                break
-        
-        self.conv_r = False
-        if reset:
-            i = 1
-        else:            
-            i = 0
-        while not self.conv_r and i < 2:
-            if i > 0:
-                print "RESETTING r!"
-                self.r_before_CF += self.r_before_CF.max().real / 100
+                                                    tmp, 
+                                                    calc_l=True,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
+                                        
+        self.l_before_CF = self.l.copy()
+
+        if self.ev_use_arpack:
+            self.r, self.conv_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
+                                                   calc_l=False,
+                                                   max_itr=self.pow_itr_max,
+                                                   tol=self.itr_rtol)
+        else:
             self.r, self.conv_r, self.itr_r = self._calc_lr(self.r_before_CF, 
-                                                        tmp, 
-                                                        calc_l=False,
-                                                        max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
-                                                        
-            self.r_before_CF = self.r.copy()
-            i += 1
-            if not auto_reset:
-                break
+                                                    tmp, 
+                                                    calc_l=False,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
+        self.r_before_CF = self.r.copy()
             
         #normalize eigenvectors:
 
@@ -1324,7 +1357,11 @@ class EvoMPS_TDVP_Uniform:
         return tau_min
         
     def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
-                         taus=[], hs=[], trybracket=True):
+                         trybracket=True):
+        #These were parameters...but it seems like cython was keeping
+        #their values across calls...?!
+        taus=[]
+        hs=[]
         
         if len(taus) == 0:
             ls = []
@@ -1499,7 +1536,7 @@ class EvoMPS_TDVP_Uniform:
             tau = self.find_min_h(B_CG, dtau_init)
         else:
             if brent:
-                tau, h_min = self.find_min_h_brent(B_CG, dtau_init, taus=taus, hs=hs,
+                tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
                                                    trybracket=False)
             else:
                 tau = self.find_min_h(B_CG, dtau_init)
