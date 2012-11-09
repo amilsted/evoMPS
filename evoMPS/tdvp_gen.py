@@ -128,16 +128,20 @@ class EvoMPS_TDVP_Generic:
         #Don't do anything pointless
         self.D[0] = 1
         self.D[self.N] = 1
-        
+
         qacc = 1
         for n in reversed(xrange(self.N)):
-            qacc *= self.q[n + 1]
+            if qacc < self.D.max(): #Avoid overflow!
+                qacc *= self.q[n + 1]
+
             if self.D[n] > qacc:
                 self.D[n] = qacc
                 
         qacc = 1
         for n in xrange(1, self.N + 1):
-            qacc *= q[n - 1]
+            if qacc < self.D.max(): #Avoid overflow!
+                qacc *= q[n - 1]
+
             if self.D[n] > qacc:
                 self.D[n] = qacc
         
@@ -153,6 +157,8 @@ class EvoMPS_TDVP_Generic:
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
         sp.fill_diagonal(self.r[self.N], 1.)
         self.setup_A()
+        
+        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
     
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -252,7 +258,7 @@ class EvoMPS_TDVP_Generic:
             R[:,s,:] = m.mmul(sqrt_r, m.H(self.A[n][s]))
 
         R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
-        V = m.H(ns.nullspace(m.H(R)))
+        V = m.H(ns.nullspace_qr(m.H(R)))
         #print (q[n]*D[n] - D[n-1], q[n]*D[n])
         #print V.shape
         #print sp.allclose(mat(V) * mat(V).H, sp.eye(q[n]*D[n] - D[n-1]))
@@ -325,7 +331,7 @@ class EvoMPS_TDVP_Generic:
                 
         return x
         
-    def calc_B(self, n):
+    def calc_B(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
         
         In other words, this returns B[n][x*] (equiv. eqn. (47) of 
@@ -339,6 +345,9 @@ class EvoMPS_TDVP_Generic:
             Vsh = self.calc_Vsh(n, r_sqrt)
             
             x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+            
+            if set_eta:
+                self.eta[n] = sp.sqrt(m.adot(x, x))
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -380,16 +389,21 @@ class EvoMPS_TDVP_Generic:
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
+        eta_tot = 0
+        
         B_prev = None
         for n in xrange(1, self.N + 2):
             #V is not always defined (e.g. at the right boundary vector, and possibly before)
             if n <= self.N:
                 B = self.calc_B(n)
+                eta_tot += self.eta[n]
             
             if n > 1 and not B_prev is None:
                 self.A[n - 1] += -dtau * B_prev
                 
             B_prev = B
+            
+        return eta_tot
 
     def take_step_implicit(self, dtau, midpoint=True):
         """A backward (implicit) integration step.
@@ -615,74 +629,71 @@ class EvoMPS_TDVP_Generic:
         Euler method, since there is no need to iteratively solve an implicit
         equation.
         """
-        #self.restore_RCF()
-        
+        def upd():
+            self.calc_l()
+            self.calc_r()
+            self.calc_C()
+            self.calc_K()            
+
+        eta_tot = 0
+
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
-        for n in xrange(1, self.N):
+        for n in xrange(1, self.N + 1):
             A0[n] = self.A[n].copy()
-            
+
         B_fin = sp.empty_like(self.A)
 
         B_prev = None
         for n in xrange(1, self.N + 2):
             if n <= self.N:
                 B = self.calc_B(n) #k1
+                eta_tot += self.eta[n]
                 B_fin[n] = B
-                
+
             if not B_prev is None:
                 self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
-                
+
             B_prev = B
-            
-        self.calc_l()
-        self.calc_r()
-        #self.restore_RCF()
-        self.calc_C()
-        self.calc_K()
-        
+
+        upd()
+
         B_prev = None
         for n in xrange(1, self.N + 2):
             if n <= self.N:
-                B = self.calc_B(n) #k2                
-                
+                B = self.calc_B(n, set_eta=False) #k2
+
             if not B_prev is None:
                 self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
                 B_fin[n - 1] += 2 * B_prev
-                
-            B_prev = B            
-            
-        self.calc_l()
-        self.calc_r()
-        #self.restore_RCF()
-        self.calc_C()
-        self.calc_K()
-            
+
+            B_prev = B
+
+        upd()
+
         B_prev = None
         for n in xrange(1, self.N + 2):
             if n <= self.N:
-                B = self.calc_B(n) #k3                
-                
+                B = self.calc_B(n, set_eta=False) #k3
+
             if not B_prev is None:
                 self.A[n - 1] = A0[n - 1] - dtau * B_prev
                 B_fin[n - 1] += 2 * B_prev
-                
+
             B_prev = B
-             
-        self.calc_l()
-        self.calc_r()
-        #self.restore_RCF()
-        self.calc_C()
-        self.calc_K()
-        
-        for n in xrange(1, self.N):
-            B = self.calc_B(n) #k4
+
+        upd()
+
+        for n in xrange(1, self.N + 1):
+            B = self.calc_B(n, set_eta=False) #k4
             if not B is None:
                 B_fin[n] += B
-            
-        for n in xrange(1, self.N):
+
+        for n in xrange(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
+
+        return eta_tot
             
     def add_noise(self, fac):
         """Adds some random noise of a given order to the state matrices A
@@ -929,7 +940,7 @@ class EvoMPS_TDVP_Generic:
             #print self.r[n - 1]
             if self.sanity_checks and not diag_l:
                 r_nm1 = self.eps_r(n, m.eyemat(self.D[n], self.typ))
-                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
+                if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: r_%u is bad" % n
         
         #Now do A[1]...
@@ -947,7 +958,7 @@ class EvoMPS_TDVP_Generic:
             
             if self.sanity_checks:
                 r0 = self.eps_r(1, self.r[1])
-                if not sp.allclose(r0, 1, atol=1E-14, rtol=1E-14):
+                if not sp.allclose(r0, 1, atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: r_0 is bad / norm failure"
                 
         if diag_l:
@@ -980,13 +991,13 @@ class EvoMPS_TDVP_Generic:
             self.eps_l(n, self.l[n - 1], out=self.l[n])
             
             if self.sanity_checks:
-                if not sp.allclose(self.l[self.N].real, 1, atol=1E-14, rtol=1E-14):
+                if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: l_N is bad / norm failure"
                     print "l_N = " + str(self.l[self.N].squeeze().real)
                 
                 for n in xrange(1, self.N + 1):
                     r_nm1 = self.eps_r(n, m.eyemat(self.D[n], self.typ))
-                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-14, rtol=1E-14):
+                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in restore_RCF!: r_%u is bad" % n
                     
             return True #FIXME: This OK?
