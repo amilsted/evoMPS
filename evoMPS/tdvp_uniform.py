@@ -395,7 +395,7 @@ class EvoMPS_TDVP_Uniform:
         print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        max_itr=1000, tol=1E-14):
+                        tol=1E-14):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -412,12 +412,12 @@ class EvoMPS_TDVP_Uniform:
         opE = EOp(self, A1, A2, calc_l)
         x *= n / norm(x.ravel())
         try:
-            ev, eV = las.eigsh(opE, which='LM', k=1, v0=x.ravel(), maxiter=max_itr, tol=tol)
+            ev, eV = las.eigsh(opE, which='LM', k=1, v0=x.ravel(), tol=tol)
             conv = True
         except las.ArpackNoConvergence as e:
-            ev = e.eigenvalues
-            eV = e.eigenvectors
-            conv = False
+            print "Reset! (l? %s)" % str(calc_l)
+            ev, eV = las.eigsh(opE, which='LM', k=1, tol=tol)
+            conv = True
             
         #print ev2
         #print ev2 * ev2.conj()
@@ -528,7 +528,6 @@ class EvoMPS_TDVP_Uniform:
         if self.ev_use_arpack:
             self.l, self.conv_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
                                                    calc_l=True,
-                                                   max_itr=self.pow_itr_max,
                                                    tol=self.itr_rtol)
         else:
             self.l, self.conv_l, self.itr_l = self._calc_lr(self.l_before_CF, 
@@ -543,7 +542,6 @@ class EvoMPS_TDVP_Uniform:
         if self.ev_use_arpack:
             self.r, self.conv_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
                                                    calc_l=False,
-                                                   max_itr=self.pow_itr_max,
                                                    tol=self.itr_rtol)
         else:
             self.r, self.conv_r, self.itr_r = self._calc_lr(self.r_before_CF, 
