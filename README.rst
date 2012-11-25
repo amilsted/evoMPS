@@ -14,7 +14,7 @@ many-particle quantum systems using matrix product states
 
 It can be used to efficiently find ground states and simulate dynamics.
 
-The evoMPS implementation assumes a nearest-neighbour Hamiltonian one of the 
+The evoMPS implementation assumes a nearest-neighbour Hamiltonian and one of the 
 following situations:
 
 * states on a finite chain with open boundary conditions
