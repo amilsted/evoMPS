@@ -9,7 +9,6 @@ import cython as cy
 import numpy as np
 cimport numpy as np
 cimport cpython.pycapsule as pc
-from cython.parallel import prange
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
@@ -34,19 +33,22 @@ cpdef calc_C(np.ndarray[DTYPE_t, ndim=4, mode="c"] AA,
         
     out.fill(0)
     
-    cdef int s, t, u, v
+    cdef int i, j, s, t, u, v
     
     cdef DTYPE_t h
     
-    #for s in prange(q1, nogil=True):
-    for s in range(q1):
-        for t in range(q2):
-            for u in range(q1):
-                for v in range(q2):
-                    h = h_nn(s, t, u, v)
-                    if h != 0:
-                        for i in range(D1): #avoid slicing, although this may work in latest cython...
-                            for j in range(D2):
-                                out[s, t, i, j] = out[s, t, i, j] + h * AA[u, v, i, j]
+    cdef DTYPE_t [:,:,:,:] AA_view = AA
+    cdef DTYPE_t [:,:,:,:] out_view = out
     
+    with nogil:
+        for s in range(q1):
+            for t in range(q2):
+                for u in range(q1):
+                    for v in range(q2):
+                        h = h_nn(s, t, u, v)
+                        if h != 0:
+                            for i in range(D1): 
+                                for j in range(D2):
+                                    out_view[s, t, i, j] = out_view[s, t, i, j] + h * AA_view[u, v, i, j]
+        
     return out
