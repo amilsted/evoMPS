@@ -14,7 +14,7 @@ TODO:
 import scipy as sp
 import scipy.linalg as la
 import matmul as m
-import tdvp_merged as tm
+import tdvp_common as tm
 
 class EvoMPS_TDVP_Generic:
     odr = 'C'

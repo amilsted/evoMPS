@@ -9,7 +9,7 @@ import scipy as sp
 import scipy.linalg as la
 import matmul as mm
 import tdvp_uniform as uni
-import tdvp_merged as tm
+import tdvp_common as tm
 
 def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
