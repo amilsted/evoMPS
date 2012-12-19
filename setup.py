@@ -13,7 +13,7 @@ else:
 if use_cython:
     ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.py"]),
                    Extension("evoMPS.allclose", ["evoMPS/allclose.pyx"]),
-                   Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.pyx"])]
+                   Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.pyx"])]
                    #Extension("evoMPS.tdvp_uniform", ["evoMPS/tdvp_uniform.py"])]
     cmdclass = {"build_ext": build_ext}
 else:

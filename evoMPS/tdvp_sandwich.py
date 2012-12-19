@@ -7,9 +7,9 @@ Created on Thu Oct 13 17:29:27 2011
 """
 import scipy as sp
 import scipy.linalg as la
-import nullspace as ns
 import matmul as mm
 import tdvp_uniform as uni
+import tdvp_merged as tm
 
 def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
@@ -364,36 +364,17 @@ class EvoMPS_TDVP_Sandwich:
         
         if self.h_nn_mat is None:
             for n in xrange(n_low, n_high):
-                self.C[n].fill(0)
-                for u in xrange(self.q[n]):
-                    for v in xrange(self.q[n + 1]):
-                        AA = mm.mmul(self.A[n][u], self.A[n + 1][v]) #only do this once for each
-                        for s in xrange(self.q[n]):
-                            for t in xrange(self.q[n + 1]):
-                                h_nn_stuv = self.h_nn(n, s, t, u, v)
-                                if h_nn_stuv != 0:
-                                    self.C[n][s, t] += h_nn_stuv * AA
+                self.C[n] = tm.calc_C_func_op(self.h_nn, self.A[n], self.A[n + 1])
         else:
-            dot = sp.dot
             for n in xrange(n_low, n_high):
-                An = self.A[n]
-                Anp1 = self.A[n + 1]
-                
-                AA = sp.empty_like(self.C[n])
-                for u in xrange(self.q[n]):
-                    for v in xrange(self.q[n + 1]):
-                        AA[u, v] = dot(An[u], Anp1[v])
+                AA = tm.calc_AA(self.A[n], self.A[n + 1])
                         
                 if n == 0: #FIXME: Temp. hack
                     self.AA0 = AA
                 elif n == 1:
                     self.AA1 = AA
                 
-                res = sp.tensordot(AA, self.h_nn_mat[n], ((0, 1), (2, 3)))
-                res = sp.rollaxis(res, 3)
-                res = sp.rollaxis(res, 3)
-                
-                self.C[n][:] = res
+                self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn_mat[n], AA)
 
     def calc_K(self):
         """Generates the right K matrices used to calculate the B's
@@ -411,9 +392,7 @@ class EvoMPS_TDVP_Sandwich:
         """
         n_low = 0
         n_high = self.N + 1
-            
-        H = mm.H
-        
+   
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
         
         self.u_gnd_r.calc_AA()
@@ -421,28 +400,12 @@ class EvoMPS_TDVP_Sandwich:
         self.u_gnd_r.calc_K()
         self.K[self.N + 1][:] = self.u_gnd_r.K
 
-        for n in reversed(xrange(n_low, n_high)):
-            self.K[n].fill(0)
-            
-            K = self.K[n]
-            Kp1 = self.K[n + 1]
-            C = self.C[n]
-            rp1 = self.r[n + 1]
-            A = self.A[n]
-            Ap1 = self.A[n + 1]
-            
-            Hr = sp.zeros_like(K)
-
-            for s in xrange(self.q[n]):
-                Ash = H(A[s])
-                for t in xrange(self.q[n+1]):
-                    Hr += C[s, t].dot(rp1.dot(H(Ap1[t]).dot(Ash)))
-
-                K += A[s].dot(Kp1.dot(Ash))
+        for n in reversed(xrange(n_low, n_high)): #FIXME: lm1???
+            self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n),
+                                      self.r[n + 1], self.A[n], self.A[n + 1],
+                                      sanity_checks=self.sanity_checks)
                 
-            self.h_expect[n] = mm.adot(self.get_l(n), Hr)
-                
-            K += Hr
+            self.h_expect[n] = he
             
         self.u_gnd_l.calc_AA()
         self.u_gnd_l.calc_C()
@@ -453,47 +416,7 @@ class EvoMPS_TDVP_Sandwich:
              
         return h
 
-    def calc_Vsh(self, n, sqrt_r):
-        """Generates mm.H(V[n][s]) for a given n, used for generating B[n][s]
-
-        This is described on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el] for left
-        gauge fixing. Here, we are using right gauge fixing.
-
-        Array slicing and reshaping is used to manipulate the indices as necessary.
-
-        Each V[n] directly depends only on A[n] and r[n].
-
-        We return the conjugate mm.H(V) because we use it in more places than V.
-        """
-        R = sp.zeros((self.D[n], self.q[n], self.D[n-1]), dtype=self.typ, order='C')
-
-        for s in xrange(self.q[n]):
-            R[:,s,:] = mm.mmul(sqrt_r, mm.H(self.A[n][s]))
-
-        R = R.reshape((self.q[n] * self.D[n], self.D[n-1]))
-        Vconj = ns.nullspace_qr(mm.H(R)).T
-
-        if self.sanity_checks:
-            if not sp.allclose(mm.mmul(Vconj.conj(), R), 0):
-                print "Sanity Fail in calc_Vsh!: VR_%u != 0" % (n)
-            if not sp.allclose(mm.mmul(Vconj, mm.H(Vconj)), sp.eye(Vconj.shape[0])):
-                print "Sanity Fail in calc_Vsh!: V H(V)_%u != eye" % (n)
-            
-        Vconj = Vconj.reshape((self.q[n] * self.D[n] - self.D[n - 1], self.D[n], self.q[n]))
-
-        Vsh = Vconj.T
-        Vsh = sp.asarray(Vsh, order='C')
-
-        if self.sanity_checks:
-            M = sp.zeros((self.q[n] * self.D[n] - self.D[n - 1], self.D[n]), dtype=self.typ)
-            for s in xrange(self.q[n]):
-                M += mm.mmul(mm.H(Vsh[s]), sqrt_r, mm.H(self.A[n][s]))
-            if not sp.allclose(M, 0):
-                print "Sanity Fail in calc_Vsh!: Bad Vsh_%u" % (n)
-
-        return Vsh
-
-    def calc_opt_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
+    def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
         """Calculate the parameter matrix x* giving the desired B.
 
         This is equivalent to eqn. (49) of arXiv:1103.0936v2 [cond-mat.str-el] except
@@ -509,50 +432,19 @@ class EvoMPS_TDVP_Sandwich:
             - K[n + 1]
             - V[n]
         """
-        x = sp.zeros((self.D[n - 1], self.q[n] * self.D[n] - self.D[n - 1]), dtype=self.typ, order=self.odr)
-        x_part = sp.empty_like(x)
-        x_subpart = sp.empty_like(self.A[n][0])
-        x_subsubpart = sp.empty_like(self.A[n][0])
-        
-        C = self.C[n]
-        Cm1 = self.C[n - 1]
-        rp1 = self.r[n + 1]
-        A = self.A[n]
-        Ap1 = self.A[n + 1]
-        Am1 = self.A[n - 1]
-        Kp1 = self.K[n + 1]
-        
-        H = mm.H
-
-        x_part.fill(0)
-        for s in xrange(self.q[n]):
-            x_subpart.fill(0)
-
-            if n < self.N + 1:
-                x_subsubpart.fill(0)
-                for t in xrange(self.q[n + 1]):
-                    x_subsubpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
-
-                x_subsubpart += A[s].dot(Kp1) #~3rd line
-
-                try:
-                    x_subpart += sqrt_r_inv.dot_left(x_subsubpart)
-                except AttributeError:
-                    x_subpart += x_subsubpart.dot(sqrt_r_inv)
-
-            x_part += x_subpart.dot(Vsh[s])
-
-        x += sqrt_l.dot(x_part)
-
         if n > 0:
-            l_nm2 = self.get_l(n - 2)
-            x_part.fill(0)
-            for s in xrange(self.q[n]):     #~2nd line
-                x_subsubpart.fill(0)
-                for t in xrange(self.q[n + 1]):
-                    x_subsubpart += H(Am1[t]).dot(l_nm2.dot(Cm1[t, s]))
-                x_part += x_subsubpart.dot(sqrt_r.dot(Vsh[s]))
-            x += sqrt_l_inv.dot(x_part)
+            lm2 = self.get_l(n - 2)
+        else:
+            lm2 = None
+            
+        if n < self.N + 1:
+            C = self.C[n]
+        else:
+            C = None
+            
+        x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
+                      lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+                      sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
 
         return x
         
@@ -609,9 +501,7 @@ class EvoMPS_TDVP_Sandwich:
                 
             B1[s] += l0_i.dot(B1sbit)
            
-        rb = sp.zeros_like(self.r[0])
-        for s in xrange(self.q[1]):
-            rb += B1[s].dot(r1.dot(mm.H(B1[s])))
+        rb = tm.eps_r_noop(r1, B1, B1)
         eta = sp.sqrt(mm.adot(l0, rb))
                 
         return B1, eta
@@ -634,9 +524,9 @@ class EvoMPS_TDVP_Sandwich:
             else:
                 l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
     
-                Vsh = self.calc_Vsh(n, r_sqrt)
+                Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
     
-                x = self.calc_opt_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+                x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
                 
                 if set_eta:
                     self.eta[n] = sp.sqrt(mm.adot(x, x))
@@ -646,10 +536,7 @@ class EvoMPS_TDVP_Sandwich:
                     B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
 
             if self.sanity_checks:
-                M = sp.zeros_like(self.r[n - 1])
-                for s in xrange(self.q[n]):
-                    M += mm.mmul(B[s], self.r[n], mm.H(self.A[n][s]))
-
+                M = tm.eps_r_noop(self.r[n], B, self.A[n])
                 if not sp.allclose(M, 0):
                     print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
 
@@ -667,37 +554,11 @@ class EvoMPS_TDVP_Sandwich:
         If l[n] or r[n] are diagonal or the identity, further optimizations are
         used.
         """
-        try:
-            l_sqrt = self.l[n - 1].sqrt()
-        except AttributeError:
-            l_sqrt, evd = mm.sqrtmh(self.l[n - 1], ret_evd=True)
+        l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i = tm.calc_l_r_roots(self.l[n - 1], 
+                                                               self.r[n], 
+                                                            self.sanity_checks)
 
-        try:
-            l_sqrt_inv = l_sqrt.inv()
-        except AttributeError:
-            l_sqrt_inv = mm.invmh(l_sqrt, evd=evd)
-
-        try:
-            r_sqrt = self.r[n].sqrt()
-        except AttributeError:
-            r_sqrt, evd =  mm.sqrtmh(self.r[n], ret_evd=True)
-
-        try:
-            r_sqrt_inv = r_sqrt.inv()
-        except AttributeError:
-            r_sqrt_inv = mm.invmh(r_sqrt, evd=evd)
-
-        if self.sanity_checks:
-            if not sp.allclose(mm.mmul(l_sqrt, l_sqrt), self.l[n - 1]):
-                print "Sanity Fail in calc_l_r_roots: Bad l_sqrt_%u" % (n - 1)
-            if not sp.allclose(mm.mmul(r_sqrt, r_sqrt), self.r[n]):
-                print "Sanity Fail in calc_l_r_roots: Bad r_sqrt_%u" % (n)
-            if not sp.allclose(mm.mmul(l_sqrt, l_sqrt_inv), sp.eye(l_sqrt.shape[0])):
-                print "Sanity Fail in calc_l_r_roots: Bad l_sqrt_inv_%u" % (n - 1)
-            if not sp.allclose(mm.mmul(r_sqrt, r_sqrt_inv), sp.eye(r_sqrt.shape[0])):
-                print "Sanity Fail in calc_l_r_roots: Bad r_sqrt_inv_%u" % (n)
-
-        return l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv
+        return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 
     def update(self, restore_rcf=True):
         """Perform all necessary steps needed before taking the next step,
@@ -853,11 +714,7 @@ class EvoMPS_TDVP_Sandwich:
         if finish < 0:
             finish = self.N + 1
         for n in xrange(start, finish + 1):
-            self.l[n] = sp.asarray(self.l[n])
-            self.l[n].fill(0)
-
-            for s in xrange(self.q[n]):
-                self.l[n] += mm.mmul(mm.H(self.A[n][s]), self.l[n - 1], self.A[n][s])
+            self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
 
     def calc_r(self, n_low=-1, n_high=-1):
         """Updates the r matrices using the current state.
@@ -869,173 +726,7 @@ class EvoMPS_TDVP_Sandwich:
         if n_high < 0:
             n_high = self.N - 1
         for n in reversed(xrange(n_low, n_high + 1)):
-            self.r[n] = sp.asarray(self.r[n])
-            self.r[n] = self.eps_r(n + 1, self.r[n + 1])
-
-    def eps_r(self, n, x, o=None):
-        """Implements the right epsilon map
-
-        Parameters
-        ----------
-        res : ndarray
-            A matrix to hold the result (with the same dimensions as r[n - 1]). May be None.
-        n : int
-            The site number.
-        x : ndarray
-            The argument matrix. For example, using r[n] (and o=None) gives a result r[n - 1]
-        o : function
-            The single-site operator to use. May be None.
-
-        Returns
-        -------
-        res : ndarray
-            The resulting matrix.
-        """
-        if n > self.N + 1:
-            n = self.N + 1
-        elif n < 0:
-            n = 0
-
-        res = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ)
-
-        if o is None:
-            for s in xrange(self.q[n]):
-                res += mm.mmul(self.A[n][s], x, mm.H(self.A[n][s]))
-        else:
-            A = self.A[n]
-            for s in xrange(self.q[n]):
-                Ash = mm.H(A[s])
-                for t in xrange(self.q[n]):
-                    o_st = o(n, s, t)
-                    if o_st != 0:
-                        res += o_st * A[t].dot(x.dot(Ash))
-        return res
-
-    def eps_r_2s(self, n, x, op, A1=None, A2=None, A3=None, A4=None):
-        if n > self.N:
-            n = self.N + 1
-            m = self.N + 1
-        elif n < 0:
-            n = 0
-            m = 0
-        else:
-            m = n + 1
-
-        if A1 is None:
-            A1 = self.A[n]
-        if A2 is None:
-            A2 = self.A[m]
-        if A3 is None:
-            A3 = self.A[n]
-        if A4 is None:
-            A4 = self.A[m]
-
-        res = sp.zeros((A1.shape[1], A1.shape[1]), dtype=self.typ)
-        subres = sp.zeros_like(A1[0])
-        
-        H = mm.H
-
-        for u in xrange(self.q[n]):
-            A3u = A3[u]
-            for v in xrange(self.q[m]):
-                AAuvH = H(A3u.dot(A4[v]))
-                subres.fill(0)
-                for s in xrange(self.q[n]):
-                    A1s = A1[s]
-                    for t in xrange(self.q[m]):
-                        opval = op(n, u, v, s, t)
-                        if opval != 0:
-                            subres += opval * A1s.dot(A2[t])
-                res += subres.dot(x.dot(AAuvH))
-
-        return res
-
-    def eps_l(self, n, x):
-        """Implements the left epsilon map
-
-        Parameters
-        ----------
-        res : ndarray
-            A matrix to hold the result (with the same dimensions as l[n]). May be None.
-        n : int
-            The site number.
-        x : ndarray
-            The argument matrix. For example, using l[n - 1] gives a result l[n]
-
-        Returns
-        -------
-        res : ndarray
-            The resulting matrix.
-        """
-        if n > self.N + 1:
-            n = self.N + 1
-        elif n < 0:
-            n = 0
-
-        res = sp.zeros_like(self.l[n])
-
-        for s in xrange(self.q[n]):
-            res += mm.mmul(mm.H(self.A[n][s]), x, self.A[n][s])
-        return res
-
-    def restore_ONR_n(self, n, G_n_i):
-        """Transforms a single A[n] to obtain right orthonormalization.
-
-        Implements the condition for right-orthonormalization from sub-section
-        3.1, theorem 1 of arXiv:quant-ph/0608197v2.
-
-        This function must be called for each n in turn, starting at N + 1,
-        passing the gauge transformation matrix from the previous step
-        as an argument.
-
-        Finds a G[n-1] such that ON_R is fulfilled for n.
-
-        Eigenvalues = 0 are a problem here... IOW rank-deficient matrices.
-        Apparently, they can turn up during a run, but if they do we're screwed.
-
-        The fact that M should be positive definite is used to optimize this.
-
-        Parameters
-        ----------
-        n : int
-            The site number.
-        G_n_i : ndarray
-            The inverse gauge transform matrix for site n obtained in the previous step (for n + 1).
-
-        Returns
-        -------
-        G_n_m1_i : ndarray
-            The inverse gauge transformation matrix for the site n - 1.
-        """
-        if G_n_i is None:
-            GGh_n_i = self.r[n]
-        else:
-            GGh_n_i = mm.mmul(G_n_i, self.r[n], mm.H(G_n_i))
-
-        M = self.eps_r(n, GGh_n_i)
-
-        try:
-            tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
-            G_nm1 = mm.H(mm.invtr(tu)) #G is now lower-triangular
-            G_nm1_i = mm.H(tu)
-        except sp.linalg.LinAlgError:
-            print "Restore_ON_R_%u: Falling back to eigh()!" % n
-            e,Gh = la.eigh(M)
-            G_nm1 = mm.H(mm.mmul(Gh, sp.diag(1/sp.sqrt(e) + 0.j)))
-            G_nm1_i = la.inv(G_nm1)
-
-        if G_n_i is None:
-            G_n_i = G_nm1_i
-
-        if self.sanity_checks:
-            if not sp.allclose(sp.dot(G_nm1, G_nm1_i), sp.eye(G_nm1.shape[0]), atol=1E-13, rtol=1E-13):
-                print "Sanity Fail in restore_ONR_%u!: Bad GT at n=%u" % (n, n)
-
-        for s in xrange(self.q[n]):
-            self.A[n][s] = mm.mmul(G_nm1, self.A[n][s], G_n_i)
-
-        return G_nm1_i, G_nm1
-
+            self.r[n] = tm.eps_r_noop(self.r[n + 1], self.A[n + 1], self.A[n + 1])
 
     def restore_RCF_dbg(self):
         for n in xrange(self.N + 2):
@@ -1072,17 +763,8 @@ class EvoMPS_TDVP_Sandwich:
     def restore_RCF_r(self):
         G_n_i = None
         for n in reversed(xrange(1, self.N + 2)):
-            G_n_i, G_n = self.restore_ONR_n(n, G_n_i)
-
-            self.r[n - 1] = mm.eyemat(self.D[n - 1], self.typ)
-
-            if self.sanity_checks:
-                r_n = mm.eyemat(self.D[n], self.typ)
-
-                r_nm1 = self.eps_r(n, r_n)
-                if not sp.allclose(r_nm1, self.r[n - 1].A, atol=1E-13, rtol=1E-13):
-                    print "Sanity Fail in restore_RCF_r!: r_%u is bad" % (n - 1)
-                    print la.norm(r_nm1 - self.r[n - 1])
+            self.r[n - 1], G_n_i, G_n = tm.restore_RCF_r(self.A[n], self.r[n], 
+                                             G_n_i, sanity_checks=self.sanity_checks)
 
         #self.r[self.N + 1] = self.r[self.N]
 
@@ -1097,40 +779,15 @@ class EvoMPS_TDVP_Sandwich:
         G_nm1 = None
         l_nm1 = self.l[0]
         for n in xrange(self.N + 1):
+            self.l[n], G_nm1, G_nm1_i = tm.restore_RCF_l(self.A[n], l_nm1, 
+                                      G_nm1, sanity_checks=self.sanity_checks)
+            
             if n == 0:
-                x = l_nm1
-            else:
-                x = mm.mmul(mm.H(G_nm1), l_nm1, G_nm1)
-            M = self.eps_l(n, x)
-            ev, EV = la.eigh(M)
+                self.u_gnd_l.r = mm.mmul(G_nm1, self.u_gnd_l.r, G_nm1_i) #since r is not eye
 
-            self.l[n] = mm.simple_diag_matrix(ev, dtype=self.typ)
-            G_n_i = EV
-
-            if n == 0:
-                G_nm1 = mm.H(EV) #for left uniform case
-                l_nm1 = self.l[n] #for sanity check
-                self.u_gnd_l.r = mm.mmul(G_nm1, self.u_gnd_l.r, G_n_i) #since r is not eye
-
-            for s in xrange(self.q[n]):
-                self.A[n][s] = mm.mmul(G_nm1, self.A[n][s], G_n_i)
-
-            if self.sanity_checks:
-                l = self.eps_l(n, l_nm1)
-                if not sp.allclose(l, self.l[n], atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_RCF_l!: l_%u is bad" % n
-                    print la.norm(l - self.l[n])
-
-            G_nm1 = mm.H(EV)
             l_nm1 = self.l[n]
 
-            if self.sanity_checks:
-                if not sp.allclose(sp.dot(G_nm1, G_n_i), sp.eye(G_n_i.shape[0]),
-                                   atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_RCF_l!: Bad GT for l_%u" % n
-
         #Now G_nm1 = G_N
-        G_nm1_i = mm.H(G_nm1)
         for s in xrange(self.q[self.N + 1]):
             self.A[self.N + 1][s] = mm.mmul(G_nm1, self.A[self.N + 1][s], G_nm1_i)
 
@@ -1203,18 +860,20 @@ class EvoMPS_TDVP_Sandwich:
         self.u_gnd_r.r = self.r[self.N]
         self.r[self.N + 1] = self.r[self.N]
 
-        self.l[self.N + 1][:] = self.eps_l(self.N + 1, self.l[self.N])
+        self.l[self.N + 1][:] = tm.eps_l_noop(self.l[self.N], 
+                                              self.A[self.N + 1], 
+                                              self.A[self.N + 1])
 
         if self.sanity_checks:
             l_n = self.l[0]
             for n in xrange(0, self.N + 1):
-                l_n = self.eps_l(n, l_n)
+                l_n = tm.eps_l_noop(l_n, self.A[n], self.A[n])
                 if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: l_%u is bad" % n
 
             r_nm1 = self.r[self.N + 1]
             for n in reversed(xrange(1, self.N + 2)):
-                r_nm1 = self.eps_r(n, r_nm1)
+                r_nm1 = tm.eps_r_noop(r_nm1, self.A[n], self.A[n])
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: r_%u is bad" % (n - 1)
         if dbg:
@@ -1325,6 +984,14 @@ class EvoMPS_TDVP_Sandwich:
         
         self.gen_h_matrix()
     
+    def get_A(self, n):
+        if n < 0:
+            return self.A[0]
+        elif n > self.N + 1:
+            return self.A[self.N + 1]
+        else:
+            return self.A[n]
+    
     def get_l(self, n):
         """Gets an l[n], even if n < 0 or n > N + 1
         """
@@ -1335,7 +1002,7 @@ class EvoMPS_TDVP_Sandwich:
         else:
             l_m = self.l[self.N + 1]
             for m in xrange(self.N + 2, n + 1):
-                l_m = self.eps_l(self.N + 1, l_m)
+                l_m = tm.eps_l_noop(l_m, self.A[self.N + 1], self.A[self.N + 1])
             return l_m
 
     def get_r(self, n, r_np1=None):
@@ -1349,10 +1016,10 @@ class EvoMPS_TDVP_Sandwich:
             if r_np1 is None:
                 r_m = self.r[0]
                 for m in reversed(xrange(n, 0)):
-                    r_m = self.eps_r(0, r_m)
+                    r_m = tm.eps_r_noop(r_m, self.A[0], self.A[0])
                 return r_m
             else:
-                return self.eps_r(0, r_np1)
+                return tm.eps_r_noop(r_np1, self.A[0], self.A[0])
 
     def expect_1s(self, o, n):
         """Computes the expectation value of a single-site operator.
@@ -1369,12 +1036,20 @@ class EvoMPS_TDVP_Sandwich:
             The operator.
         n : int
             The site number.
-        """
-        res = self.eps_r(n, self.get_r(n), o)
+        """        
+        A = self.get_A(n)
+        op = lambda s, t: o(n, s, t)
+        opv = sp.vectorize(op, otypes=[sp.complex128])
+        opm = sp.fromfunction(opv, (A.shape[0], A.shape[0]))
+        res = tm.eps_r_op_1s(self.get_r(n), A, A, opm)
         return mm.adot(self.get_l(n - 1), res)
 
     def expect_2s(self, o, n):
-        res = self.eps_r_2s(n, self.get_r(n + 1), o)
+        A = self.get_A(n)
+        Ap1 = self.get_A(n + 1)
+        AA = tm.calc_AA(A, Ap1)
+        op = lambda s,t,u,v: o(n, s, t, u, v)
+        res = tm.eps_r_op_2s_AA(self.get_r(n + 1), AA, AA, op)
         return mm.adot(self.get_l(n - 1), res)
 
     def expect_1s_Cor(self, o1, o2, n1, n2):
@@ -1397,15 +1072,14 @@ class EvoMPS_TDVP_Sandwich:
         n2 : int
             The site number of the second site (must be > n1).
         """
-        r_n = self.eps_r(n2, self.r[n2], o2)
+        r_n = tm.eps_r_op_1s(self.r[n2], self.A[n2], self.A[n2], o2)
 
         for n in reversed(xrange(n1 + 1, n2)):
-            r_n = self.eps_r(n, r_n)
+            r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
 
-        r_n = self.eps_r(n1, r_n, o1)
+        r_n = tm.eps_r_op_1s(r_n, self.A[n1], self.A[n1], o1)
 
-        res = mm.mmul(self.l[n1 - 1], r_n)
-        return res.trace()
+        return mm.adot(self.l[n1 - 1], r_n)
 
     def density_2s(self, n1, n2):
         """Returns a reduced density matrix for a pair of sites.
@@ -1427,13 +1101,13 @@ class EvoMPS_TDVP_Sandwich:
 
                 r_n = r_n2
                 for n in reversed(xrange(n1 + 1, n2)):
-                    r_n = self.eps_r(n, r_n)
+                    r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
 
                 for s1 in xrange(self.q[n1]):
                     for t1 in xrange(self.q[n1]):
                         r_n1 = mm.mmul(self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
-                        tmp = mm.mmul(self.l[n1 - 1], r_n1)
-                        rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp.trace()
+                        tmp = mm.adot(self.l[n1 - 1], r_n1)
+                        rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
         return rho
 
     def apply_op_1s(self, o, n):

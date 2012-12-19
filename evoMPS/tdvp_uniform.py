@@ -10,20 +10,21 @@ import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
 import scipy.optimize as opti
-import nullspace as ns
+import tdvp_merged as tm
 import matmul as m
 import math as ma
 
-import time
-
 try:
-    import tdvp_common as tc
-    import allclose as ac
+    import tdvp_calc_C as tc
 except ImportError:
     tc = None
-    ac = None
     print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
-        
+
+#try:
+#    import allclose as ac
+#except ImportError:
+#    ac = None
+#    print "Warning! Cython version of allclose not found."        
 
 class EOp:
     def __init__(self, tdvp, A1, A2, left):
@@ -40,9 +41,9 @@ class EOp:
         self.out = np.empty_like(tdvp.r)
         
         if left:
-            self.eps = tdvp._eps_l_noop_dense
+            self.eps = tm.eps_l_noop_inplace
         else:
-            self.eps = tdvp._eps_r_noop_dense
+            self.eps = tm.eps_r_noop_inplace
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
@@ -54,7 +55,6 @@ class EOp:
 
 class PPInvOp:    
     def __init__(self, tdvp, p, left, pseudo, A1, A2, r):
-        self.tdvp = tdvp
         self.A1 = A1
         self.A2 = A2
         self.l = tdvp.l
@@ -75,14 +75,14 @@ class PPInvOp:
         x = v.reshape((self.D, self.D))
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = self.tdvp._eps_l_noop_dense(x, self.A1, self.A2, self.out)
+            Ehx = tm.eps_l_noop_inplace(x, self.A1, self.A2, self.out)
             if self.pseudo:
                 QEQhx = Ehx - self.l * m.adot(self.r, x)
                 res = x - sp.exp(-1.j * self.p) * QEQhx
             else:
                 res = x - sp.exp(-1.j * self.p) * Ehx
         else:
-            Ex = self.tdvp._eps_r_noop_dense(x, self.A1, self.A2, self.out)
+            Ex = tm.eps_r_noop_inplace(x, self.A1, self.A2, self.out)
             if self.pseudo:
                 QEQx = Ex - self.r * m.adot(self.l, x)
                 res = x - sp.exp(1.j * self.p) * QEQx
@@ -94,7 +94,6 @@ class PPInvOp:
 class Excite_H_Op:
     def __init__(self, tdvp, donor, p):
         self.donor = donor
-        self.tdvp = tdvp
         self.p = p
         
         self.D = tdvp.D
@@ -107,6 +106,8 @@ class Excite_H_Op:
         
         self.prereq = (tdvp.calc_BHB_prereq(donor))
         
+        self.calc_BHB = tdvp.calc_BHB
+        
         self.calls = 0
     
     def matvec(self, v):
@@ -115,7 +116,7 @@ class Excite_H_Op:
         self.calls += 1
         print "Calls: %u" % self.calls
         
-        res = self.tdvp.calc_BHB(x, self.p, self.donor, *self.prereq)
+        res = self.calc_BHB(x, self.p, self.donor, *self.prereq)
         
         return res.ravel()
 
@@ -135,8 +136,11 @@ class EvoMPS_TDVP_Uniform:
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
         
+        self.itr_l = 0
+        self.itr_r = 0
+        
         self.pow_itr_max = 2000
-        self.ev_use_arpack = False
+        self.ev_use_arpack = True
         
         self.h_nn = None    
         self.h_nn_cptr = None
@@ -184,193 +188,7 @@ class EvoMPS_TDVP_Uniform:
         self.conv_r = True
         
         self.tmp = np.zeros_like(self.A[0])
-           
-    def _eps_r_noop_dense(self, x, A1, A2, out):
-        """The right epsilon map, optimized for efficiency.
-        """
-        out.fill(0)
-        dot = np.dot
-        for s in xrange(self.q):
-            out += dot(A1[s], dot(x, A2[s].conj().T))
         
-        return out
-        
-    def eps_r(self, x, A1=None, A2=None, op=None, out=None):
-        """Implements the right epsilon map
-        
-        FIXME: Ref.
-        
-        Parameters
-        ----------
-        op : function
-            The single-site operator to use.
-        out : ndarray
-            A matrix to hold the result (with the same dimensions as r).
-        x : ndarray
-            The argument matrix.
-    
-        Returns
-        -------
-        res : ndarray
-            The resulting matrix.
-        """
-           
-        if A1 is None:
-            A1 = self.A
-        if A2 is None:
-            A2 = self.A
-
-        if out is None:
-            out = np.zeros((A1.shape[1], A2.shape[1]), dtype=self.typ)
-        else:
-            out.fill(0.)
-            
-        if op is None:
-            for s in xrange(self.q):
-                out += m.mmul(A1[s], x, m.H(A2[s]))
-        else:
-            for s in xrange(self.q):
-                for t in xrange(self.q):
-                    o_st = op(s, t)
-                    if o_st != 0.:
-                        tmp = m.mmul(A1[t], x, m.H(A2[s]))
-                        tmp *= o_st
-                        out += tmp
-        return out
-        
-    def _eps_l_noop_dense(self, x, A1, A2, out):
-        """The left epsilon map, optimized for efficiency.
-        """
-        out.fill(0)        
-        #gemm = self.gemm
-        
-        #if gemm is None:
-        dot = np.dot
-        for s in xrange(self.q):
-            out += dot(A1[s].conj().T, dot(x, A2[s]))
-        #else:
-        #    for s in xrange(self.q):
-        #        out += gemm(1, A1[s], gemm(1, x, A2[s]), 0, None, 2, 0, False)
-            
-        return out
-        
-    def eps_l(self, x, A1=None, A2=None, out=None):
-        if out is None:
-            out = np.zeros_like(self.A[0])
-        else:
-            out.fill(0.)
-            
-        if A1 is None:
-            A1 = self.A
-        if A2 is None:
-            A2 = self.A
-            
-        for s in xrange(self.q):
-            out += m.mmul(m.H(A1[s]), x, A2[s])
-            
-        return out
-        
-    def calc_AA(self):
-        dot = np.dot
-        A = self.A
-        AA = self.AA
-        for s in xrange(self.q):
-            for t in xrange(self.q):
-                AA[s, t] = dot(A[s], A[t])
-        
-        #Note: This could be cythonized, calling BLAS from C    
-        
-        #This works too: (just for reference)
-        #AA = np.array([dot(A[s], A[t]) for s in xrange(self.q) for t in xrange(self.q)])
-        #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
-        
-    def eps_r_2s(self, x, op, A1=None, A2=None, A3=None, A4=None, C34=None, C=None):
-        if A1 is None:
-            A1 = self.A
-        if A2 is None:
-            A2 = self.A
-        if A3 is None:
-            A3 = self.A
-        if A4 is None:
-            A4 = self.A
-            
-        if op is self.h_nn and C is None:
-            C = self.C
-            op = None
-            
-        res = np.zeros((A1.shape[1], A3.shape[1]), dtype=self.typ)
-        zeros_like = np.zeros_like
-        zeros = np.zeros
-        
-        if (A1 is self.A) and (A2 is self.A) and (A3 is self.A) and (A4 is self.A):
-            if op is None and not C is None:
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        res += C[s, t].dot(x.dot(m.H(self.AA[s, t])))
-            else:
-                for u in xrange(self.q):
-                    for v in xrange(self.q):
-                        subres = zeros_like(A1[0])
-                        for s in xrange(self.q):
-                            for t in xrange(self.q):
-                                opval = op(u, v, s, t)
-                                if opval != 0:
-                                    subres += opval * self.AA[s, t]
-                        res += subres.dot(x.dot(m.H(self.AA[u, v])))
-        elif (A1 is self.A) and (A2 is self.A):
-            if op is None and not C is None:
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        AAstH = m.H(A3[s].dot(A4[t]))
-                        res += C[s, t].dot(x.dot(AAstH))
-            elif op is None and not C34 is None:
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        res += self.AA[s, t].dot(x.dot(m.H(C34[s, t])))
-            else:
-                for u in xrange(self.q):
-                    for v in xrange(self.q):
-                        subres = zeros_like(self.A[0])
-                        for s in xrange(self.q):
-                            for t in xrange(self.q):
-                                opval = op(u, v, s, t)
-                                if opval != 0:
-                                    subres += opval * self.AA[s, t]
-                        AAuvH = m.H(A3[u].dot(A4[v]))
-                        res += subres.dot(x.dot(AAuvH))
-        elif (op is None and not C34 is None) or (A3 is self.A) and (A4 is self.A):
-            if op is None and not C34 is None:
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        res += A1[s].dot(A2[t]).dot(x.dot(m.H(C34[s, t])))
-            elif op is None and not C is None:
-                for s in xrange(self.q):
-                    for t in xrange(self.q):
-                        res += A1[s].dot(A2[t]).dot(x.dot(m.H(C[s, t])))
-            else:
-                for u in xrange(self.q):
-                    for v in xrange(self.q):
-                        subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
-                        for s in xrange(self.q):
-                            for t in xrange(self.q):
-                                opval = op(u, v, s, t)
-                                if opval != 0:
-                                    subres += opval * A1[s].dot(A2[t])
-                        res += subres.dot(x.dot(m.H(self.AA[u, v])))
-        else:
-            for u in xrange(self.q):
-                for v in xrange(self.q):
-                    subres = zeros((A1.shape[1], A2.shape[2]), dtype=self.typ)
-                    for s in xrange(self.q):
-                        for t in xrange(self.q):
-                            opval = op(u, v, s, t)
-                            if opval != 0:
-                                subres += opval * A1[s].dot(A2[t])
-                    AAuvH = m.H(A3[u].dot(A4[v]))
-                    res += subres.dot(x.dot(AAuvH))
-                    
-        return res
-
     def _calc_lr_brute(self):
         E = np.zeros((self.D**2, self.D**2), dtype=self.typ, order='C')
         
@@ -391,8 +209,10 @@ class EvoMPS_TDVP_Uniform:
         self.r *= 1 / sp.sqrt(norm)        
         
         print "Sledgehammer:"
-        print "Left ok?: " + str(np.allclose(self.eps_l(self.l), self.l))
-        print "Right ok?: " + str(np.allclose(self.eps_r(self.r), self.r))
+        print "Left ok?: " + str(np.allclose(
+                                tm.eps_l_noop(self.l, self.A, self.A), self.l))
+        print "Right ok?: " + str(np.allclose(
+                                tm.eps_r_noop(self.r, self.A, self.A), self.r))
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                         tol=1E-14):
@@ -450,9 +270,9 @@ class EvoMPS_TDVP_Uniform:
                 if not A1 is A2:
                     print "Sanity check failed: Re-scaling with A1 <> A2!"
                 if calc_l:
-                    self._eps_l_noop_dense(x, A1, A2, tmp)
+                    tm.eps_l_noop_inplace(x, A1, A2, tmp)
                 else:
-                    self._eps_r_noop_dense(x, A1, A2, tmp)
+                    tm.eps_r_noop_inplace(x, A1, A2, tmp)
                 ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < tol:
                     print "Sanity check failed: Largest ev after re-scale = " + str(ev)
@@ -489,9 +309,9 @@ class EvoMPS_TDVP_Uniform:
         for i in xrange(max_itr):
             x[:] = tmp
             if calc_l:
-                self._eps_l_noop_dense(x, A1, A2, tmp)
+                tm.eps_l_noop_inplace(x, A1, A2, tmp)
             else:
-                self._eps_r_noop_dense(x, A1, A2, tmp)
+                tm.eps_r_noop_inplace(x, A1, A2, tmp)
             ev_mag = norm(tmp.ravel()) / n
             ev = (tmp.mean() / x.mean()).real
             tmp *= (1 / ev_mag)
@@ -509,9 +329,9 @@ class EvoMPS_TDVP_Uniform:
                 if not A1 is A2:
                     print "Sanity check failed: Re-scaling with A1 <> A2!"
                 if calc_l:
-                    self._eps_l_noop_dense(x, A1, A2, tmp)
+                    tm.eps_l_noop_inplace(x, A1, A2, tmp)
                 else:
-                    self._eps_r_noop_dense(x, A1, A2, tmp)
+                    tm.eps_r_noop_inplace(x, A1, A2, tmp)
                 ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < atol:
                     print "Sanity check failed: Largest ev after re-scale = " + str(ev)
@@ -583,17 +403,17 @@ class EvoMPS_TDVP_Uniform:
                 print "Warning: Max. iterations reached during normalization!"
 
         if self.sanity_checks:
-            if not np.allclose(self.eps_l(self.l), self.l,
+            if not np.allclose(tm.eps_l_noop(self.l, self.A, self.A), self.l,
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Left eigenvector bad! Off by: " \
-                       + str(la.norm(self.eps_l(self.l) - self.l))
+                       + str(la.norm(tm.eps_l_noop(self.l, self.A, self.A) - self.l))
                        
-            if not np.allclose(self.eps_r(self.r), self.r,
+            if not np.allclose(tm.eps_r_noop(self.r, self.A, self.A), self.r,
             rtol=self.itr_rtol*self.check_fac,
             atol=self.itr_atol*self.check_fac):
                 print "Sanity check failed: Right eigenvector bad! Off by: " \
-                       + str(la.norm(self.eps_r(self.r) - self.r))
+                       + str(la.norm(tm.eps_r_noop(self.r, self.A, self.A) - self.r))
             
             if not np.allclose(self.l, m.H(self.l),
             rtol=self.itr_rtol*self.check_fac, 
@@ -650,8 +470,8 @@ class EvoMPS_TDVP_Uniform:
             if not np.allclose(Sfull, r):
                 print "Sanity check failed: Restorce_SCF, right failed!"
                 
-            l = self.eps_l(Sfull)
-            r = self.eps_r(Sfull)
+            l = tm.eps_l_noop(Sfull, self.A, self.A)
+            r = tm.eps_r_noop(Sfull, self.A, self.A)
             
             if not np.allclose(Sfull, l, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
@@ -707,8 +527,8 @@ class EvoMPS_TDVP_Uniform:
                     print "Sanity check failed: r not identity."
                     print "Off by: " + str(la.norm(np.eye(self.D) - self.r))
                 
-                l = self.eps_l(self.l)
-                r = self.eps_r(self.r)
+                l = tm.eps_l_noop(self.l, self.A, self.A)
+                r = tm.eps_r_noop(self.r, self.A, self.A)
                 
                 if not np.allclose(r, self.r,
                                    rtol=self.itr_rtol*self.check_fac, 
@@ -733,29 +553,19 @@ class EvoMPS_TDVP_Uniform:
         """Generates a matrix form for h_nn, which can speed up parts of the
         algorithm by avoiding excess loops and python calls.
         """
-        self.h_nn_mat = sp.zeros((self.q, self.q, self.q, self.q), dtype=self.typ)
-        q = self.q
-        for u in xrange(q):
-            for v in xrange(q):
-                for s in xrange(q):
-                    for t in xrange(q):
-                        self.h_nn_mat[s, t, u, v] = self.h_nn(s, t, u, v)   
+        hv = np.vectorize(self.h_nn, otypes=[np.complex128])
+        self.h_nn_mat = np.fromfunction(hv, (self.q, self.q, self.q, self.q))  
     
+    def calc_AA(self):
+        self.AA = tm.calc_AA(self.A, self.A)
+
     def calc_C(self):
         if not tc is None and not self.h_nn_cptr is None and np.iscomplexobj(self.C):
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
         elif not self.h_nn_mat is None:
-            self.C[:] = sp.tensordot(self.h_nn_mat, self.AA, ((2, 3), (0, 1)))
+            self.C[:] = tm.calc_C_mat_op_AA(self.h_nn_mat, self.AA)
         else:
-            self.C.fill(0)
-            
-            for u in xrange(self.q): #ndindex is just too slow..
-                for v in xrange(self.q):
-                    for s in xrange(self.q):
-                        for t in xrange(self.q):
-                            h = self.h_nn(s, t, u, v) #for large q, this executes a lot..
-                            if h != 0:
-                                self.C[s, t] += h * self.AA[u, v]
+            self.C[:] = tm.calc_C_func_op_AA(self.h_nn, self.AA)
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, pseudo=True):
         if out is None:
@@ -808,11 +618,7 @@ class EvoMPS_TDVP_Uniform:
         return out
         
     def calc_K(self):
-        Hr = np.zeros_like(self.A[0])
-        
-        for s in xrange(self.q):
-            for t in xrange(self.q):
-                Hr += m.mmul(self.C[s, t], self.r, m.H(self.AA[s, t]))
+        Hr = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
         
         self.h = m.adot(self.l, Hr)
         
@@ -821,7 +627,7 @@ class EvoMPS_TDVP_Uniform:
         self.calc_PPinv(QHr, out=self.K)
         
         if self.sanity_checks:
-            Ex = self.eps_r(self.K)
+            Ex = tm.eps_r_noop(self.K, self.A, self.A)
             QEQ = Ex - self.r * m.adot(self.l, self.K)
             res = self.K - QEQ
             if not np.allclose(res, QHr):
@@ -829,11 +635,7 @@ class EvoMPS_TDVP_Uniform:
                 print "Off by: " + str(la.norm(res - QHr))
         
     def calc_K_l(self):
-        lH = np.zeros_like(self.A[0])
-        
-        for s in xrange(self.q):
-            for t in xrange(self.q):
-                lH += m.mmul(m.H(self.AA[s, t]), self.l, self.C[s, t])
+        lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
         
         h = m.adot(self.r, lH)
         
@@ -842,7 +644,7 @@ class EvoMPS_TDVP_Uniform:
         self.K_left = self.calc_PPinv(lHQ, left=True, out=self.K_left)
         
         if self.sanity_checks:
-            xE = self.eps_l(self.K_left)
+            xE = tm.eps_l_noop(self.K_left, self.A, self.A)
             QEQ = xE - self.l * m.adot(self.r, self.K_left)
             res = self.K_left - QEQ
             if not np.allclose(res, lHQ):
@@ -850,30 +652,6 @@ class EvoMPS_TDVP_Uniform:
                 print "Off by: " + str(la.norm(res - lHQ))
         
         return self.K_left, h
-            
-    def calc_Vsh(self, r_sqrt):
-        R = np.zeros((self.D, self.q, self.D), dtype=self.typ, order='C')
-        
-        for s in xrange(self.q):
-            R[:,s,:] = m.mmul(r_sqrt, m.H(self.A[s]))
-        
-        R = R.reshape((self.q * self.D, self.D))
-        
-        Vconj = ns.nullspace_qr(m.H(R)).T
-        #R can be pretty huge for large q and D. The decomp. can take a long time...
-
-        if self.sanity_checks:
-            if not np.allclose(np.dot(Vconj, m.H(Vconj)), np.eye(self.q*self.D - self.D)):
-                print "Sanity check failed: V . H(V) not eye!"
-            if not np.allclose(np.dot(Vconj.conj(), R), 0):
-                print "Sanity check failed: V . R not zero!"
-        Vconj = Vconj.reshape(((self.q - 1) * self.D, self.D, self.q))
-        
-        #prepare for using V[s] and already take the adjoint, since we use it more often
-        Vsh = Vconj.T
-        Vsh = np.asarray(Vsh, order='C')
-
-        return Vsh
         
     def calc_x(self, l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh, out=None):
         if out is None:
@@ -908,37 +686,16 @@ class EvoMPS_TDVP_Uniform:
         return out
         
     def calc_l_r_roots(self):
-        try:
-            self.l_sqrt = self.l.sqrt()
-            self.l_sqrt_i = self.l_sqrt.inv()
-        except AttributeError:
-            self.l_sqrt, evd = m.sqrtmh(self.l, ret_evd=True)
-            self.l_sqrt_i = m.invmh(self.l_sqrt, evd=evd)
-            
-        try:
-            self.r_sqrt = self.r.sqrt()
-            self.r_sqrt_i = self.r_sqrt.inv()
-        except AttributeError:
-            self.r_sqrt, evd = m.sqrtmh(self.r, ret_evd=True)
-            self.r_sqrt_i = m.invmh(self.r_sqrt, evd=evd)
-        
-        if self.sanity_checks:
-            if not np.allclose(self.l_sqrt.dot(self.l_sqrt), self.l):
-                print "Sanity check failed: l_sqrt is bad!"
-            if not np.allclose(self.l_sqrt.dot(self.l_sqrt_i), np.eye(self.D)):
-                print "Sanity check failed: l_sqrt_i is bad!"
-            if not np.allclose(self.r_sqrt.dot(self.r_sqrt), self.r):
-                print "Sanity check failed: r_sqrt is bad!"
-            if (not np.allclose(self.r_sqrt.dot(self.r_sqrt_i), np.eye(self.D))):
-                print "Sanity check failed: r_sqrt_i is bad!"
+        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, self.sanity_checks)
         
     def calc_B(self, set_eta=True):
         self.calc_l_r_roots()
                 
-        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
-        self.x = self.calc_x(self.l_sqrt, self.l_sqrt_i, self.r_sqrt, 
-                        self.r_sqrt_i, self.Vsh)
+        self.x = tm.calc_x(self.K, self.C, self.C, self.r, self.l, self.A, 
+                           self.A, self.A, self.l_sqrt, self.l_sqrt_i,
+                           self.r_sqrt, self.r_sqrt_i, self.Vsh)
         
         if set_eta:
             self.eta = sp.sqrt(m.adot(self.x, self.x))
@@ -947,9 +704,7 @@ class EvoMPS_TDVP_Uniform:
         
         if self.sanity_checks:
             #Test gauge-fixing:
-            tst = np.zeros_like(self.A[0])
-            for s in xrange(self.q):
-                tst += m.mmul(B[s], self.r, m.H(self.A[s]))
+            tst = tm.eps_r_noop(self.r, B, self.A)
             if not np.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
 
@@ -1081,7 +836,7 @@ class EvoMPS_TDVP_Uniform:
 
         C_ = sp.tensordot(h_nn_mat, AA_, ((2, 3), (0, 1)))
         
-        rhs10 = donor.eps_r_2s(r_, op=None, A3=Vri_, C34=C_Vri_A_)
+        rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
         
         return h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
             
@@ -1108,7 +863,7 @@ class EvoMPS_TDVP_Uniform:
         B = donor.get_B_from_x(x, donor.Vsh, l_sqrt_i, r__sqrt_i)
         
         if self.sanity_checks:
-            tst = donor.eps_r(r_, A1=B)
+            tst = tm.eps_r_noop(r_, B, A_)
             if not np.allclose(tst, 0):
                 print "Sanity check failed: Gauge-fixing violation!"
 
@@ -1120,21 +875,21 @@ class EvoMPS_TDVP_Uniform:
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity Fail in calc_BHB! Bad Vri!"
             
-        y = self.eps_l(l, A1=B)  
+        y = tm.eps_l_noop(l, B, self.A)
         
         if pseudo:
             y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
         M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo)
         #print m.adot(r, M)
         if self.sanity_checks:
-            y2 = M - sp.exp(+1.j * p) * self.eps_l(M, A1=A_)
+            y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
             if not sp.allclose(y, y2):
                 print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         Mh = m.H(M)
 
         res = l_sqrt.dot(
-               donor.eps_r_2s(r_, op=None, A1=B, A3=Vri_, C34=C_Vri_A_) #1 OK
-               + sp.exp(+1.j * p) * self.eps_r_2s(r_, op=None, A2=B, A3=Vri_, A4=A_, C34=C_Vri_A_) #3 OK with 4
+               tm.eps_r_op_2s_C34(r_, B, A_, C_Vri_A_) #1 OK
+               + sp.exp(+1.j * p) * tm.eps_r_op_2s_C34(r_, self.A, B, C_Vri_A_) #3 OK with 4
               )
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
@@ -1147,15 +902,15 @@ class EvoMPS_TDVP_Uniform:
                 res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
                 res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
         
-        res += l_sqrt.dot(self.eps_r(K__r, A1=B, A2=Vri_)) #5 OK
+        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
         
-        res += l_sqrt_i.dot(m.H(K_l).dot(self.eps_r(r__sqrt, A1=B, A2=V_))) #6
+        res += l_sqrt_i.dot(m.H(K_l).dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
         
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(donor.eps_r(K__r, A2=Vri_))) #8
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
-        y1 = sp.exp(+1.j * p) * donor.eps_r(K__r, A1=B) #7
-        y2 = sp.exp(+1.j * p) * donor.eps_r_2s(r_, op=None, A1=B, C34=C_) #9
-        y3 = sp.exp(+2.j * p) * donor.eps_r_2s(r_, op=None, A1=A, A2=B, C34=C_) #11
+        y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
+        y2 = sp.exp(+1.j * p) * tm.eps_r_op_2s_C34(r_, B, A_, C_) #9
+        y3 = sp.exp(+2.j * p) * tm.eps_r_op_2s_C34(r_, self.A, B, C_) #11
         
         y = y1 + y2 + y3
         if pseudo:
@@ -1163,11 +918,11 @@ class EvoMPS_TDVP_Uniform:
         y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo)
         #print m.adot(l, y_pi)
         if self.sanity_checks:
-            y2 = y_pi - sp.exp(+1.j * p) * self.eps_r(y_pi, A2=A_)
+            y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
             if not sp.allclose(y, y2):
                 print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
         
-        res += l_sqrt.dot(self.eps_r(y_pi, A2=Vri_))
+        res += l_sqrt.dot(tm.eps_r_noop(y_pi, self.A, Vri_))
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
@@ -1182,7 +937,7 @@ class EvoMPS_TDVP_Uniform:
     def _prepare_excite_op_top_triv(self, p):
         self.calc_K_l()
         self.calc_l_r_roots()
-        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, self, p)
 
@@ -1192,7 +947,7 @@ class EvoMPS_TDVP_Uniform:
                         which='SM', return_eigenvectors=False):
         self.calc_K_l()
         self.calc_l_r_roots()
-        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, self, p)
         res = las.eigsh(op, which=which, k=k, v0=v0,
@@ -1204,7 +959,7 @@ class EvoMPS_TDVP_Uniform:
     def excite_top_triv_brute(self, p):
         self.calc_K_l()
         self.calc_l_r_roots()
-        self.Vsh = self.calc_Vsh(self.r_sqrt)
+        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, self, p)
         
@@ -1253,7 +1008,7 @@ class EvoMPS_TDVP_Uniform:
         self.calc_K_l()
         self.calc_l_r_roots()
         donor.calc_l_r_roots()
-        donor.Vsh = donor.calc_Vsh(donor.r_sqrt)
+        donor.Vsh = tm.calc_Vsh(donor.A, donor.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, donor, p)
                 
@@ -1561,12 +1316,17 @@ class EvoMPS_TDVP_Uniform:
         
             
     def expect_1s(self, op):
-        Or = self.eps_r(self.r, op=op)
+        opv = np.vectorize(op, otypes=[np.complex128])
+        opm = np.fromfunction(opv, (self.q, self.q))
+        Or = tm.eps_r_op_1s(self.r, self.A, self.A, opm)
         
         return m.adot(self.l, Or)
             
     def expect_2s(self, op):
-        res = self.eps_r_2s(self.r, op)
+        if op == self.h_nn:
+            res = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
+        else:
+            res = tm.eps_r_op_2s_AA_func_op(self.r, self.AA, self.AA, op)
         
         return m.adot(self.l, res)
         
