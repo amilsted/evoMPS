@@ -3,6 +3,9 @@
 Created on Sun Nov 25 11:49:32 2012
 
 @author: ash
+
+TODO:
+    - Sane implementation of sanity checks (return the info to the caller)
 """
 
 import scipy as sp
@@ -43,9 +46,9 @@ def eps_l_op_1s(x, A1, A2, op):
     out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         for t in xrange(A1.shape[0]):
-            o_st = op[s, t]
+            o_st = op[t, s]
             if o_st != 0:
-                out += o_st * A1[s].conj().T.dot(x.dot(A2[t]))
+                out += o_st.conj() * A1[s].conj().T.dot(x.dot(A2[t]))
     return out
     
 def eps_r_noop(x, A1, A2):
@@ -96,8 +99,7 @@ def eps_r_op_2s_A(x, A1, A2, A3, A4, op):
                     opval = op[u, v, s, t]
                     if opval != 0:
                         subres += opval * A1[s].dot(A2[t])
-            AAuvH = (A3[u].dot(A4[v])).conj().T
-            res += subres.dot(x.dot(AAuvH))
+            res += subres.dot(x.dot((A3[u].dot(A4[v])).conj().T))
     return res
     
 def eps_r_op_2s_AA12(x, AA12, A3, A4, op):
@@ -111,8 +113,7 @@ def eps_r_op_2s_AA12(x, AA12, A3, A4, op):
                     opval = op[u, v, s, t]
                     if opval != 0:
                         subres += opval * AA12[s, t]
-            AAuvH = (A3[u].dot(A4[v])).conj().T
-            res += subres.dot(x.dot(AAuvH))
+            res += subres.dot(x.dot((A3[u].dot(A4[v])).conj().T))
     return res
     
 def eps_r_op_2s_AA_func_op(x, AA12, AA34, op):
@@ -133,8 +134,7 @@ def eps_r_op_2s_C12(x, C12, A3, A4):
     res = np.zeros((C12.shape[2], A3.shape[1]), dtype=A3.dtype)
     for u in xrange(A3.shape[0]):
         for v in xrange(A4.shape[0]):
-            AAuvH = (A3[u].dot(A4[v])).conj().T
-            res += C12[u, v].dot(x.dot(AAuvH))
+            res += C12[u, v].dot(x.dot((A3[u].dot(A4[v])).conj().T))
     return res
     
 def eps_r_op_2s_C34(x, A1, A2, C34):
@@ -148,8 +148,7 @@ def eps_r_op_2s_C12_AA34(x, C12, AA34):
     res = np.zeros((C12.shape[2], AA34.shape[2]), dtype=AA34.dtype)
     for u in xrange(AA34.shape[0]):
         for v in xrange(AA34.shape[1]):
-            AAuvH = AA34[u, v].conj().T
-            res += C12[u, v].dot(x.dot(AAuvH))
+            res += C12[u, v].dot(x.dot(AA34[u, v].conj().T))
     return res
     
 def eps_r_op_2s_AA12_C34(x, AA12, C34):
@@ -183,8 +182,11 @@ def calc_AA(A, Ap1):
     #AA = np.array([dot(A[s], A[t]) for s in xrange(self.q) for t in xrange(self.q)])
     #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
 
-def calc_C_mat_op_AA(op, AA):        
+def calc_C_mat_op_AA(op, AA):
     return sp.tensordot(op, AA, ((2, 3), (0, 1)))
+
+def calc_C_conj_mat_op_AA(op, AA):
+    return sp.tensordot(op.conj(), AA, ((0, 1), (0, 1)))
 
 def calc_C_func_op(op, A, Ap1):
     q = A.shape[0]
