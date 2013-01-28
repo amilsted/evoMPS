@@ -109,6 +109,9 @@ class Excite_H_Op:
         self.calc_BHB = tdvp.calc_BHB
         
         self.calls = 0
+        
+        self.M_prev = None
+        self.y_pi_prev = None
     
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
@@ -116,10 +119,13 @@ class Excite_H_Op:
         self.calls += 1
         print "Calls: %u" % self.calls
         
-        res = self.calc_BHB(x, self.p, self.donor, *self.prereq)
+        res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.donor, 
+                                                         *self.prereq,
+                                                         M_prev=self.M_prev, 
+                                                         y_pi_prev=self.y_pi_prev)
         
         return res.ravel()
-
+        
 class EvoMPS_TDVP_Uniform:
     odr = 'C'    
         
@@ -635,6 +641,7 @@ class EvoMPS_TDVP_Uniform:
                 print "Off by: " + str(la.norm(res - QHr))
         
     def calc_K_l(self):
+        #Using C is allowed because h is Hermitian
         lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
         
         h = m.adot(self.r, lH)
@@ -838,9 +845,12 @@ class EvoMPS_TDVP_Uniform:
         
         rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
         
+        #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
+        
         return h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
             
-    def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10): 
+    def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, 
+                 C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         """        
         A = self.A
@@ -875,11 +885,14 @@ class EvoMPS_TDVP_Uniform:
                                atol=self.itr_atol*self.check_fac):
                 print "Sanity Fail in calc_BHB! Bad Vri!"
             
+        BA_ = tm.calc_AA(B, A_)
+        AB = tm.calc_AA(self.A, B)
+            
         y = tm.eps_l_noop(l, B, self.A)
         
         if pseudo:
             y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo)
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo, out=M_prev)
         #print m.adot(r, M)
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
@@ -888,19 +901,20 @@ class EvoMPS_TDVP_Uniform:
         Mh = m.H(M)
 
         res = l_sqrt.dot(
-               tm.eps_r_op_2s_C34(r_, B, A_, C_Vri_A_) #1 OK
-               + sp.exp(+1.j * p) * tm.eps_r_op_2s_C34(r_, self.A, B, C_Vri_A_) #3 OK with 4
+               tm.eps_r_op_2s_AA12_C34(r_, BA_, C_Vri_A_) #1 OK
+               + sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_Vri_A_) #3 OK with 4
               )
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
         exp = sp.exp
-        H = m.H
+        subres = sp.zeros_like(res)
         for s in xrange(self.q):
             for t in xrange(self.q):
-                res += l_sqrt_i.dot(C_AhlA[s, t].dot(B[s])).dot(H(Vr_[t])) #2 OK
-                res += exp(-1.j * p) * l_sqrt_i.dot(H(A[t]).dot(l.dot(B[s]))).dot(C_A_Vrh_[s, t]) #4 OK with 3
-                res += exp(-2.j * p) * l_sqrt_i.dot(H(A[s]).dot(Mh.dot(C_[s, t]))).dot(H(Vr_[t])) #12
+                subres += (C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
+                         + exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[s, t]) #4 OK with 3
+                         + exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_[s, t])).dot(Vr_[t].conj().T)) #12
+        res += l_sqrt_i.dot(subres)
         
         res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
         
@@ -909,13 +923,13 @@ class EvoMPS_TDVP_Uniform:
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
         y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
-        y2 = sp.exp(+1.j * p) * tm.eps_r_op_2s_C34(r_, B, A_, C_) #9
-        y3 = sp.exp(+2.j * p) * tm.eps_r_op_2s_C34(r_, self.A, B, C_) #11
+        y2 = sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, BA_, C_) #9
+        y3 = sp.exp(+2.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_) #11
         
         y = y1 + y2 + y3
         if pseudo:
             y = y - m.adot(l, y) * r_
-        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo)
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo, out=y_pi_prev)
         #print m.adot(l, y_pi)
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
@@ -932,7 +946,7 @@ class EvoMPS_TDVP_Uniform:
             if not abs(expval.imag) < 1E-9:
                 print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
         
-        return res
+        return res, M, y_pi
     
     def _prepare_excite_op_top_triv(self, p):
         self.calc_K_l()
@@ -943,16 +957,18 @@ class EvoMPS_TDVP_Uniform:
 
         return op        
     
-    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None,
+    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
+                        sigma=None,
                         which='SM', return_eigenvectors=False):
+        self.gen_h_matrix()
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, self, p)
-        res = las.eigsh(op, which=which, k=k, v0=v0,
+        res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
                          return_eigenvectors=return_eigenvectors, 
-                         maxiter=max_itr, tol=tol)
+                         maxiter=max_itr, tol=tol, sigma=sigma)
                           
         return res
     
@@ -983,7 +999,8 @@ class EvoMPS_TDVP_Uniform:
         return la.eigvalsh(H)
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
-                           which='SM', return_eigenvectors=False, lobpcg=False):
+                           which='SM', return_eigenvectors=False, sigma=None,
+                           ncv=None):
         self.gen_h_matrix()
         donor.gen_h_matrix()
         self.calc_lr()
@@ -1011,22 +1028,11 @@ class EvoMPS_TDVP_Uniform:
         donor.Vsh = tm.calc_Vsh(donor.A, donor.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, donor, p)
-                
-        if lobpcg:  #This seems to cope with real problems only... :(       
-            if v0 is None:
-                v0 = np.ones(((self.q - 1) * self.D**2, k), self.typ)
-                
-            if len(v0.shape) == 1:
-                v0_1 = v0
-                v0 = np.ones(((self.q - 1) * self.D**2, k), self.typ)
-                v0[:, 0] = v0_1
-    
-            res = las.lobpcg(op, v0, largest=False,  verbosityLevel=1)
-        else:
-            res = las.eigsh(op, which=which, k=k, v0=v0,
+                            
+        res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
                             return_eigenvectors=return_eigenvectors, 
-                            maxiter=max_itr, tol=tol)
-                
+                            maxiter=max_itr, tol=tol, ncv=ncv)
+        
         return res
         
     def find_min_h(self, B, dtau_init, tol=5E-2):
