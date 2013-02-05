@@ -221,7 +221,7 @@ class EvoMPS_TDVP_Uniform:
                                 tm.eps_r_noop(self.r, self.A, self.A), self.r))
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        tol=1E-14):
+                        tol=1E-14, ncv=6):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -238,18 +238,19 @@ class EvoMPS_TDVP_Uniform:
         opE = EOp(self, A1, A2, calc_l)
         x *= n / norm(x.ravel())
         try:
-            ev, eV = las.eigsh(opE, which='LM', k=1, v0=x.ravel(), tol=tol)
+            ev, eV = las.eigs(opE, which='LM', k=1, v0=x.ravel(), tol=tol, ncv=ncv)
             conv = True
         except las.ArpackNoConvergence as e:
             print "Reset! (l? %s)" % str(calc_l)
-            ev, eV = las.eigsh(opE, which='LM', k=1, tol=tol)
+            ev, eV = las.eigs(opE, which='LM', k=1, tol=tol, ncv=ncv)
             conv = True
             
         #print ev2
         #print ev2 * ev2.conj()
-        ev = np.real_if_close(ev[0])
+        ind = ev.argmax()
+        ev = np.real_if_close(ev[ind])
         ev = np.asscalar(ev)
-        eV = eV[:, 0]
+        eV = eV[:, ind]
         
         #remove any additional phase factor
         eVmean = eV.mean()
@@ -284,6 +285,23 @@ class EvoMPS_TDVP_Uniform:
                     print "Sanity check failed: Largest ev after re-scale = " + str(ev)
         
         return x, conv
+        
+    def calc_E_gap(self, tol=1E-6, ncv=10):
+        """
+        Calculates the spectral gap of E by calculating the second-largest eigenvalue
+        
+        This is the correlation length.
+        """
+        opE = EOp(self, self.A, self.A, False)
+        
+        r = np.asarray(self.r)
+        
+        ev = las.eigs(opE, which='LM', k=2, v0=r.ravel(), tol=tol, ncv=ncv,
+                          return_eigenvectors=False)
+                          
+        e1 = abs(ev.max())
+        e2 = abs(ev.min())
+        return ((e1 - e2) / e1)
                 
     def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
@@ -1352,7 +1370,7 @@ class EvoMPS_TDVP_Uniform:
                 
         self.A = newA
             
-    def save_state(self, file, userdata=None):
+    def export_state(self, userdata=None):
         if userdata is None:
             userdata = self.userdata
 
@@ -1366,11 +1384,12 @@ class EvoMPS_TDVP_Uniform:
         tosave[3] = self.K
         tosave[4] = np.asarray(userdata)
         
-        np.save(file, tosave)
+        return tosave
+            
+    def save_state(self, file, userdata=None):
+        np.save(file, self.export_state(userdata))
         
-    def load_state(self, file, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
-        state = np.load(file)
-        
+    def import_state(self, state, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
         newA = state[0]
         newl = state[1]
         newr = state[2]
@@ -1432,6 +1451,10 @@ class EvoMPS_TDVP_Uniform:
             print "SHRUNK in q!"
         else:
             return False
+            
+    def load_state(self, file, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+        state = np.load(file)
+        return self.import_state(state, expand=expand, expand_q=expand_q, shrink_q=shrink_q, refac=refac, imfac=imfac)
             
     def expand_q(self, newq):
         if newq < self.q:
