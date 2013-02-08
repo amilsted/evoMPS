@@ -40,6 +40,8 @@ class EOp:
         
         self.out = np.empty_like(tdvp.r)
         
+        self.calls = 0
+        
         if left:
             self.eps = tm.eps_l_noop_inplace
         else:
@@ -49,6 +51,8 @@ class EOp:
         x = v.reshape((self.D, self.D))
 
         Ex = self.eps(x, self.A1, self.A2, self.out)
+        
+        self.calls += 1
         
         return Ex.ravel()
     
@@ -240,7 +244,7 @@ class EvoMPS_TDVP_Uniform:
         try:
             ev, eV = las.eigs(opE, which='LM', k=1, v0=x.ravel(), tol=tol, ncv=ncv)
             conv = True
-        except las.ArpackNoConvergence as e:
+        except las.ArpackNoConvergence:
             print "Reset! (l? %s)" % str(calc_l)
             ev, eV = las.eigs(opE, which='LM', k=1, tol=tol, ncv=ncv)
             conv = True
@@ -284,7 +288,7 @@ class EvoMPS_TDVP_Uniform:
                 if not abs(ev - 1) < tol:
                     print "Sanity check failed: Largest ev after re-scale = " + str(ev)
         
-        return x, conv
+        return x, conv, opE.calls
         
     def calc_E_gap(self, tol=1E-6, ncv=10):
         """
@@ -299,9 +303,9 @@ class EvoMPS_TDVP_Uniform:
         ev = las.eigs(opE, which='LM', k=2, v0=r.ravel(), tol=tol, ncv=ncv,
                           return_eigenvectors=False)
                           
-        e1 = abs(ev.max())
-        e2 = abs(ev.min())
-        return ((e1 - e2) / e1)
+        ev1 = abs(ev.max())
+        ev2 = abs(ev.min())
+        return ((ev1 - ev2) / ev1)
                 
     def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
@@ -370,7 +374,7 @@ class EvoMPS_TDVP_Uniform:
         self.r_before_CF = np.asarray(self.r_before_CF)
         
         if self.ev_use_arpack:
-            self.l, self.conv_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
+            self.l, self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
                                                    calc_l=True,
                                                    tol=self.itr_rtol)
         else:
@@ -384,7 +388,7 @@ class EvoMPS_TDVP_Uniform:
         self.l_before_CF = self.l.copy()
 
         if self.ev_use_arpack:
-            self.r, self.conv_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
+            self.r, self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
                                                    calc_l=False,
                                                    tol=self.itr_rtol)
         else:
