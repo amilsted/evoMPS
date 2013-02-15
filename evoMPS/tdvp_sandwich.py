@@ -794,7 +794,7 @@ class EvoMPS_TDVP_Sandwich:
         ##This should not be necessary if G_N is really unitary
         #self.r[self.N] = mm.mmul(G_nm1, self.r[self.N], mm.H(G_nm1))
         #self.r[self.N + 1] = self.r[self.N]
-        self.u_gnd_r.l[:] = mm.mmul(mm.H(G_nm1_i), self.u_gnd_r.l, G_nm1_i)
+        self.u_gnd_r.l = mm.mmul(mm.H(G_nm1_i), self.u_gnd_r.l, G_nm1_i)
         
         self.S_hc = sp.zeros((self.N), dtype=sp.complex128)
         for n in xrange(1, self.N + 1):
@@ -886,7 +886,48 @@ class EvoMPS_TDVP_Sandwich:
 
             print (h_after.sum() - h_before.sum() + h_left_after - h_left_before
                    + h_right_after - h_right_before)
+    
+    def restore_RCF_bulk_only(self):
+        self.u_gnd_l.calc_lr()
+        g, gi = self.u_gnd_l.restore_CF(ret_g=True)
 
+        m = self.u_gnd_l.A.mean()
+        print sp.sqrt(sp.conj(m) / m)
+        self.u_gnd_l.A *= sp.sqrt(sp.conj(m) / m)
+        
+        self.u_gnd_l.calc_lr()
+        
+        self.A[0] = self.u_gnd_l.A
+        for s in xrange(self.A[1].shape[0]):
+            self.A[1][s] = gi.dot(self.A[1][s])
+        self.l[0] = self.u_gnd_l.l
+        
+        self.u_gnd_r.calc_lr()
+        g, gi = self.u_gnd_r.restore_CF(ret_g=True)
+        
+        m = self.u_gnd_r.A.mean()
+        print sp.sqrt(sp.conj(m) / m)
+        self.u_gnd_r.A *= sp.sqrt(sp.conj(m) / m)
+        
+        self.u_gnd_r.calc_lr()
+        
+        self.A[self.N + 1] = self.u_gnd_r.A
+        for s in xrange(self.A[1].shape[0]):
+            self.A[self.N][s] = self.A[self.N][s].dot(g)
+        self.r[self.N] = self.u_gnd_r.r
+        self.r[self.N + 1] = self.r[self.N]
+        
+        self.calc_r()
+        
+        norm = mm.adot(self.l[0], self.r[0])
+        
+        self.A[1] *= 1 / sp.sqrt(norm)
+        
+        self.calc_l()
+        self.calc_r()
+        
+        #TODO: Phase!
+    
     def grow_left(self, m):
         """Grow the generic region to the left by m sites.
         """
@@ -1122,6 +1163,90 @@ class EvoMPS_TDVP_Sandwich:
                 newA[s] += self.A[n][t] * o(n, s, t)
 
         self.A[n] = newA
+        
+    def overlap(self, other, sanity_checks=False):
+        dL, phiL, gLl = self.u_gnd_l.fidelity_per_site(other.u_gnd_l, full_output=True, left=True)
+        
+        dR, phiR, gRr = self.u_gnd_r.fidelity_per_site(other.u_gnd_r, full_output=True, left=False)
+        
+        gr = mm.H(la.inv(gRr).dot(sp.asarray(self.u_gnd_r.r)))
+        gri = mm.H(la.inv(sp.asarray(self.u_gnd_r.r)).dot(gRr))
+        
+        if sanity_checks:
+            AR = other.u_gnd_r.A.copy()        
+            for s in xrange(AR.shape[0]):
+                AR[s] = gr.dot(AR[s]).dot(gri)
+                
+            print la.norm(AR - self.u_gnd_r.A)
+        
+        r = gr.dot(sp.asarray(other.u_gnd_r.r)).dot(mm.H(gr))
+        fac = la.norm(sp.asarray(self.u_gnd_r.r)) / la.norm(r)        
+        gr *= sp.sqrt(fac)
+        gri /= sp.sqrt(fac)
+        
+        if sanity_checks:
+            r *= fac
+            print la.norm(r - self.u_gnd_r.r)
+
+            AN = other.A[self.N].copy()
+            for s in xrange(AN.shape[0]):
+                AN[s] = AN[s].dot(gri)
+            r = tm.eps_r_noop(self.u_gnd_r.r, AN, AN)
+            print la.norm(r - other.r[self.N - 1])
+
+        gl = la.inv(sp.asarray(self.u_gnd_l.l)).dot(gLl)
+        gli = la.inv(gLl).dot(sp.asarray(self.u_gnd_l.l))
+        
+        l = mm.H(gli).dot(sp.asarray(other.u_gnd_l.l)).dot(gli)
+        fac = la.norm(sp.asarray(self.u_gnd_l.l)) / la.norm(l)
+
+        gli *= sp.sqrt(fac)
+        gl /= sp.sqrt(fac)
+        
+        if sanity_checks:
+            l *= fac
+            print la.norm(l - self.u_gnd_l.l)
+        
+            l = mm.H(gli).dot(sp.asarray(other.u_gnd_l.l)).dot(gli)
+            print la.norm(l - self.u_gnd_l.l)
+        
+        print (dL, dR, phiL, phiR)
+        
+        if not self.N == other.N:
+            print "States must have same number of non-uniform sites!"
+            return
+            
+        if not sp.all(self.D == other.D):
+            print "States must have same bond-dimensions!"
+            return
+            
+        if not sp.all(self.q == other.q):
+            print "States must have same Hilbert-space dimensions!"
+            return
+
+        if not abs(dL - 1) < 1E-12:
+            print "Left bulk states do not match!"
+            return 0
+            
+        if not abs(dR - 1) < 1E-12:
+            print "Right bulk states do not match!"
+            return 0
+                    
+        AN = other.A[self.N].copy()
+        for s in xrange(AN.shape[0]):
+            AN[s] = AN[s].dot(gri)
+            
+        A1 = other.A[1].copy()
+        for s in xrange(A1.shape[0]):
+            A1[s] = gl.dot(A1[s])
+        
+        r = tm.eps_r_noop(self.u_gnd_r.r, self.A[self.N], AN)
+        for n in xrange(self.N - 1, 1, -1):
+            r = tm.eps_r_noop(r, self.A[n], other.A[n])
+        r = tm.eps_r_noop(r, self.A[1], A1)
+    
+        return mm.adot(self.u_gnd_l.l, r)
+        
 
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
