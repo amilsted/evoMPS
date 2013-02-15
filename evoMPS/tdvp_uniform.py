@@ -1019,6 +1019,66 @@ class EvoMPS_TDVP_Uniform:
         #print np.allclose(H, m.H(H))
                
         return la.eigvalsh(H)
+        
+    def fidelity_per_site(self, other, full_output=False, left=False):
+        """
+          Returns the per-site fidelity.
+          
+          Also returns the largest eigenvalue "w" of the overlap transfer
+          operator, as well as the corresponding eigenvector "V" in the
+          matrix representation.
+          
+          If the fidelity is 1:
+          
+            A^s = w g A'^s g^-1      (with g = V r'^-1)
+            
+        """
+        if self.D == 1:
+            ev = 0
+            for s in xrange(self.q):
+                ev += self.A[s] * other.A[s].conj()
+            if left:
+                ev = ev.conj()
+            if full_output:
+                return abs(ev), ev, 1
+            else:
+                return abs(ev)
+        else:
+            opE = EOp(other, self.A, other.A, left)
+            ev, eV = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=True)
+            if full_output:
+                return abs(ev[0]), ev[0], eV[:, 0].reshape(self.D, self.D)
+            else:
+                return abs(ev[0])
+
+    def phase_align(self, other, tol=1E-12, left=False):
+        d, phi, gR = self.fidelity_per_site(other, full_output=True, left=left)
+        
+        self.A *= phi.conj()
+        
+        return phi, gR
+
+    def gauge_align(self, other, tol=1E-12):
+        d, phi, gR = self.fidelity_per_site(other, full_output=True)
+        
+        if abs(d - 1) > tol:
+            return False
+            
+        try:
+            g = other.r.inv().dotleft(gR)
+        except:
+            g = gR.dot(m.invmh(other.r))
+            
+        gi = la.inv(g)
+        
+        for s in xrange(self.q):
+            self.A[s] = phi.conj() * gi.dot(self.A[s]).dot(g)
+            
+        self.l = m.H(g).dot(self.l.dot(g))
+        
+        self.r = gi.dot(self.r.dot(m.H(gi)))
+            
+        return g, gi, phi
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
