@@ -65,7 +65,7 @@ cpdef np.ndarray calc_C_func_op_AA(op, np.ndarray AA)
 @cython.locals(Dm1 = cython.int, q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, Ash = np.ndarray, K = np.ndarray, Hr = np.ndarray, op_expect = npcmp)
 cpdef np.ndarray calc_K(np.ndarray Kp1, np.ndarray C, lm1, rp1, np.ndarray A, np.ndarray Ap1, bint sanity_checks=*)
 
-@cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
+@cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qm1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
 cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
 @cython.locals(s = cython.int, x = np.ndarray)

@@ -304,6 +304,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     Dm1 = A.shape[1]
     q = A.shape[0]
     qp1 = Ap1.shape[0]
+    qm1 = Am1.shape[0]
     
     x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = sp.empty_like(x)
@@ -336,7 +337,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x_part.fill(0)
         for s in xrange(q):     #~2nd line
             x_subsubpart.fill(0)
-            for t in xrange(qp1):
+            for t in xrange(qm1):
                 x_subsubpart += H(Am1[t]).dot(lm2.dot(Cm1[t, s]))
             x_part += x_subsubpart.dot(r_s.dot(Vsh[s]))
         x += lm1_si.dot(x_part)
