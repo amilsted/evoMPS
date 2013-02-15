@@ -375,8 +375,26 @@ def calc_AA(A, Ap1):
     #AA = np.array([dot(A[s], A[t]) for s in xrange(self.q) for t in xrange(self.q)])
     #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
 
+def calc_AAA(A, Ap1, Ap2):
+    Dp2 = Ap2.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    qp1 = Ap1.shape[0]
+    qp2 = Ap2.shape[0]
+    
+    AAA = sp.zeros((q, qp1, qp2, Dm1, Dp2), dtype=A.dtype)
+    for u in xrange(q):
+        for v in xrange(qp1):
+            for w in xrange(qp2):
+                AAA[u, v, w] = A[u].dot(Ap1[v]).dot(Ap2[w])
+    
+    return AAA
+
 def calc_C_mat_op_AA(op, AA):
     return sp.tensordot(op, AA, ((2, 3), (0, 1)))
+    
+def calc_C_3s_mat_op_AAA(op, AAA):
+    return sp.tensordot(op, AAA, ((3, 4, 5), (0, 1, 2)))
 
 def calc_C_conj_mat_op_AA(op, AA):
     return sp.tensordot(op.conj(), AA, ((0, 1), (0, 1)))
@@ -533,6 +551,65 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
             for t in xrange(qm1):
                 x_subsubpart += H(Am1[t]).dot(lm2.dot(Cm1[t, s]))
             x_part += x_subsubpart.dot(r_s.dot(Vsh[s]))
+        x += lm1_si.dot(x_part)
+
+    return x
+    
+def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, lm1_s, lm1_si, r_s, r_si, Vsh):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    qp1 = Ap1.shape[0]
+    qp2 = Ap2.shape[0]
+    qm1 = Am1.shape[0]
+    qm2 = Am2.shape[0]
+    
+    x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
+    x_part = sp.empty_like(x)
+    x_subpart = sp.empty_like(A[0])
+    x_subsubpart = sp.empty_like(A[0])
+    
+    H = mm.H
+    
+    x_part.fill(0)
+    for s in xrange(q):
+        x_subpart.fill(0)
+
+        if not C is None:
+            x_subsubpart.fill(0)
+            for t in xrange(qp1):
+                for u in xrange(qp2):
+                    x_subsubpart += C[s,t,u].dot(rp2.dot(H(Ap2[u]))).dot(H(Ap1[t])) #~1st line
+
+            x_subsubpart += A[s].dot(Kp1) #~3rd line
+
+            try:
+                x_subpart += r_si.dot_left(x_subsubpart)
+            except AttributeError:
+                x_subpart += x_subsubpart.dot(r_si)
+
+        x_part += x_subpart.dot(Vsh[s])
+
+    x += lm1_s.dot(x_part)
+
+    if not lm2 is None:
+        x_part.fill(0)
+        for t in xrange(q):     #~2nd line
+            x_subsubpart.fill(0)
+            for s in xrange(qm1):
+                for u in xrange(qp1):
+                    x_subsubpart += H(Am1[s]).dot(lm2.dot(Cm1[s, t, u])).dot(rp1.dot(H(Ap1[u])))
+            x_part += x_subsubpart.dot(r_si.dot(Vsh[t]))
+        x += lm1_si.dot(x_part)
+
+    if not lm3 is None:
+        x_part.fill(0)
+        for u in xrange(q):     #~2nd line
+            x_subsubpart.fill(0)
+            for s in xrange(qm2):
+                for t in xrange(qm1):
+                    x_subsubpart += H(Am1[t]).dot(H(Am2[s])).dot(lm3.dot(Cm2[s, t, u]))
+            x_part += x_subsubpart.dot(r_s.dot(Vsh[u]))
         x += lm1_si.dot(x_part)
 
     return x
