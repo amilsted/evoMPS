@@ -143,7 +143,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def calc_C(self):
         if not tc is None and not self.h_nn_cptr is None and np.iscomplexobj(self.C):
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
-        elif not hasattr(self.h_nn, '__call__'):
+        elif not callable(self.h_nn):
             self.C[:] = tm.calc_C_mat_op_AA(self.h_nn, self.AA)
         else:
             self.C[:] = tm.calc_C_func_op_AA(self.h_nn, self.AA)
@@ -512,7 +512,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res, M, y_pi
     
     def _prepare_excite_op_top_triv(self, p):
-        if hasattr(self.h_nn, '__call__'):
+        if callable(self.h_nn):
             self.set_h_nn_array_from_function(self.h_nn)
         self.calc_K_l()
         self.calc_l_r_roots()
@@ -551,9 +551,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p):
-        if hasattr(self.h_nn, '__call__'):
+        if callable(self.h_nn):
             self.set_h_nn_array_from_function(self.h_nn)
-        if hasattr(donor.h_nn, '__call__'):
+        if callable(donor.h_nn):
             donor.set_h_nn_array_from_function(donor.h_nn)
             
         self.calc_lr()

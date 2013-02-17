@@ -544,7 +544,7 @@ class EvoMPS_MPS_Uniform(object):
         
             
     def expect_1s(self, op):
-        if hasattr(op, '__call__'):
+        if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
             
@@ -553,7 +553,7 @@ class EvoMPS_MPS_Uniform(object):
         return m.adot(self.l, Or)
             
     def expect_2s(self, op):
-        if hasattr(op, '__call__'):
+        if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q, self.q, self.q))        
         
@@ -569,7 +569,7 @@ class EvoMPS_MPS_Uniform(object):
         return rho
         
     def apply_op_1s(self, op):
-        if hasattr(op, '__call__'):
+        if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
             
