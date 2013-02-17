@@ -45,11 +45,11 @@ class EOp:
 
 class EvoMPS_MPS_Uniform(object):   
         
-    def __init__(self, D, q, typ=None):
+    def __init__(self, D, q, dtype=None):
         
         self.odr = 'C' 
         
-        if typ is None:
+        if dtype is None:
             self.typ = np.complex128
         
         self.itr_rtol = 1E-13
@@ -260,7 +260,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, i < max_itr - 1, i
     
-    def calc_lr(self, reset=False, auto_reset=False):
+    def calc_lr(self):
         tmp = np.empty_like(self.tmp)
         
         #Make sure...
@@ -544,17 +544,20 @@ class EvoMPS_MPS_Uniform(object):
         
             
     def expect_1s(self, op):
-        opv = np.vectorize(op, otypes=[np.complex128])
-        opm = np.fromfunction(opv, (self.q, self.q))
-        Or = tm.eps_r_op_1s(self.r, self.A, self.A, opm)
+        if hasattr(op, '__call__'):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+            
+        Or = tm.eps_r_op_1s(self.r, self.A, self.A, op)
         
         return m.adot(self.l, Or)
             
     def expect_2s(self, op):
-        if op == self.h_nn:
-            res = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
-        else:
-            res = tm.eps_r_op_2s_AA_func_op(self.r, self.AA, self.AA, op)
+        if hasattr(op, '__call__'):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q, self.q, self.q))        
+        
+        res = tm.eps_r_op_2s_AA_func_op(self.r, self.AA, self.AA, op)
         
         return m.adot(self.l, res)
         
@@ -565,12 +568,16 @@ class EvoMPS_MPS_Uniform(object):
                 rho[s, t] = m.adot(self.l, m.mmul(self.A[t], self.r, m.H(self.A[s])))
         return rho
         
-    def apply_op_1s(self, o):
+    def apply_op_1s(self, op):
+        if hasattr(op, '__call__'):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+            
         newA = sp.zeros_like(self.A)
         
         for s in xrange(self.q):
             for t in xrange(self.q):
-                newA[s] += self.A[t] * o(s, t)
+                newA[s] += self.A[t] * op[s, t]
                 
         self.A = newA
             

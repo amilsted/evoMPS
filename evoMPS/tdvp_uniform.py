@@ -4,6 +4,10 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
+TODO:
+    - Clean up CG code: Create nice interface?
+    - Split out excitations stuff?
+
 """
 import numpy as np
 import scipy as sp
@@ -96,13 +100,28 @@ class Excite_H_Op:
         
 class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
-    def __init__(self, D, q, h_nn, typ=None):
+    def __init__(self, D, q, h_nn, h_nn_cptr=None, dtype=None):
+        """Implements the TDVP algorithm for uniform MPS.
         
-        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, typ=typ)
+        Parameters
+        ----------
+            D : int
+                The bond-dimension
+            q : int
+                The single-site Hilbert space dimension
+            h_nn : callable or ndarray
+                Nearest-neighbour Hamiltonian element
+            h_nn_cprt : capsule = None
+                A capsule containing a pointer to a C implementation with the
+                capsule name 'h_nn'.
+            dtype : numpy dtype = None
+                Specifies the array type.
+        """
+        
+        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, dtype=dtype)
                 
         self.h_nn = h_nn
-        self.h_nn_cptr = None
-        self.h_nn_mat = None
+        self.h_nn_cptr = h_nn_cptr
                         
         self.eta = 0
     
@@ -114,18 +133,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K = np.ones_like(self.A[0])
         self.K_left = None
             
-    def gen_h_matrix(self):
-        """Generates a matrix form for h_nn, which can speed up parts of the
+    def set_h_nn_array_from_function(self, h_nn_func):
+        """Generates an array form for h_nn, which can speed up parts of the
         algorithm by avoiding excess loops and python calls.
         """
-        hv = np.vectorize(self.h_nn, otypes=[np.complex128])
-        self.h_nn_mat = np.fromfunction(hv, (self.q, self.q, self.q, self.q))  
+        hv = np.vectorize(h_nn_func, otypes=[np.complex128])
+        self.h_nn = np.fromfunction(hv, (self.q, self.q, self.q, self.q))  
 
     def calc_C(self):
         if not tc is None and not self.h_nn_cptr is None and np.iscomplexobj(self.C):
             self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
-        elif not self.h_nn_mat is None:
-            self.C[:] = tm.calc_C_mat_op_AA(self.h_nn_mat, self.AA)
+        elif not hasattr(self.h_nn, '__call__'):
+            self.C[:] = tm.calc_C_mat_op_AA(self.h_nn, self.AA)
         else:
             self.C[:] = tm.calc_C_func_op_AA(self.h_nn, self.AA)
     
@@ -348,19 +367,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         A = self.A
         A_ = donor.A
         AA_ = donor.AA
-                    
-#        def h_nn(s,t,u,v):
-#            h = self.h_nn(s,t,u,v)
-#            if s == u and t == v:
-#                h -= self.h.real
-#            return h
-#        h_nn = np.vectorize(h_nn, otypes=[self.typ])
-#        h_nn_mat = np.fromfunction(h_nn, (self.q, self.q, self.q, self.q), dtype=self.typ)
+        
         eyed = np.eye(self.q**2)
         eyed = eyed.reshape((self.q, self.q, self.q, self.q))
-        h_nn_mat = self.h_nn_mat - self.h.real * eyed
-        def h_nn(s,t,u,v):
-            return h_nn_mat[s,t,u,v]
+        h_nn_ = self.h_nn - self.h.real * eyed
             
         V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
         for s in xrange(donor.q):
@@ -378,31 +388,31 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for u in xrange(self.q):
             for s in xrange(self.q):
                 C_AhlA[u, s] = m.H(A[u]).dot(l.dot(A[s]))
-        C_AhlA = sp.tensordot(h_nn_mat, C_AhlA, ((2, 0), (0, 1)))
+        C_AhlA = sp.tensordot(h_nn_, C_AhlA, ((2, 0), (0, 1)))
         
         C_A_Vrh_ = np.empty((self.q, self.q, A_.shape[1], Vr_.shape[1]), dtype=self.typ)
         for t in xrange(self.q):
             for v in xrange(self.q):
                 C_A_Vrh_[t, v] = A_[t].dot(m.H(Vr_[v]))
-        C_A_Vrh_ = sp.tensordot(h_nn_mat, C_A_Vrh_, ((1, 3), (0, 1)))
+        C_A_Vrh_ = sp.tensordot(h_nn_, C_A_Vrh_, ((1, 3), (0, 1)))
                 
         C_Vri_A_ = np.empty((self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
         for s in xrange(self.q):
             for t in xrange(self.q):
                 C_Vri_A_[s, t] = Vri_[s].dot(A_[t])
-        C_Vri_A_ = sp.tensordot(h_nn_mat, C_Vri_A_, ((2, 3), (0, 1)))
+        C_Vri_A_ = sp.tensordot(h_nn_, C_Vri_A_, ((2, 3), (0, 1)))
         
-        C = sp.tensordot(h_nn_mat, self.AA, ((2, 3), (0, 1)))
+        C = sp.tensordot(h_nn_, self.AA, ((2, 3), (0, 1)))
 
-        C_ = sp.tensordot(h_nn_mat, AA_, ((2, 3), (0, 1)))
+        C_ = sp.tensordot(h_nn_, AA_, ((2, 3), (0, 1)))
         
         rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
         
         #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
         
-        return h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
+        return h_nn_, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
             
-    def calc_BHB(self, x, p, donor, h_nn, h_nn_mat, C, C_, V_, Vr_, Vri_, 
+    def calc_BHB(self, x, p, donor, h_nn_, C, C_, V_, Vr_, Vri_, 
                  C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         """        
@@ -502,6 +512,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res, M, y_pi
     
     def _prepare_excite_op_top_triv(self, p):
+        if hasattr(self.h_nn, '__call__'):
+            self.set_h_nn_array_from_function(self.h_nn)
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
@@ -513,50 +525,37 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None,
                         which='SM', return_eigenvectors=False):
-        self.gen_h_matrix()
-        self.calc_K_l()
-        self.calc_l_r_roots()
-        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
+        op = self._prepare_excite_op_top_triv(p)
         
-        op = Excite_H_Op(self, self, p)
         res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
                          return_eigenvectors=return_eigenvectors, 
                          maxiter=max_itr, tol=tol, sigma=sigma)
                           
         return res
     
-    def excite_top_triv_brute(self, p):
-        self.calc_K_l()
-        self.calc_l_r_roots()
-        self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
-        
-        op = Excite_H_Op(self, self, p)
+    def excite_top_triv_brute(self, p, return_eigenvectors=False):
+        op = self._prepare_excite_op_top_triv(p)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
-        y = np.empty_like(x)
         
         H = np.zeros((x.shape[0], x.shape[0]), dtype=self.typ)
         
-        #Only fill the lower triangle
         for i in xrange(x.shape[0]):
             x.fill(0)
             x[i] = 1
-            for j in xrange(i + 1):
-                y.fill(0)
-                y[j] = 1
-                
-                H[i, j] = x.dot(op.matvec(y))
+            H[:, i] = op.matvec(x)
 
-        #print np.allclose(H, m.H(H))
-               
-        return la.eigvalsh(H)
+        if not np.allclose(H, m.H(H)):
+            print "H is not Hermitian!"
+         
+        return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-
-    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
-                           which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None):
-        self.gen_h_matrix()
-        donor.gen_h_matrix()
+    def _prepare_excite_op_top_nontriv(self, donor, p):
+        if hasattr(self.h_nn, '__call__'):
+            self.set_h_nn_array_from_function(self.h_nn)
+        if hasattr(donor.h_nn, '__call__'):
+            donor.set_h_nn_array_from_function(donor.h_nn)
+            
         self.calc_lr()
         self.restore_CF()
         donor.calc_lr()
@@ -582,12 +581,36 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         donor.Vsh = tm.calc_Vsh(donor.A, donor.r_sqrt, sanity_checks=self.sanity_checks)
         
         op = Excite_H_Op(self, donor, p)
+
+        return op 
+
+    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
+                           which='SM', return_eigenvectors=False, sigma=None,
+                           ncv=None):
+        op = self._prepare_excite_op_top_nontriv(donor, p)
                             
         res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
                             return_eigenvectors=return_eigenvectors, 
                             maxiter=max_itr, tol=tol, ncv=ncv)
         
         return res
+        
+    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p)
+        
+        x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
+        
+        H = np.zeros((x.shape[0], x.shape[0]), dtype=self.typ)
+        
+        for i in xrange(x.shape[0]):
+            x.fill(0)
+            x[i] = 1
+            H[:, i] = op.matvec(x)
+
+        if not np.allclose(H, m.H(H)):
+            print "H is not Hermitian!"
+         
+        return la.eigh(H, eigvals_only=not return_eigenvectors)
         
     def find_min_h(self, B, dtau_init, tol=5E-2):
         dtau = dtau_init
@@ -629,7 +652,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             #self.l[:] = l_min
             #self.r[:] = r_min
             
-            self.calc_lr(reset=True)
+            self.calc_lr()
             self.calc_AA()
             self.calc_C()
             
@@ -700,7 +723,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     self.l = ls[nearest_tau_ind]
                     self.r = rs[nearest_tau_ind]
 
-                self.calc_lr(auto_reset=False)
+                self.calc_lr()
                 self.calc_AA()
                 self.calc_C()
                 
@@ -989,3 +1012,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K[:oldD, oldD:].fill(la.norm(oldK) / oldD**2)
         self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
         
+    def expect_2s(self, op):
+        if op == self.h_nn:
+            res = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
+            return m.adot(self.l, res)
+        else:
+            return super(EvoMPS_TDVP_Uniform, self).expect_2s(op)
