@@ -17,6 +17,7 @@ import scipy.optimize as opti
 import tdvp_common as tm
 import matmul as m
 from mps_uniform import EvoMPS_MPS_Uniform, EOp
+from mps_uniform_pinv import pinv_1mE
 
 try:
     import tdvp_calc_C as tc
@@ -24,44 +25,6 @@ except ImportError:
     tc = None
     print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
 
-
-class PPInvOp:    
-    def __init__(self, tdvp, p, left, pseudo, A1, A2, r):
-        self.A1 = A1
-        self.A2 = A2
-        self.l = tdvp.l
-        self.r = r
-        self.p = p
-        self.left = left
-        self.pseudo = pseudo
-        
-        self.D = tdvp.D
-        
-        self.shape = (self.D**2, self.D**2)
-        
-        self.dtype = np.dtype(tdvp.typ)
-        
-        self.out = np.empty_like(self.l)
-    
-    def matvec(self, v):
-        x = v.reshape((self.D, self.D))
-        
-        if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = tm.eps_l_noop_inplace(x, self.A1, self.A2, self.out)
-            if self.pseudo:
-                QEQhx = Ehx - self.l * m.adot(self.r, x)
-                res = x - sp.exp(-1.j * self.p) * QEQhx
-            else:
-                res = x - sp.exp(-1.j * self.p) * Ehx
-        else:
-            Ex = tm.eps_r_noop_inplace(x, self.A1, self.A2, self.out)
-            if self.pseudo:
-                QEQx = Ex - self.r * m.adot(self.l, x)
-                res = x - sp.exp(1.j * self.p) * QEQx
-            else:
-                res = x - sp.exp(1.j * self.p) * Ex
-        
-        return res.ravel()
         
 class Excite_H_Op:
     def __init__(self, tdvp, donor, p):
@@ -148,10 +111,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             self.C[:] = tm.calc_C_func_op_AA(self.h_nn, self.AA)
     
-    def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, pseudo=True):
-        if out is None:
-            out = np.ones_like(self.A[0])
-            
+    def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, 
+                   pseudo=True, brute_check=False):
         if A1 is None:
             A1 = self.A
             
@@ -161,41 +122,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if r is None:
             r = self.r
         
-        op = PPInvOp(self, p, left, pseudo, A1, A2, r)
-        
-        res = out.ravel()
-        x = x.ravel()
-        
-        res, info = las.bicgstab(op, x, x0=res, maxiter=2000, 
-                                 tol=self.itr_rtol) #tol: norm( b - A*x ) / norm( b )
-        
-        if info > 0:
-            print "Warning: Did not converge on solution for ppinv!"
-        
-        #Test
-        if self.sanity_checks:
-            RHS_test = op.matvec(res)
-            d = la.norm(RHS_test - x) / la.norm(x)
-            if not d < self.itr_rtol*self.check_fac:
-                print "Sanity check failed: Bad ppinv solution! Off by: " + str(
-                        d)
-        
-        res = res.reshape((self.D, self.D))
-            
-        if False and self.sanity_checks and self.D < 16:
-            pinvE = self.pinvE_brute(p, A1, A2, r, pseudo)
-            
-            if left:
-                res_brute = (x.reshape((1, self.D**2)).conj().dot(pinvE)).ravel().conj().reshape((self.D, self.D))
-                #res_brute = (pinvE.T.dot(x)).reshape((self.D, self.D))
-            else:
-                res_brute = pinvE.dot(x).reshape((self.D, self.D))
-            
-            if not np.allclose(res, res_brute):
-                print "Sanity Fail in calc_PPinv (left: %s): Bad brute check! Off by: %g" % (str(left), la.norm(res - res_brute))
-        
-        out[:] = res
-        
+        out = pinv_1mE(x, A1, A2, self.l, r, p=p, left=left, pseudo=pseudo, 
+                       out=out, tol=self.itr_rtol, 
+                       sanity_checks=self.sanity_checks,
+                       sanity_tol=self.itr_atol * self.check_fac)
+
         return out
         
     def calc_K(self):
@@ -340,24 +271,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         B_fin += B
             
         self.A = A0 - dtau /6 * B_fin
-            
-    def pinvE_brute(self, p, A1, A2, r, pseudo=True):
-        E = np.zeros((self.D**2, self.D**2), dtype=self.typ)
-
-        for s in xrange(self.q):
-            E += np.kron(A1[s], A2[s].conj())
-        
-        l = np.asarray(self.l)
-        r = np.asarray(r)
-        
-        if pseudo:
-            QEQ = E - r.reshape((self.D**2, 1)).dot(l.reshape((1, self.D**2)).conj())
-        else:
-            QEQ = E
-        
-        EyemE = np.eye(self.D**2, dtype=self.typ) - sp.exp(1.j * p) * QEQ
-        
-        return la.inv(EyemE)
         
     def calc_BHB_prereq(self, donor):
         l = self.l
