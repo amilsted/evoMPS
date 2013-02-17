@@ -611,91 +611,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             print "H is not Hermitian!"
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
-        
-    def find_min_h(self, B, dtau_init, tol=5E-2):
-        dtau = dtau_init
-        d = 1.0
-        #dh_dtau = 0
-        
-        tau_min = 0
-        
-        A0 = self.A.copy()                
-        AA0 = self.AA.copy()
-        C0 = self.C.copy()
-        
-        try:
-            l0 = self.l
-            self.l = self.l.A
-        except:
-            l0 = self.l.copy()
-            pass
-        
-        try:
-            r0 = self.r
-            self.r = self.r.A
-        except:
-            r0 = self.r.copy()
-            pass
-        
-        h_min = self.h
-        A_min = self.A.copy()
-        
-        #l_min = np.array(self.l, copy=True)
-        #r_min = np.array(self.r, copy=True)
-        
-        itr = 0
-        while itr == 0 or itr < 30 and (abs(dtau) / tau_min > tol or tau_min == 0):
-            itr += 1
-            for s in xrange(self.q):
-                self.A[s] = A_min[s] -d * dtau * B[s]
-            
-            #self.l[:] = l_min
-            #self.r[:] = r_min
-            
-            self.calc_lr()
-            self.calc_AA()
-            self.calc_C()
-            
-            self.h = self.expect_2s(self.h_nn)
-            
-            #dh_dtau = d * (self.h - h_min) / dtau
-            
-            print (tau_min + dtau, self.h.real, tau_min)
-            
-            if self.h.real < h_min.real:
-                #self.restore_CF()
-                h_min = self.h
-                A_min[:] = self.A
-                #l_min[:] = self.l
-                #r_min[:] = self.r
-                
-                dtau = min(dtau * 1.1, dtau_init * 10)
-                
-#                if tau + d * dtau > 0:
-                tau_min += d * dtau
-#                else:
-#                    d = -1.0
-#                    dtau = tau
-            else:
-                d *= -1.0
-                dtau = dtau / 2.0
-                
-#                if tau + d * dtau < 0:
-#                    dtau = tau #only happens if dtau is -ive
-                
-        #Must restore everything needed for take_step
-        self.A = A0
-        self.l = l0
-        self.r = r0
-        self.AA = AA0
-        self.C = C0
-        
-        return tau_min
+
         
     def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
                          trybracket=True):
-        #These were parameters...but it seems like cython was keeping
-        #their values across calls...?!
         taus=[]
         hs=[]
         
@@ -833,11 +752,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return h.real < self.h.real, h
 
-    def calc_B_CG(self, B_CG_0, x_0, eta_0, dtau_init, reset=False,
-                 skipIfLower=False, brent=True):
+    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False):
+        """Calculates a tangent vector using the non-linear conjugate gradient method.
+        
+        Parameters:
+            B_CG_0 : ndarray
+                Tangent vector used to make the previous step. Ignored on reset.
+            eta_0 : float
+                Norm of the previous tangent vector.
+            dtau_init : float
+                Initial step-size for the line-search.
+            reset : bool = False
+                Whether to perform a reset, using the gradient as the next search direction.
+        """
         B = self.calc_B()
         eta = self.eta
-        x = self.x
         
         if reset:
             beta = 0.
@@ -846,41 +775,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B_CG = B
         else:
             beta = (eta**2) / eta_0**2
-            
-            #xy = m.adot(x_0, x)
-            #betaPR = (eta**2 - xy) / eta_0**2
         
             print "BetaFR = " + str(beta)
-            #print "BetaPR = " + str(betaPR)
         
             beta = max(0, beta.real)
         
             B_CG = B + beta * B_CG_0
-        
-        taus = []
-        hs = []
+
         
         lb0 = self.l_before_CF.copy()
         rb0 = self.r_before_CF.copy()
         
-        if skipIfLower:
-            stepRedH, h = self.step_reduces_h(B_CG, dtau_init)
-            taus.append(dtau_init)
-            hs.append(h)
-        
-        if skipIfLower and stepRedH:
-            tau = self.find_min_h(B_CG, dtau_init)
-        else:
-            if brent:
-                tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
-                                                   trybracket=False)
-            else:
-                tau = self.find_min_h(B_CG, dtau_init)
-        
-#        if tau < 0:
-#            print "RESET due to negative dtau!"
-#            B_CG = B
-#            tau, h_min = self.find_min_h_brent(B_CG, dtau_init)
+        tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
+                                           trybracket=False)
             
         if self.h.real < h_min:
             print "RESET due to energy rise!"
@@ -895,7 +802,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 self.r_before_CF = rb0
                 tau = 0
         
-        return B_CG, B, x, eta, tau
+        return B_CG, B, eta, tau
         
             
     def export_state(self, userdata=None):
