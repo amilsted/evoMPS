@@ -494,6 +494,19 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         return mm.adot(self.get_l(n - 1), res)
 
     def expect_2s(self, op, n):
+        """Computes the expectation value of a nearest-neighbour two-site operator.
+        
+        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array 
+        such that op[s, t, u, v] = <st|op|uv> or a function of the form 
+        op(s, t, u, v) = <st|op|uv>.
+        
+        Parameters
+        ----------
+        o : ndarray or callable
+            The operator array or function.
+        n : int
+            The leftmost site number (operator acts on n, n + 1).
+        """
         A = self.get_A(n)
         Ap1 = self.get_A(n + 1)
         AA = tm.calc_AA(A, Ap1)
@@ -517,9 +530,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         Parameters
         ----------
-        o1 : function
+        op1 : function
             The first operator, acting on the first site.
-        o2 : function
+        op2 : function
             The second operator, acting on the second site.
         n1 : int
             The site number of the first site.
