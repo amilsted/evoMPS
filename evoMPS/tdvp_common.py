@@ -449,6 +449,31 @@ def calc_K(Kp1, C, lm1, rp1, A, Ap1, sanity_checks=False):
     
     return K, op_expect
     
+def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    qp1 = Ap1.shape[0]
+    qp2 = Ap2.shape[0]
+    
+    K = sp.zeros((Dm1, Dm1), dtype=A.dtype)
+    
+    Hr = sp.zeros_like(K)
+
+    for s in xrange(q):
+        Ash = A[s].conj().T
+        for t in xrange(qp1):
+            Ath = Ap1[t].conj().T
+            for u in xrange(qp2):
+                Hr += C[s, t, u].dot(rp2.dot(mm.H(Ap2[u]).dot(Ath).dot(Ash)))
+
+        K += A[s].dot(Kp1.dot(Ash))
+        
+    op_expect = mm.adot(lm1, Hr)
+        
+    K += Hr
+    
+    return K, op_expect
+    
 def calc_l_r_roots(lm1, r, sanity_checks=False):
     try:
         l_sqrt = lm1.sqrt()
@@ -514,7 +539,6 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     D = A.shape[2]
     Dm1 = A.shape[1]
     q = A.shape[0]
-    qp1 = Ap1.shape[0]    
     
     x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = sp.empty_like(x)
@@ -528,6 +552,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x_subpart.fill(0)
 
         if not C is None:
+            qp1 = Ap1.shape[0]
             x_subsubpart.fill(0)
             for t in xrange(qp1):
                 x_subsubpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
@@ -555,14 +580,11 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
 
     return x
     
-def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, lm1_s, lm1_si, r_s, r_si, Vsh):
+def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, 
+              lm1_s, lm1_si, r_s, r_si, Vsh):
     D = A.shape[2]
     Dm1 = A.shape[1]
     q = A.shape[0]
-    qp1 = Ap1.shape[0]
-    qp2 = Ap2.shape[0]
-    qm1 = Am1.shape[0]
-    qm2 = Am2.shape[0]
     
     x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = sp.empty_like(x)
@@ -576,6 +598,8 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, lm1_s
         x_subpart.fill(0)
 
         if not C is None:
+            qp1 = Ap1.shape[0]
+            qp2 = Ap2.shape[0]
             x_subsubpart.fill(0)
             for t in xrange(qp1):
                 for u in xrange(qp2):
@@ -592,7 +616,9 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, lm1_s
 
     x += lm1_s.dot(x_part)
 
-    if not lm2 is None:
+    if not lm2 is None and not Cm1 is None:
+        qm1 = Am1.shape[0]
+        qp1 = Ap1.shape[0]
         x_part.fill(0)
         for t in xrange(q):     #~2nd line
             x_subsubpart.fill(0)
@@ -603,6 +629,8 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, lm1_s
         x += lm1_si.dot(x_part)
 
     if not lm3 is None:
+        qm1 = Am1.shape[0]
+        qm2 = Am2.shape[0]
         x_part.fill(0)
         for u in xrange(q):     #~2nd line
             x_subsubpart.fill(0)
