@@ -61,13 +61,18 @@ class EvoMPS_MPS_Generic(object):
             
         if (self.D.shape[0] != N + 1) or (self.q.shape[0] != N + 1):
             raise ValueError('D and q must have length N + 1')
+
+        self.correct_bond_dimension()
         
+        self._init_arrays()
+        
+        self.initialize_state()
+    
+    def _init_arrays(self):
         self.A = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         
         self.r = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 0..N
         self.l = sp.empty((self.N + 1), dtype=sp.ndarray)        
-        
-        self.correct_bond_dimension()
         
         self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)  
         self.l[0] = sp.eye(self.D[0], self.D[0], dtype=self.typ).copy(order=self.odr) #Already set the 0th element (not a dummy)    
@@ -77,12 +82,9 @@ class EvoMPS_MPS_Generic(object):
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.A[n] = sp.empty((self.q[n], self.D[n - 1], self.D[n]), dtype=self.typ, order=self.odr)
             
-        sp.fill_diagonal(self.r[self.N], 1.)
-        
-        self.setup_A()
-        
+        sp.fill_diagonal(self.r[self.N], 1.)        
     
-    def setup_A(self):
+    def initialize_state(self):
         """Initializes the state to full rank with norm 1.
         """
         for n in xrange(1, self.N + 1):
@@ -167,16 +169,16 @@ class EvoMPS_MPS_Generic(object):
             self.simple_renorm()
                 
     
-    def calc_l(self, start=-1, finish=-1):
+    def calc_l(self, n_low=-1, n_high=-1):
         """Updates the l matrices using the current state.
         Implements step 5 of the TDVP algorithm or, equivalently, eqn. (41).
         (arXiv:1103.0936v2 [cond-mat.str-el])
         """
-        if start < 0:
-            start = 1
-        if finish < 0:
-            finish = self.N
-        for n in xrange(start, finish + 1):
+        if n_low < 0:
+            n_low = 1
+        if n_high < 0:
+            n_high = self.N
+        for n in xrange(n_low, n_high + 1):
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
     
     def calc_r(self, n_low=-1, n_high=-1):
@@ -344,7 +346,7 @@ class EvoMPS_MPS_Generic(object):
         
         return (rnsOK, ls_trOK, ls_pos, ls_diag, normOK)
     
-    def expect_1s(self, o, n):
+    def expect_1s(self, op, n):
         """Computes the expectation value of a single-site operator.
         
         The operator should be a q[n] x q[n] matrix.
@@ -353,12 +355,16 @@ class EvoMPS_MPS_Generic(object):
         
         Parameters
         ----------
-        o : ndarray
-            The operator matrix.
+        o : ndarray or callable
+            The operator matrix or function.
         n : int
             The site number.
         """        
-        res = tm.eps_r_op_1s(self.r[n], self.A[n], self.A[n], o)
+        if callable(op):
+            op = sp.vectorize(op, otypes=[sp.complex128])
+            op = sp.fromfunction(op, (self.q[n], self.q[n + 1], self.q[n], self.q[n + 1]))
+            
+        res = tm.eps_r_op_1s(self.r[n], self.A[n], self.A[n], op)
         return  m.adot(self.l[n - 1], res)
         
     def expect_1s_cor(self, o1, o2, n1, n2):
