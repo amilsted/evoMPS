@@ -19,7 +19,7 @@ from mps_gen import EvoMPS_MPS_Generic
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
-    def __init__(self, N, D, q, h_nn, h_ext=None):
+    def __init__(self, N, D, q, ham, ham_sites=None):
         """Creates a new TDVP_MPS object.
         
         The TDVP_MPS class implements the time-dependent variational principle 
@@ -48,17 +48,34 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
         
-        self.h_nn = h_nn
-        self.h_ext = h_ext
+        self.ham = ham
+        if ham_sites is None:
+            try:
+                ham = sp.array(self.ham)
+                self.ham_sites = (len(ham.shape) - 1) / 2
+            except ValueError:
+                self.ham_sites = 2
+        else:
+            self.ham_sites = ham_sites
+        
+        print self.ham_sites
+        
+        if not (self.ham_sites == 2 or self.ham_sites == 3):
+            raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
         
         #Make indicies correspond to the thesis
         self.K = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         self.C = sp.empty((self.N), dtype=sp.ndarray) #Elements 1..N-1 
 
         for n in xrange(1, self.N + 1):
-            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
-            if n < self.N:
-                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
+            self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)    
+            if n <= self.N - self.ham_sites + 1:
+                ham_shape = []
+                for i in xrange(self.ham_sites):
+                    ham_shape.append(self.q[n + i])
+                C_shape = tuple(ham_shape + [self.D[n - 1], self.D[n - 1 + self.ham_sites]])
+                print C_shape
+                self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
         
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
     
@@ -74,17 +91,28 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         C[n] depends on A[n] and A[n + 1].
         
         """
-        if self.h_nn is None:
+        if self.ham is None:
             return 0
         
         if n_low < 1:
             n_low = 1
         if n_high < 1:
-            n_high = self.N
+            n_high = self.N - self.ham_sites + 1
         
-        for n in xrange(n_low, n_high):
-            h_nn_n = lambda s, t, u, v: self.h_nn(n, s, t, u, v) 
-            self.C[n] = tm.calc_C_func_op(h_nn_n, self.A[n], self.A[n + 1])
+        for n in xrange(n_low, n_high + 1):
+            if callable(self.ham):
+                ham_n = lambda *args: self.ham(n, *args)
+                ham_n = sp.vectorize(ham_n, otypes=sp.complex128)
+                ham_n = sp.fromfunction(ham_n, tuple(self.C[n].shape[:-2] * 2))
+            else:
+                ham_n = self.ham[n]
+                
+            if self.ham_sites == 2:
+                AA = tm.calc_AA(self.A[n], self.A[n + 1])
+                self.C[n] = tm.calc_C_mat_op_AA(ham_n, AA)
+            else:
+                AAA = tm.calc_AAA(self.A[n], self.A[n + 1], self.A[n + 2])
+                self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, AAA)                
     
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's
@@ -106,22 +134,21 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_low < 1:
             n_low = 1
         if n_high < 1:
-            n_high = self.N + 1
+            n_high = self.N
             
-        for n in reversed(xrange(n_low, n_high)):
-            if n < self.N:
-                self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                          self.r[n + 1], self.A[n], self.A[n + 1], 
-                                          sanity_checks=self.sanity_checks)
+        for n in reversed(xrange(n_low, n_high + 1)):
+            if n <= self.N - self.ham_sites + 1:
+                if self.ham_sites == 2:
+                    self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                              self.r[n + 1], self.A[n], self.A[n + 1], 
+                                              sanity_checks=self.sanity_checks)
+                else:
+                    self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                              self.r[n + 2], self.A[n], self.A[n + 1], 
+                                              self.A[n + 2],
+                                              sanity_checks=self.sanity_checks)                    
             else:
                 self.K[n].fill(0)
-            
-            if not self.h_ext is None:
-                for s in xrange(self.q[n]):
-                    for t in xrange(self.q[n]):
-                        h_ext_st = self.h_ext(n, s, t)
-                        if h_ext_st != 0:
-                            self.K[n] += h_ext_st * self.A[n][t].dot(self.r[n].dot(m.H(self.A[n][s])))
     
     def update(self, restore_RCF=True):
         super(EvoMPS_TDVP_Generic, self).update(restore_RCF)
@@ -150,28 +177,51 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """
         if n > 1:
             lm2 = self.l[n - 2]
+            Cm1 = self.C[n - 1]
+            Am1 = self.A[n - 1]
         else:
             lm2 = None
+            Cm1 = None
+            Am1 = None
             
-        if n < self.N:
-            C = self.C[n]
+        if n > 2:
+            lm3 = self.l[n - 3]
+            Cm2 = self.C[n - 2]
+            Am2 = self.A[n - 2]
+        else:
+            lm3 = None
+            Cm2 = None
+            Am2 = None
+            
+        if n <= self.N - self.ham_sites + 1:
+            C = self.C[n]            
         else:
             C = None
             
-        x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
-                      lm2, self.A[n - 1], self.A[n], self.A[n + 1],
-                      sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
-                              
-        #Extra term to take care of h_ext..
-        if not self.h_ext is None:
-            x_subpart = sp.zeros((self.A[n].shape[1], Vsh.shape[2]), dtype=self.typ)
-            x_subsubpart = sp.empty_like(self.A[n][0])
-            for s in xrange(self.q[n]):
-                x_subsubpart.fill(0)
-                for t in xrange(self.q[n]):
-                    x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-                x_subpart += x_subsubpart.dot(sqrt_r.dot(Vsh[s]))
-            x += sqrt_l.dot(x_subpart)
+        if n < self.N - 1:
+            Ap2 = self.A[n + 2]
+            rp2 = self.r[n + 2]
+        else:
+            Ap2 = None
+            rp2 = None
+            
+        if n < self.N:
+            Kp1 = self.K[n + 1]
+            rp1 = self.r[n + 1]
+            Ap1 = self.A[n + 1]
+        else:
+            Kp1 = None
+            rp1 = None
+            Ap1 = None
+
+        if self.ham_sites == 2:
+            x = tm.calc_x(Kp1, C, Cm1, rp1,
+                          lm2, Am1, self.A[n], Ap1,
+                          sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+        else:
+            x = tm.calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, 
+                             lm3, Am2, Am1, self.A[n], Ap1, Ap2,
+                             sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
                 
         return x
         
