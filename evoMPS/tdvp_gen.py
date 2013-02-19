@@ -58,8 +58,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             self.ham_sites = ham_sites
         
-        print self.ham_sites
-        
         if not (self.ham_sites == 2 or self.ham_sites == 3):
             raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
         
@@ -74,10 +72,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 for i in xrange(self.ham_sites):
                     ham_shape.append(self.q[n + i])
                 C_shape = tuple(ham_shape + [self.D[n - 1], self.D[n - 1 + self.ham_sites]])
-                print C_shape
                 self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
         
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+        
+        self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
+        self.H_expect = 0
     
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -147,8 +147,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                               self.r[n + 2], self.A[n], self.A[n + 1], 
                                               self.A[n + 2],
                                               sanity_checks=self.sanity_checks)                    
+                self.h_expect[n] = ex
             else:
                 self.K[n].fill(0)
+                
+        if n_low == 1:
+            self.H_expect = sp.asscalar(self.K[1])
     
     def update(self, restore_RCF=True):
         super(EvoMPS_TDVP_Generic, self).update(restore_RCF)
