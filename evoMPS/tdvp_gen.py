@@ -62,8 +62,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             self.ham_sites = ham_sites
         
-        print self.ham_sites
-        
         if not (self.ham_sites == 2 or self.ham_sites == 3):
             raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
             
@@ -174,7 +172,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_low == 1:
             self.H_expect = sp.asscalar(self.K[1])
 
-            
+
     def update(self, restore_RCF=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
