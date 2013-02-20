@@ -346,6 +346,18 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
+        
+        oldD = self.D
+        oldq = self.q
+
+        self.D = sp.zeros((self.N + m + 2), dtype=int)
+        self.q = sp.zeros((self.N + m + 2), dtype=int)
+        
+        self.D[m:] = oldD
+        self.q[m:] = oldq
+        
+        self.D[:m] = [self.uni_l.D] * m
+        self.q[:m] = [self.uni_l.q] * m
 
         self.N = self.N + m
         self._init_arrays()
@@ -369,6 +381,18 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
+        
+        oldD = self.D
+        oldq = self.q
+
+        self.D = sp.zeros((self.N + m + 2), dtype=int)
+        self.q = sp.zeros((self.N + m + 2), dtype=int)
+        
+        self.D[:-m] = oldD
+        self.q[:-m] = oldq
+        
+        self.D[-m:] = [self.uni_l.D] * m
+        self.q[-m:] = [self.uni_l.q] * m
 
         self.N = self.N + m
         self._init_arrays()
@@ -395,6 +419,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
 
+        self.D = self.D[m:]
+        self.q = self.q[m:]
+
         self.N = self.N - m
         self._init_arrays()
 
@@ -415,6 +442,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
+        
+        self.D = self.D[:-m]
+        self.q = self.q[:-m]
 
         self.N = self.N - m
         self._init_arrays()
@@ -590,7 +620,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         return rho
 
     def apply_op_1s(self, op, n):
-        """Applies a one-site operator o to site n.
+        """Applies a one-site operator op to site n.
         
         Can be used to create excitations.
         """
@@ -623,21 +653,21 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             print "States must have same Hilbert-space dimensions!"
             return
         
-        dL, phiL, gLl = self.uni_l.fidelity_per_site(other.u_gnd_l, full_output=True, left=True)
+        dL, phiL, gLl = self.uni_l.fidelity_per_site(other.uni_l, full_output=True, left=True)
         
-        dR, phiR, gRr = self.uni_r.fidelity_per_site(other.u_gnd_r, full_output=True, left=False)
+        dR, phiR, gRr = self.uni_r.fidelity_per_site(other.uni_r, full_output=True, left=False)
         
         gr = mm.H(la.inv(gRr).dot(sp.asarray(self.uni_r.r)))
         gri = mm.H(la.inv(sp.asarray(self.uni_r.r)).dot(gRr))
         
         if sanity_checks:
-            AR = other.u_gnd_r.A.copy()        
+            AR = other.uni_r.A.copy()        
             for s in xrange(AR.shape[0]):
                 AR[s] = gr.dot(AR[s]).dot(gri)
                 
             print la.norm(AR - self.uni_r.A)
         
-        r = gr.dot(sp.asarray(other.u_gnd_r.r)).dot(mm.H(gr))
+        r = gr.dot(sp.asarray(other.uni_r.r)).dot(mm.H(gr))
         fac = la.norm(sp.asarray(self.uni_r.r)) / la.norm(r)        
         gr *= sp.sqrt(fac)
         gri /= sp.sqrt(fac)
@@ -655,7 +685,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         gl = la.inv(sp.asarray(self.uni_l.l)).dot(gLl)
         gli = la.inv(gLl).dot(sp.asarray(self.uni_l.l))
         
-        l = mm.H(gli).dot(sp.asarray(other.u_gnd_l.l)).dot(gli)
+        l = mm.H(gli).dot(sp.asarray(other.uni_l.l)).dot(gli)
         fac = la.norm(sp.asarray(self.uni_l.l)) / la.norm(l)
 
         gli *= sp.sqrt(fac)
@@ -665,7 +695,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             l *= fac
             print la.norm(l - self.uni_l.l)
         
-            l = mm.H(gli).dot(sp.asarray(other.u_gnd_l.l)).dot(gli)
+            l = mm.H(gli).dot(sp.asarray(other.uni_l.l)).dot(gli)
             print la.norm(l - self.uni_l.l)
         
         #print (dL, dR, phiL, phiR)
