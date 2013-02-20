@@ -54,10 +54,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
         self.ham = ham
         if ham_sites is None:
-            try:
-                ham = sp.array(self.ham)
-                self.ham_sites = (len(ham.shape) - 1) / 2
-            except ValueError:
+            if not callable(ham):
+                self.ham_sites = len(ham[0].shape) / 2
+            else:
                 self.ham_sites = 2
         else:
             self.ham_sites = ham_sites
@@ -121,7 +120,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         for n in xrange(n_low, n_high + 1):
             if callable(self.ham):
                 ham_n = lambda *args: self.ham(n, *args)
-                ham_n = sp.vectorize(ham_n, otypes=sp.complex128)
+                ham_n = sp.vectorize(ham_n, otypes=[sp.complex128])
                 ham_n = sp.fromfunction(ham_n, tuple(self.C[n].shape[:-2] * 2))
             else:
                 ham_n = self.ham[n]
