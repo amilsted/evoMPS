@@ -65,11 +65,12 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             opf = open(op_save_as, "a")
         else:
             opf = open(op_save_as, "w")
-            
+    
+    oldata = []        
     if not overlap_save_as is None:
         if append_saved:
             try:
-                data = sp.genfromtxt(overlap_save_as).tolist()
+                oldata = sp.genfromtxt(overlap_save_as).tolist()
             except:
                 print "No previous  overlap data, or error loading!"
                 pass
@@ -200,12 +201,12 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 
         if (not overlap_with is None) and (i % op_every == 0):
             row = [abs(sim.overlap(overlap_with))]
-            data.append(row)
+            oldata.append(row)
             if not overlap_save_as is None:
                 if rewrite_opf:
                     olf.close()
                     olf = open(overlap_save_as, "w")
-                    for row in data:
+                    for row in oldata:
                         olf.write("\t".join(map(str, row)) + "\n")
                     olf.flush()
                 else:
@@ -225,10 +226,13 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     if (not entropy_save_as is None):
         Sf.close()
         
+    if (not overlap_save_as is None):
+        olf.close()
+        
     if not csv_file is None:
         csvf.close()
 
-    return data, endata, Sdata
+    return data, endata, Sdata, oldata
 
 class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
