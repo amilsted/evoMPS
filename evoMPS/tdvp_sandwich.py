@@ -139,7 +139,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             
         if not save_as is None and ((i % save_every == 0)
                                     or i == steps - 1):
-            sim.save_state(save_as + "_%u" % i)
+            sim.save_state(save_as) #+ "_%u" % i)
 
         if i % 20 == 19:
             print header
@@ -252,7 +252,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
     def _init_arrays(self):
         super(EvoMPS_TDVP_Sandwich, self)._init_arrays()
-        
+
         #Make indicies correspond to the thesis
         #Deliberately add a None to the end to catch [-1] indexing!
         self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
@@ -619,6 +619,25 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return eta_tot
         
+    def grow_left(self, m):
+        super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
+        if not callable(self.h_nn):
+            self.h_nn = [self.uni_l.h_nn] * m + list(self.h_nn)
+            
+    def grow_right(self, m):
+        super(EvoMPS_TDVP_Sandwich, self).grow_right(m)
+        if not callable(self.h_nn):
+            self.h_nn = list(self.h_nn) + [self.uni_r.h_nn] * m
+
+    def shrink_left(self, m):
+        super(EvoMPS_TDVP_Sandwich, self).shrink_left(m)
+        if not callable(self.h_nn):
+            self.h_nn = self.h_nn[m:]
+
+    def shrink_right(self, m):
+        super(EvoMPS_TDVP_Sandwich, self).shrink_right(m)
+        if not callable(self.h_nn):
+            self.h_nn = self.h_nn[:-m]
 
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
