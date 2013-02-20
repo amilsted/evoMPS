@@ -16,6 +16,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
        en_save_as=None,
        entropy_save_as=None,
+       overlap_with=None,
+       overlap_save_as=None,
        append_saved=True,
        save_every=10, save_as=None, counter_start=0,
        csv_file=None,
@@ -63,6 +65,17 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             opf = open(op_save_as, "a")
         else:
             opf = open(op_save_as, "w")
+            
+    if not overlap_save_as is None:
+        if append_saved:
+            try:
+                data = sp.genfromtxt(overlap_save_as).tolist()
+            except:
+                print "No previous  overlap data, or error loading!"
+                pass
+            olf = open(overlap_save_as, "a")
+        else:
+            olf = open(overlap_save_as, "w")
         
     if not csv_file is None:
         if append_saved:
@@ -93,6 +106,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                     rewrite_opf = True
                     print "Growing left by: %u" % autogrow_amount
                     sim.grow_left(autogrow_amount)
+                    if not overlap_with is None:
+                        overlap_with.grow_left(autogrow_amount)
                     for j in range(autogrow_amount):
                         for row in data:                        
                             row.insert(0, 0)
@@ -105,6 +120,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                     rewrite_opf = True
                     print "Growing right by: %u" % autogrow_amount
                     sim.grow_right(autogrow_amount)
+                    if not overlap_with is None:
+                        overlap_with.grow_right(autogrow_amount)
                     for j in range(autogrow_amount):
                         for row in data:
                             row.append(0)
@@ -180,6 +197,20 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             else:
                 Sf.write("\t".join(map(str, row)) + "\n")
                 Sf.flush()
+                
+        if (not overlap_with is None) and (i % op_every == 0):
+            row = [abs(sim.overlap(overlap_with))]
+            data.append(row)
+            if not overlap_save_as is None:
+                if rewrite_opf:
+                    olf.close()
+                    olf = open(overlap_save_as, "w")
+                    for row in data:
+                        olf.write("\t".join(map(str, row)) + "\n")
+                    olf.flush()
+                else:
+                    olf.write("\t".join(map(str, row)) + "\n")
+                    olf.flush()
             
         if i > counter_start and eta.real < tol:
             print "Tolerance reached!"
@@ -210,8 +241,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.eta_uni = self.uni_l.eta
         self.uni_l_kmr = la.norm(self.uni_l.r / la.norm(self.uni_l.r) - 
                                    self.uni_l.K / la.norm(self.uni_l.K))
-
-        self.h_nn = lambda n, s, t, u, v: self.uni_l.h_nn(s, t, u, v)
+        
+        if callable(self.uni_l.h_nn):
+            self.h_nn = lambda n, s, t, u, v: self.uni_l.h_nn(s, t, u, v)
+        else:
+            self.h_nn = [self.uni_l.h_nn] * (self.N + 1)
 
         self.eps = sp.finfo(self.typ).eps
 
@@ -584,6 +618,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
 
         return eta_tot
+        
 
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
