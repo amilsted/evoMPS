@@ -203,15 +203,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             row = [abs(sim.overlap(overlap_with))]
             oldata.append(row)
             if not overlap_save_as is None:
-                if rewrite_opf:
-                    olf.close()
-                    olf = open(overlap_save_as, "w")
-                    for row in oldata:
-                        olf.write("\t".join(map(str, row)) + "\n")
-                    olf.flush()
-                else:
-                    olf.write("\t".join(map(str, row)) + "\n")
-                    olf.flush()
+                olf.write("\t".join(map(str, row)) + "\n")
+                olf.flush()
             
         if i > counter_start and eta.real < tol:
             print "Tolerance reached!"
