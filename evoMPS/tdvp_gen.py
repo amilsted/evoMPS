@@ -46,9 +46,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             A 1d array, length N + 1, of integers indicating the 
             dimension of the hilbert space for each site. 
             Entry 0 is ignored (there is no site 0).
-        h_nn : array or callable
-            Hamiltonian term for each site ham(n, s, t, u, v) or 
-            ham[n][s, t, u, v] for site n.
+        ham : array or callable
+            Hamiltonian term for each site ham(n, *physical_indices) or 
+            ham[n][*physical indices] for site n.
          
         """       
 
