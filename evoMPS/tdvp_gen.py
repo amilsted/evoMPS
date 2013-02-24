@@ -8,7 +8,6 @@ TODO:
     - Implement evaluation of the error due to restriction to bond dim.
     - Add an algorithm for expanding the bond dimension.
     - Adaptive step size.
-    - Find a way to randomize the starting state.
 
 """
 import scipy as sp
@@ -19,7 +18,7 @@ from mps_gen import EvoMPS_MPS_Generic
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
-    def __init__(self, N, D, q, h_nn, h_ext=None):
+    def __init__(self, N, D, q, h_nn):
         """Creates a new TDVP_MPS object.
         
         The TDVP_MPS class implements the time-dependent variational principle 
@@ -40,15 +39,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             A 1-d array, length N + 1, of integers indicating the 
             dimension of the hilbert space for each site (first entry is ignored).
         h_nn : array or callable
-            Nearest-neighbour Hamiltonian for each site h_nn(n, s, t, u, v)
-            or h_nn[n][s, t, u, v] for site n.
+            Hamiltonian term for each site ham(n, s, t, u, v) or 
+            ham[n][s, t, u, v] for site n.
          
-        """
-        
-        super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
-        
+        """       
         self.h_nn = h_nn
-        self.h_ext = h_ext
+        self.ham_sites = 2
+            
+        super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
     
     
     def _init_arrays(self):
@@ -59,11 +57,18 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.C = sp.empty((self.N), dtype=sp.ndarray) #Elements 1..N-1 
 
         for n in xrange(1, self.N + 1):
-            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)    
-            if n < self.N:
-                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
+            self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)    
+            if n <= self.N - self.ham_sites + 1:
+                ham_shape = []
+                for i in xrange(self.ham_sites):
+                    ham_shape.append(self.q[n + i])
+                C_shape = tuple(ham_shape + [self.D[n - 1], self.D[n - 1 + self.ham_sites]])
+                self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
         
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+        
+        self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
+        self.H_expect = 0
     
     
     def calc_C(self, n_low=-1, n_high=-1):
@@ -84,11 +89,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_low < 1:
             n_low = 1
         if n_high < 1:
-            n_high = self.N
+            n_high = self.N - self.ham_sites + 1
         
-        for n in xrange(n_low, n_high):
-            h_nn_n = lambda s, t, u, v: self.h_nn(n, s, t, u, v) 
-            self.C[n] = tm.calc_C_func_op(h_nn_n, self.A[n], self.A[n + 1])
+        for n in xrange(n_low, n_high + 1):
+            if callable(self.h_nn):
+                h_nn = lambda *args: self.h_nn(n, *args)
+                h_nn = sp.vectorize(h_nn, otypes=[sp.complex128])
+                h_nn = sp.fromfunction(h_nn, tuple(self.C[n].shape[:-2] * 2))
+            else:
+                h_nn = self.h_nn[n]
+            
+            AA = tm.calc_AA(self.A[n], self.A[n + 1])
+            self.C[n] = tm.calc_C_mat_op_AA(h_nn, AA)
+         
     
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's
@@ -110,22 +123,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_low < 1:
             n_low = 1
         if n_high < 1:
-            n_high = self.N + 1
+            n_high = self.N
             
-        for n in reversed(xrange(n_low, n_high)):
-            if n < self.N:
+        for n in reversed(xrange(n_low, n_high + 1)):
+            if n <= self.N - self.ham_sites + 1:
                 self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
                                           self.r[n + 1], self.A[n], self.A[n + 1], 
-                                          sanity_checks=self.sanity_checks)
+                                          sanity_checks=self.sanity_checks)                   
+                self.h_expect[n] = ex
             else:
                 self.K[n].fill(0)
-            
-            if not self.h_ext is None:
-                for s in xrange(self.q[n]):
-                    for t in xrange(self.q[n]):
-                        h_ext_st = self.h_ext(n, s, t)
-                        if h_ext_st != 0:
-                            self.K[n] += h_ext_st * self.A[n][t].dot(self.r[n].dot(m.H(self.A[n][s])))
+                
+        if n_low == 1:
+            self.H_expect = sp.asscalar(self.K[1])
     
     def update(self, restore_RCF=True):
         super(EvoMPS_TDVP_Generic, self).update(restore_RCF)
@@ -154,28 +164,30 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """
         if n > 1:
             lm2 = self.l[n - 2]
+            Cm1 = self.C[n - 1]
+            Am1 = self.A[n - 1]
         else:
             lm2 = None
-            
-        if n < self.N:
-            C = self.C[n]
+            Cm1 = None
+            Am1 = None
+                        
+        if n <= self.N - self.ham_sites + 1:
+            C = self.C[n]            
         else:
             C = None
             
-        x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
-                      lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+        if n < self.N:
+            Kp1 = self.K[n + 1]
+            rp1 = self.r[n + 1]
+            Ap1 = self.A[n + 1]
+        else:
+            Kp1 = None
+            rp1 = None
+            Ap1 = None
+
+        x = tm.calc_x(Kp1, C, Cm1, rp1,
+                      lm2, Am1, self.A[n], Ap1,
                       sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
-                              
-        #Extra term to take care of h_ext..
-        if not self.h_ext is None:
-            x_subpart = sp.zeros((self.A[n].shape[1], Vsh.shape[2]), dtype=self.typ)
-            x_subsubpart = sp.empty_like(self.A[n][0])
-            for s in xrange(self.q[n]):
-                x_subsubpart.fill(0)
-                for t in xrange(self.q[n]):
-                    x_subsubpart += self.h_ext(n, s, t) * self.A[n][t] #it may be more effecient to squeeze this into the nn term...
-                x_subpart += x_subsubpart.dot(sqrt_r.dot(Vsh[s]))
-            x += sqrt_l.dot(x_subpart)
                 
         return x
         
