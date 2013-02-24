@@ -125,7 +125,7 @@ reCF = []
 reNorm = []
 
 T = sp.zeros((total_steps), dtype=sp.complex128)
-K1 = sp.zeros((total_steps), dtype=sp.complex128)
+H = sp.zeros((total_steps), dtype=sp.complex128)
 lN = sp.zeros((total_steps), dtype=sp.complex128)
 
 Sx_3 = sp.zeros((total_steps), dtype=sp.complex128) #Observables for site 3.
@@ -158,15 +158,15 @@ for i in xrange(total_steps):
     eta = s.eta.real.sum()    
     row.append("%.6g" % eta)
         
-    K1[i] = s.H_expect
-    row.append("%.15g" % K1[i].real)
+    H[i] = s.H_expect
+    row.append("%.15g" % H[i].real)
     
     if i > 0:        
-        dK1 = K1[i].real - K1[i - 1].real
+        dH = H[i].real - H[i - 1].real
     else:
-        dK1 = K1[i]
+        dH = H[i]
     
-    row.append("%.2e" % (dK1.real))
+    row.append("%.2e" % (dH.real))
         
     """
     Compute obserables!
@@ -221,14 +221,14 @@ if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
     
     fig1 = plt.figure(1)
     fig2 = plt.figure(2) 
-    K1_tau = fig1.add_subplot(111)
-    K1_tau.set_xlabel('tau')
-    K1_tau.set_ylabel('H')
+    H_tau = fig1.add_subplot(111)
+    H_tau.set_xlabel('tau')
+    H_tau.set_ylabel('H')
     M_tau = fig2.add_subplot(111)
     M_tau.set_xlabel('tau')
     M_tau.set_ylabel('M_x')    
     
-    K1_tau.plot(tau, K1.real[0:imsteps])
+    H_tau.plot(tau, H.real[0:imsteps])
     M_tau.plot(tau, Mx.real[0:imsteps])
 
 #Now plot the real time evolution of K1 and Mx
@@ -236,14 +236,14 @@ t = T.real[imsteps + 1:]
 fig3 = plt.figure(3)
 fig4 = plt.figure(4)
 
-K1_t = fig3.add_subplot(111)
-K1_t.set_xlabel('t')
-K1_t.set_ylabel('H')
+H_t = fig3.add_subplot(111)
+H_t.set_xlabel('t')
+H_t.set_ylabel('H')
 M_t = fig4.add_subplot(111)
 M_t.set_xlabel('t')
 M_t.set_ylabel('M_x')
 
-K1_t.plot(t, K1.real[imsteps + 1:])
+H_t.plot(t, H.real[imsteps + 1:])
 M_t.plot(t, Mx.real[imsteps + 1:])
 
 plt.show()
