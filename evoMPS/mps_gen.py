@@ -363,7 +363,7 @@ class EvoMPS_MPS_Generic(object):
         """        
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (self.q[n], self.q[n + 1], self.q[n], self.q[n + 1]))
+            op = sp.fromfunction(op, (self.q[n], self.q[n]))
             
         res = tm.eps_r_op_1s(self.r[n], self.A[n], self.A[n], op)
         return  m.adot(self.l[n - 1], res)

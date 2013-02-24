@@ -24,32 +24,35 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         The TDVP_MPS class implements the time-dependent variational principle 
         for matrix product states for systems with open boundary conditions and
-        a hamiltonian consisting of a nearest-neighbour interaction term and a 
-        single-site term (external field).
+        a Hamiltonian consisting of a sum over nearest-neighbour interaction terms.
         
         Bond dimensions will be adjusted where they are too high to be useful.
-        FIXME: Add reference.
+        
+        Array indices correspond to site numbers 1 to N.
         
         Parameters
         ----------
-        numsites : int
+        N : int
             The number of lattice sites.
         D : ndarray
-            A 1-d array, length numsites, of integers indicating the desired bond dimensions.
+            A 1-d array, length N + 1, of integers indicating the desired bond dimensions.
         q : ndarray
-            A 1-d array, also length numsites, of integers indicating the 
-            dimension of the hilbert space for each site.
-    
-        Returns
-        -------
-        sqrt_A : ndarray
-            An array of the same shape and type as A containing the matrix square root of A.        
+            A 1-d array, length N + 1, of integers indicating the 
+            dimension of the hilbert space for each site (first entry is ignored).
+        h_nn : array or callable
+            Nearest-neighbour Hamiltonian for each site h_nn(n, s, t, u, v)
+            or h_nn[n][s, t, u, v] for site n.
+         
         """
         
         super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
         
         self.h_nn = h_nn
         self.h_ext = h_ext
+    
+    
+    def _init_arrays(self):
+        super(EvoMPS_TDVP_Generic, self)._init_arrays()
         
         #Make indicies correspond to the thesis
         self.K = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
@@ -61,6 +64,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
         
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+    
     
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
