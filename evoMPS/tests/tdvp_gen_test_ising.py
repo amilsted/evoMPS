@@ -26,14 +26,13 @@ def get_ham(N, J, h):
 
 class TestOps(unittest.TestCase):
     def test_ising_crit_im_tdvp(self):
-        N = 7 
+        N = 7
         
         s = tdvp.EvoMPS_TDVP_Generic(N, [1024] * (N + 1), [2] * (N + 1), get_ham(N, 1.0, 1.0))
         
         E = - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) / (2 * (2 * N + 1)))).sum()
-        print "Exact ground state energy = %.15g" % E
         
-        tol = 1E-7
+        tol = 1E-6 #Should result in correct energy to ~1E-12
         
         eta = 1
         while eta > tol:
@@ -42,5 +41,7 @@ class TestOps(unittest.TestCase):
             s.take_step(0.1)
             eta = s.eta.real.sum()
             
-        print "Imaginary time result: ", H.real
         self.assertTrue(sp.allclose(E, H))
+        
+if __name__ == '__main__':
+    unittest.main()

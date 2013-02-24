@@ -140,13 +140,13 @@ Print a table header.
 """
 print "Bond dimensions: " + str(s.D)
 print
-col_heads = ["Step", "t", "eta", "<H>", "d<H>", 
+col_heads = ["Step", "t", "<H>", "d<H>", 
              "sig_x_3", "sig_y_3", "sig_z_3",
-             "E_vn_3,4", "M_x", "Next step",
-             "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
+             "E_vn_3,4", "M_x", "eta"] #These last three are for testing the midpoint method.
 print "\t".join(col_heads)
 print
 
+eta = 1
 for i in xrange(total_steps):
     T[i] = t
     
@@ -154,9 +154,6 @@ for i in xrange(total_steps):
     row.append(str(t))
     
     s.update()
-    
-    eta = s.eta.real.sum()    
-    row.append("%.6g" % eta)
         
     H[i] = s.H_expect
     row.append("%.15g" % H[i].real)
@@ -197,18 +194,19 @@ for i in xrange(total_steps):
         loaded = False
         print 'Starting real time evolution!'
     
-    row.append(str(1.j * sp.conj(step)))
-    
     """
     Carry out next step!
     """
     if not real_time:
-        print "\t".join(row)
         s.take_step(step)     
         imsteps += 1
     else:
-        print "\t".join(row)
         s.take_step_RK4(step)
+        
+    eta = s.eta.real.sum() 
+    row.append("%.6g" % eta)
+    
+    print "\t".join(row)
     
     t += 1.j * sp.conj(step)
 
