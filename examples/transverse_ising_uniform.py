@@ -64,23 +64,18 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-D = 8 #The bond dimension
+D = 16 #The bond dimension
 q = 2 #The site dimension
 
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp.EvoMPS_TDVP_Uniform(D, q)
-
-"""
-Tell evoMPS about our Hamiltonian.
-"""
-s.h_nn = h_nn
+s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
 
 """
 Set the initial Hamiltonian parameters.
 """
-h = -0.50
+h = -1.00
 J = 1.00
 
 """
@@ -93,7 +88,7 @@ J_real = 0.25
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.05
+step = 0.1
 realstep = 0.01
 
 """
@@ -119,7 +114,7 @@ grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))
 
 expand = False
 
-if True:
+if False:
     try:
        a_file = open(grnd_fname, 'rb')
        s.load_state(a_file)

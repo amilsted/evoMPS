@@ -12,7 +12,7 @@ from scipy import *
 import scipy.linalg as la
 import matplotlib.pyplot as plt
 
-from evoMPS import *
+import evoMPS.tdvp_gen as tdvp_gen
 
 """
 First, we define our Hamiltonian and some observables.
@@ -23,13 +23,13 @@ def h_nn(n, s, t, u, v):
 
     The global variable J determines the strength.
     """
-    res = x_ss(n, s, u) * x_ss(n, t, v)
-    res += y_ss(n, s, u) * y_ss(n, t, v)
-    res += z_ss(n, s, u) * z_ss(n, t, v)    
+    res = x_ss(s, u) * x_ss(t, v)
+    res += y_ss(s, u) * y_ss(t, v)
+    res += z_ss(s, u) * z_ss(t, v)    
         
     return J * 1.0 * res
     
-def z_ss(n, s, t):
+def z_ss(s, t):
     """Spin observable: z-direction
     """
     if s == t:
@@ -37,7 +37,7 @@ def z_ss(n, s, t):
     else:
         return 0
         
-def x_ss(n, s, t):
+def x_ss(s, t):
     """Spin observable: x-direction
     """
     if s == t:
@@ -45,7 +45,7 @@ def x_ss(n, s, t):
     else:
         return 1.0
         
-def y_ss(n, s, t):
+def y_ss(s, t):
     """Spin observable: y-direction
     """
     if s == t:
@@ -83,12 +83,7 @@ q.fill(qn)
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp_gen.EvoMPS_TDVP_Generic(N, D, q)
-
-"""
-Tell evoMPS about our Hamiltonian.
-"""
-s.h_nn = h_nn
+s = tdvp_gen.EvoMPS_TDVP_Generic(N, D, q, h_nn)
 
 """
 Set the initial Hamiltonian parameters.
