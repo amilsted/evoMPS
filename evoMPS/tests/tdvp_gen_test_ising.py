@@ -43,5 +43,23 @@ class TestOps(unittest.TestCase):
             
         self.assertTrue(sp.allclose(E, H))
         
+    def test_ising_crit_im_tdvp_RK4(self):
+        N = 7
+        
+        s = tdvp.EvoMPS_TDVP_Generic(N, [1024] * (N + 1), [2] * (N + 1), get_ham(N, 1.0, 1.0))
+        
+        E = - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) / (2 * (2 * N + 1)))).sum()
+        
+        tol = 1E-6 #Should result in correct energy to ~1E-12
+        
+        eta = 1
+        while eta > tol:
+            s.update()
+            H = s.H_expect
+            s.take_step_RK4(0.1)
+            eta = s.eta.real.sum()
+            
+        self.assertTrue(sp.allclose(E, H))
+        
 if __name__ == '__main__':
     unittest.main()
