@@ -113,13 +113,12 @@ def Sminus(s, t):
 """
 The bond dimension:
 """
-D = 512
+D = 16
 
 """
 Initialize the simulation object:
 """
-s = tdvp.EvoMPS_TDVP_Uniform(D, q)
-s.h_nn = h_nn
+s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
 
 """
 Set the Hamiltonian parameters.
