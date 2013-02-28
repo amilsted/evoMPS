@@ -547,8 +547,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 print (tau, hs[i], hs[i] - self.h.real, "from stored")
                 return hs[i]
             except ValueError:
-                for s in xrange(self.q):
-                    self.A[s] = A0[s] - tau * B[s]
+                self.A[:] = A0 - tau * B
                 
                 if len(taus) > 0:
                     nearest_tau_ind = abs(np.array(taus) - tau).argmin()

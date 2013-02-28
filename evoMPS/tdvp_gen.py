@@ -12,8 +12,10 @@ TODO:
 """
 import scipy as sp
 import scipy.linalg as la
+import scipy.optimize as opti
 import matmul as m
 import tdvp_common as tm
+import copy
 from mps_gen import EvoMPS_MPS_Generic
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
@@ -255,8 +257,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             return None
 
-    
-    def take_step(self, dtau):   
+    def take_step(self, dtau, B=None):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A[n] -= dtau * B[n] with B[n] form self.calc_B(n).
@@ -277,21 +278,27 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
-        eta_tot = 0
-        
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            #V is not always defined (e.g. at the right boundary vector, and possibly before)
-            if n <= self.N:
-                B = self.calc_B(n)
-                eta_tot += self.eta[n]
+        if B is None:
+            eta_tot = 0
             
-            if n > 1 and not B_prev is None:
-                self.A[n - 1] += -dtau * B_prev
+            B_prev = None
+            for n in xrange(1, self.N + 2):
+                #V is not always defined (e.g. at the right boundary vector, and possibly before)
+                if n <= self.N:
+                    B = self.calc_B(n)
+                    eta_tot += self.eta[n]
                 
-            B_prev = B
-            
-        return eta_tot
+                if n > 1 and not B_prev is None:
+                    self.A[n - 1] += -dtau * B_prev
+                    
+                B_prev = B
+                
+            return eta_tot
+        else:
+            for n in xrange(1, self.N + 1):
+                if not B[n] is None:
+                    self.A[n] += -dtau * B[n]
+
         
     def take_step_RK4(self, dtau):
         """Take a step using the fourth-order explicit Runge-Kutta method.
@@ -371,3 +378,131 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
         return eta_tot
         
+    def calc_B_CG(self, B_CG_0, eta_0, dtau_init):
+        """Calculates a tangent vector using the non-linear conjugate gradient method.
+        
+        Parameters:
+            B_CG_0 : ndarray
+                Tangent vector used to make the previous step. Setting to None
+                triggers reset.
+            eta_0 : float
+                Norm of the previous tangent vector.
+            dtau_init : float
+                Initial step-size for the line-search.
+                
+        Returns:
+            B_CG, B, eta, tau
+        """
+        B = sp.empty_like(self.A)
+        for n in xrange(1, self.N + 1):
+            B[n] = self.calc_B(n)
+            
+        eta = self.eta.real.sum()
+        
+        if B_CG_0 is None:
+            beta = 0.
+            print "RESET CG"
+            
+            B_CG = B
+        else:
+            beta = (eta**2) / eta_0**2
+        
+            print "BetaFR = " + str(beta)
+        
+            beta = max(0, beta.real)
+            
+            B_CG = sp.empty_like(self.A)
+            for n in xrange(1, self.N + 1):
+                if not B[n] is None:
+                    B_CG[n] = B[n] + beta * B_CG_0[n]
+
+        old_h = self.H_expect.real
+        tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
+                                           trybracket=False)
+            
+        if old_h < h_min:
+            print "RESET due to energy rise!"
+            B_CG = B
+            tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
+        
+            if old_h < h_min:
+                print "RESET FAILED: Setting tau=0!"
+                tau = 0
+        
+        return B_CG, B, eta, tau
+        
+    def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
+                         trybracket=True):
+        taus=[]
+        hs=[]
+        
+        h_before = self.H_expect.real
+        
+        def f(tau, *args):
+            if tau == 0:
+                print (0, "tau=0")
+                return h_before              
+            try:
+                i = taus.index(tau)
+                print (tau, hs[i], hs[i] - h_before, "from stored")
+                return hs[i]
+            except ValueError:
+                for n in xrange(1, self.N + 1):
+                    if not B[n] is None:
+                        self.A[n] = A0[n] - tau * B[n]
+
+                self.calc_l()
+                self.calc_r()
+                self.simple_renorm()
+                self.calc_C()
+                self.calc_K()
+                h = self.H_expect
+                
+                print (tau, h.real, h.real - h_before)
+                
+                res = h.real
+                
+                taus.append(tau)
+                hs.append(res)
+                
+                return res
+        
+        #TODO: Generalize this?
+        A0 = copy.deepcopy(self.A)
+        C0 = copy.deepcopy(self.C)
+        K0 = copy.deepcopy(self.K)
+        l0 = copy.deepcopy(self.l)
+        r0 = copy.deepcopy(self.r)
+        
+        if skipIfLower:
+            if f(dtau_init) < self.h.real:
+                return dtau_init
+        
+        fb_brack = (dtau_init * 0.9, dtau_init * 1.1)
+        if trybracket:
+            brack = (dtau_init * 0.1, dtau_init, dtau_init * 2.0)
+        else:
+            brack = fb_brack
+                
+        try:
+            tau_opt, h_min, itr, calls = opti.brent(f, 
+                                                    brack=brack, 
+                                                    tol=tol,
+                                                    maxiter=20,
+                                                    full_output=True)
+        except ValueError:
+            print "Bracketing attempt failed..."
+            tau_opt, h_min, itr, calls = opti.brent(f, 
+                                                    brack=fb_brack, 
+                                                    tol=tol,
+                                                    maxiter=20,
+                                                    full_output=True)
+        
+        #Must restore everything needed for take_step
+        self.A = A0
+        self.l = l0
+        self.r = r0
+        self.C = C0
+        self.K = K0
+        
+        return tau_opt, h_min
