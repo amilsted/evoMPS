@@ -18,70 +18,34 @@ import evoMPS.tdvp_uniform as tdvp
 First, we define our Hamiltonian and some observables.
 """
 
-def h_nn(s, t, u, v):
-    """The nearest neighbour Hamiltonian representing the interaction.
+x_ss_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0], 
+                                   [1, 0, 1], 
+                                   [0, 1, 0]])
+y_ss_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0], 
+                                         [-1, 0, 1], 
+                                         [0, -1, 0]])
+z_ss_s1 = sp.array([[1, 0, 0], 
+                    [0, 0, 0], 
+                    [0, 0, -1]])
+                    
+x_ss_pauli = sp.array([[0, 1], 
+                       [1, 0]])
+y_ss_pauli = 1.j * sp.array([[0, -1], 
+                             [1, 0]])
+z_ss_pauli = sp.array([[1, 0], 
+                       [0, -1]])
 
-    The global variable J determines the strength.
-    """        
-    res = Jx * x_ss(s, u) * x_ss(t, v)
-    res += Jy * y_ss(s, u) * y_ss(t, v)
-    res += Jz * z_ss(s, u) * z_ss(t, v)               
-        
-    return res        
-    
-
-def z_ss_pauli(s, t):
-    """Spin observable: z-direction
-    """
-    if s == t:
-        return (-1.0)**s
+def get_ham(S, Jx, Jy, Jz):
+    if S == 1:
+        return (Jx * sp.kron(x_ss_s1, x_ss_s1) 
+                + Jy * sp.kron(y_ss_s1, y_ss_s1)
+                + Jz * sp.kron(z_ss_s1, z_ss_s1)).reshape(3, 3, 3, 3)
+    elif S == 0.5:
+        return (Jx * sp.kron(x_ss_pauli, x_ss_pauli) 
+                + Jy * sp.kron(y_ss_pauli, y_ss_pauli)
+                + Jz * sp.kron(z_ss_pauli, z_ss_pauli)).reshape(2, 2, 2, 2)
     else:
-        return 0
-        
-def x_ss_pauli(s, t):
-    """Spin observable: x-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return 1.0
-        
-def y_ss_pauli(s, t):
-    """Spin observable: y-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return (1.j * (-1.0)**t)
-        
-def z_ss_s1(s, t):
-    """Spin observable: z-direction
-    """
-    if s == t:
-        if s == 1:
-            return 0
-        else:
-            return 1 * (-1.0)**(s/2)
-    else:
-        return 0
-        
-def x_ss_s1(s, t):
-    """Spin observable: x-direction
-    """
-    if s == t or abs(s - t) == 2:
-        return 0
-    else:
-        return ma.sqrt(0.5)
-        
-def y_ss_s1(s, t):
-    """Spin observable: y-direction
-    """
-    if s == t or abs(s - t) == 2:
-        return 0
-    elif s > t:
-        return -1.j * ma.sqrt(0.5)
-    else:
-        return 1.j * ma.sqrt(0.5)
+        return None
 
 """
 Choose spin-1 or spin-1/2.
@@ -103,11 +67,8 @@ else:
     print "Only S = 1 or S = 1/2 are supported!"
     exit()
 
-def Splus(s, t):
-    return x_ss(s, t) + 1.j * y_ss(s, t)
-
-def Sminus(s, t):
-    return x_ss(s, t) - 1.j * y_ss(s, t)
+#Splus = x_ss + 1.j * y_ss
+#Sminus = x_ss - 1.j * y_ss
 
 
 """
@@ -116,14 +77,15 @@ The bond dimension:
 D = 16
 
 """
-Initialize the simulation object:
-"""
-s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
-
-"""
 Set the Hamiltonian parameters.
 """
 Jx = Jy = Jz = 1
+
+"""
+Initialize the simulation object:
+"""
+s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham(S, Jx, Jy, Jz))
+#s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
 
 """
 Set the parameters for the quench.
@@ -156,8 +118,8 @@ grnd_fname_fmt = "heis_af_uni_D%d_q%d_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy"
 
 grnd_fname = grnd_fname_fmt % (D, q, Jx, Jy, Jz, tol_im, step)
 
-load_state = True
-expand = True
+load_state = False
+expand = False
 real_time = False
 
 if load_state:
@@ -273,9 +235,7 @@ if __name__ == "__main__":
             
             s.save_state(grnd_fname)
             
-            Jx = Jx_2
-            Jy = Jy_2
-            Jz = Jz_2
+            s.h_nn = get_ham(S, Jx_2, Jy_2, Jz_2)
             
             step = realstep * 1.j
             loaded = False
