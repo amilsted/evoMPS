@@ -8,50 +8,61 @@ for the transverse Ising model.
 @author: Ashley Milsted
 """
 
-from scipy import *
+import scipy as sp
 import scipy.linalg as la
 import matplotlib.pyplot as plt
+import math as ma
 
 import evoMPS.tdvp_gen as tdvp_gen
 
-"""
-First, we define our Hamiltonian and some observables.
-"""
+x_ss_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0], 
+                                   [1, 0, 1], 
+                                   [0, 1, 0]])
+y_ss_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0], 
+                                         [-1, 0, 1], 
+                                         [0, -1, 0]])
+z_ss_s1 = sp.array([[1, 0, 0], 
+                    [0, 0, 0], 
+                    [0, 0, -1]])
+                    
+x_ss_pauli = sp.array([[0, 1], 
+                       [1, 0]])
+y_ss_pauli = 1.j * sp.array([[0, -1], 
+                             [1, 0]])
+z_ss_pauli = sp.array([[1, 0], 
+                       [0, -1]])
 
-def h_nn(n, s, t, u, v):
-    """The nearest neighbour Hamiltonian representing the interaction.
+def get_ham(S, Jx, Jy, Jz):
+    if S == 1:
+        return (Jx * sp.kron(x_ss_s1, x_ss_s1) 
+                + Jy * sp.kron(y_ss_s1, y_ss_s1)
+                + Jz * sp.kron(z_ss_s1, z_ss_s1)).reshape(3, 3, 3, 3)
+    elif S == 0.5:
+        return (Jx * sp.kron(x_ss_pauli, x_ss_pauli) 
+                + Jy * sp.kron(y_ss_pauli, y_ss_pauli)
+                + Jz * sp.kron(z_ss_pauli, z_ss_pauli)).reshape(2, 2, 2, 2)
+    else:
+        return None
 
-    The global variable J determines the strength.
-    """
-    res = x_ss(s, u) * x_ss(t, v)
-    res += y_ss(s, u) * y_ss(t, v)
-    res += z_ss(s, u) * z_ss(t, v)    
-        
-    return J * 1.0 * res
-    
-def z_ss(s, t):
-    """Spin observable: z-direction
-    """
-    if s == t:
-        return (-1.0)**s
-    else:
-        return 0
-        
-def x_ss(s, t):
-    """Spin observable: x-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return 1.0
-        
-def y_ss(s, t):
-    """Spin observable: y-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return (1.j * (-1.0)**t)
+"""
+Choose spin-1 or spin-1/2.
+"""
+q = 0
+S = 1
+
+if S == 0.5:
+    q = 2
+    z_ss = z_ss_pauli
+    y_ss = y_ss_pauli
+    x_ss = x_ss_pauli
+elif S == 1:
+    q = 3
+    z_ss = z_ss_s1
+    y_ss = y_ss_s1
+    x_ss = x_ss_s1
+else:
+    print "Only S = 1 or S = 1/2 are supported!"
+    exit()
 
 """
 Next, we set up some global variables to be used as parameters to 
@@ -67,28 +78,18 @@ Here we set the bond dimension = bond_dim for all sites.
 """
 bond_dim = 16 #The maximum bond dimension
 
-D = empty(N + 1, dtype=int32)
-D.fill(bond_dim)
-
-
-"""
-The site Hilbert space dimension is also given as a vector, length N.
-Here, we set all sites to dimension = qn.
-"""
-qn = 2 #The site dimension
-
-q = empty(N + 1, dtype=int32)
-q.fill(qn)
-
-"""
-Now we are ready to create an instance of the evoMPS class.
-"""
-s = tdvp_gen.EvoMPS_TDVP_Generic(N, D, q, h_nn)
 
 """
 Set the initial Hamiltonian parameters.
 """
 J = 1
+
+"""
+Now we are ready to create an instance of the evoMPS class.
+"""
+s = tdvp_gen.EvoMPS_TDVP_Generic(N, [bond_dim] * (N + 1), 
+                                 [q] * (N + 1), 
+                                 [get_ham(S, J, J, J)] * N)
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -117,7 +118,7 @@ The ground state will be saved automatically when it is declared found.
 If this script is run again with the same settings, an existing
 ground state will be loaded, if present.
 """
-grnd_fname = "heis_af_N%d_D%d_q%d_J%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim, J, tol_im, step)
+grnd_fname = "heis_af_N%d_D%d_q%d_J%g_s%g_dtau%g_ground.npy" % (N, q, bond_dim, J, tol_im, step)
 
 try:
    a_file = open(grnd_fname, 'rb')
@@ -140,15 +141,15 @@ imsteps = 0
 reCF = []
 reNorm = []
 
-T = zeros((total_steps), dtype=complex128)
-K1 = zeros((total_steps), dtype=complex128)
-lN = zeros((total_steps), dtype=complex128)
+T = sp.zeros((total_steps), dtype=sp.complex128)
+K1 = sp.zeros((total_steps), dtype=sp.complex128)
+lN = sp.zeros((total_steps), dtype=sp.complex128)
 
-Sx_3 = zeros((total_steps), dtype=complex128) #Observables for site 3.
-Sy_3 = zeros((total_steps), dtype=complex128)
-Sz_3 = zeros((total_steps), dtype=complex128)
+Sx_3 = sp.zeros((total_steps), dtype=sp.complex128) #Observables for site 3.
+Sy_3 = sp.zeros((total_steps), dtype=sp.complex128)
+Sz_3 = sp.zeros((total_steps), dtype=sp.complex128)
 
-Mx = zeros((total_steps), dtype=complex128)   #Magnetization in x-direction.
+Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
    
    
 """
@@ -184,7 +185,7 @@ for i in xrange(total_steps):
         row.append("No")
     
     #Renormalize if the norm is drifting.
-    reNormalize = not allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
+    reNormalize = not sp.allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
     reNorm.append(reNormalize)
     if reNormalize:
         row.append("True")
@@ -216,10 +217,10 @@ for i in xrange(total_steps):
     row.append("%.3g" % Sy_3[i].real)
     row.append("%.3g" % Sz_3[i].real)
     
-    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
-    E_v = -trace(dot(rho_34, la.logm(rho_34)/log(2))) #The von Neumann entropy.
+#    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
+#    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
     
-    row.append("%.9g" % E_v.real)
+#    row.append("%.9g" % E_v.real)
     
     m = 0   #x-Magnetization
     for n in xrange(1, N + 1):
@@ -239,7 +240,7 @@ for i in xrange(total_steps):
 #        loaded = False
 #        print 'Starting real time evolution!'
     
-    row.append(str(1.j * conj(step)))
+    row.append(str(1.j * sp.conj(step)))
     
     """
     Carry out next step!
@@ -258,7 +259,7 @@ for i in xrange(total_steps):
         print "\t".join(row)
         s.take_step_RK4(step)
     
-    t += 1.j * conj(step)
+    t += 1.j * sp.conj(step)
 
 """
 Simple plots of the results.
