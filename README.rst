@@ -65,19 +65,21 @@ Essentially, the user defines a spin chain Hilbert space
 and a nearest-neighbour Hamiltonian and then carries out a series of small 
 time steps (numerically integrating the "Schrödinger equation" for the MPS parameters)::
 
-    sim = EvoMPS_TDVP_Uniform(bond_dim, local_hilb_dim)
+    sim = EvoMPS_TDVP_Uniform(bond_dim, local_hilb_dim, my_hamiltonian)
     
-    sim.h_nn = my_hamiltonian
-    
-    for i in range(max_steps).
+    for i in range(max_steps):
         sim.update()
         
         my_exp_val = sim.expect_1s(my_op)
         
-        sim.take_step(dtau)
+        sim.take_step_RK4(dtau)
 
-Operators, including the Hamiltonian, are defined as python callables (functions)
-like this::
+Operators, including the Hamiltonian, are defined as arrays like this::
+
+    pauli_z = numpy.array([[1, 0],
+                           [0, -1]])
+                     
+or as python callables (functions) like this::
 
     def pauli_z(s, t):
         if s == t:
@@ -85,12 +87,8 @@ like this::
         else:
             return 0
 
-The content of the function is up to the user. Using a Numpy ndarray is also easy::
-
-    def pauli_z(s, t):
-        return pauli_z_matrix[s, t]
-
-Calculating expectation values or other quantities can be done after each step as desired.
+Calculating expectation values or other quantities can be done after each step 
+as desired.
 
 Switching between imaginary time evolution (for finding the ground state)
 and real time evolution is as easy as multiplying the time step size by a factor of i!
