@@ -39,6 +39,7 @@ nonuniformities on infinite chains was developed by:
 * Frank Verstraete
 * Jutho Haegeman
 
+and is detailed in arXiv:1207.0691 <http://arxiv.org/abs/1207.0691>.
 For details, see doc/implementation_details.pdf and the source code itself,
 which I endeavour to annotate thoroughly.
 
