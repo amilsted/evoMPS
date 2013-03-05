@@ -4,9 +4,6 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
-TODO:
-    - Find a way to randomize the starting state without losing rank.
-
 """
 import scipy as sp
 import scipy.linalg as la
@@ -19,17 +16,13 @@ class EvoMPS_MPS_Generic(object):
         """Creates a new EvoMPS_MPS_Generic object.
         
         This class implements basic operations on a generic MPS with
-        open boundary conditions in a finite setting.
+        open boundary conditions on a finite chain.
         
-        Bond dimensions will be adjusted where they are too high to be useful.
+        Performs self.correct_bond_dimension().
         
-        Sites are numbered 1 to N. The following objects are created:
-            .A : ndarray
-                 Parameter matrices indexed by site (entries 1 to N)
-            .l : ndarray
-                 Left ancilla 'density matrices' (entries 0 to N)
-            .r : ndarray
-                 Right ancilla 'density matrices' (entries 0 to N)
+        Sites are numbered 1 to N.
+        self.A[n] is the parameter tensor for site n
+        with shape == (q[n], D[n - 1], D[n]).
         
         Parameters
         ----------
@@ -85,7 +78,7 @@ class EvoMPS_MPS_Generic(object):
         sp.fill_diagonal(self.r[self.N], 1.)        
     
     def initialize_state(self):
-        """Initializes the state to full rank with norm 1.
+        """Initializes the state to a hard-coded full rank state with norm 1.
         """
         for n in xrange(1, self.N + 1):
             self.A[n].fill(0)
@@ -116,7 +109,12 @@ class EvoMPS_MPS_Generic(object):
     
     
     def randomize(self, do_update=True):
-        """Set A's randomly
+        """Randomizes the parameter tensors self.A.
+        
+        Parameters
+        ----------
+        do_update : bool (True)
+            Whether to perform self.update() after randomizing.
         """
         for n in xrange(1, self.N + 1):
             self.A[n] = ((sp.rand(*self.A[n].shape) - 0.5) 
@@ -128,9 +126,13 @@ class EvoMPS_MPS_Generic(object):
 
         
     def add_noise(self, fac, do_update=True):
-        """Adds some random noise of a given order to the state matrices A
-        This can be used to determine the influence of numerical innaccuracies
-        on quantities such as observables.
+        """Adds some random (white) noise of a given magnitude to the parameter 
+        tensors A.
+        
+        Parameters
+        ----------
+        fac : number
+            A factor determining the amplitude of the random noise.
         """
         for n in xrange(1, self.N + 1):
             self.A[n].real += (sp.rand(*self.A[n].shape) - 0.5) * 2 * fac
@@ -140,6 +142,14 @@ class EvoMPS_MPS_Generic(object):
             self.update()
         
     def correct_bond_dimension(self):
+        """Reduces bond dimensions to the maximum physically useful values.
+        
+        Bond dimensions will be adjusted where they are too high to be useful
+        (when they would be higher than the corresponding maximum
+        Schmidt ranks). The maximum value for D[n] is the minimum of the 
+        dimensions of the two partial Hilbert spaces corresponding to a cut 
+        between sites n and n + 1.
+        """
         self.D[0] = 1
         self.D[self.N] = 1
 
@@ -161,6 +171,18 @@ class EvoMPS_MPS_Generic(object):
                 
     
     def update(self, restore_RCF=True):
+        """Updates secondary quantities to reflect the state parameters self.A.
+        
+        Must be used after changing the parameters self.A before calculating
+        physical quantities, such as expectation values.
+        
+        Also (optionally) restores the right canonical form.
+        
+        Parameters
+        ----------
+        restore_RCF : bool (True)
+            Whether to restore right canonical form.
+        """
         if restore_RCF:
             self.restore_RCF()
         else:
@@ -170,7 +192,8 @@ class EvoMPS_MPS_Generic(object):
                 
     
     def calc_l(self, n_low=-1, n_high=-1):
-        """Updates the l matrices using the current state.
+        """Updates the l matrices to reflect the current state parameters self.A.
+        
         Implements step 5 of the TDVP algorithm or, equivalently, eqn. (41).
         (arXiv:1103.0936v2 [cond-mat.str-el])
         """
@@ -182,7 +205,8 @@ class EvoMPS_MPS_Generic(object):
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
     
     def calc_r(self, n_low=-1, n_high=-1):
-        """Updates the r matrices using the current state.
+        """Updates the r matrices using the current state parameters self.A.
+        
         Implements step 5 of the TDVP algorithm or, equivalently, eqn. (41).
         (arXiv:1103.0936v2 [cond-mat.str-el])
         """
@@ -198,17 +222,18 @@ class EvoMPS_MPS_Generic(object):
         
         We change A[N] only, which is a column vector because D[N] = 1, using a factor
         equivalent to an almost-gauge transformation where all G's are the identity, except
-        G[N], which represents the factor. Almost means G[0] =/= G[N] (the norm is allowed to change).
+        G[N], which represents the factor. "Almost" means G[0] =/= G[N] (the norm is allowed to change).
         
         Requires that l is up to date. 
         
-        Note that this generally breaks ON_R, because this changes r[N - 1] by the same factor.
+        Note that this generally breaks canonical form
+        because we change r[N - 1] by the same factor.
         
         By default, this also updates the r matrices to reflect the change in A[N].
         
         Parameters
         ----------
-        update_r : bool
+        update_r : bool (True)
             Whether to call update all the r matrices to reflect the change.
         """
         norm = self.l[self.N][0, 0].real
@@ -222,7 +247,7 @@ class EvoMPS_MPS_Generic(object):
             for n in xrange(self.N):
                 self.r[n] *= 1 / norm    
     
-    def restore_RCF(self, start=-1, update_l=True, normalize=True, diag_l=True):
+    def restore_RCF(self, update_l=True, normalize=True, diag_l=True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
@@ -252,21 +277,16 @@ class EvoMPS_MPS_Generic(object):
         
         By default, the l's are updated even if diag_l=False.
         
-        FIXME: Currently, "start" only affects the ON_R stage!
-        
         Parameters
         ----------
-        start : int
-            The rightmost site to start from (defaults to N)
         update_l : bool
             Whether to call calc_l() after completion (defaults to True)
         normalize : bool
-            Whether to also attempt to enforce the condition for A[1], which normalizes the state.
+            Whether to also attempt to normalize the state.
         diag_l : bool
             Whether to put l in diagonal form (defaults to True)
         """   
-        if start < 1:
-            start = self.N
+        start = self.N
         
         G_n_i = sp.eye(self.D[start], dtype=self.typ) #This is actually just the number 1
         for n in xrange(start, 1, -1):
@@ -317,17 +337,27 @@ class EvoMPS_MPS_Generic(object):
                     r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
                         print "Sanity Fail in restore_RCF!: r_%u is bad" % n
-                    
-            return True #FIXME: This OK?
         elif update_l:
-            res = self.calc_l()
-            return res
-        else:
-            return True
+            self.calc_l()
+            
     
     def check_RCF(self):
         """Tests for right canonical form.
+        
         Uses the criteria listed in sub-section 3.1, theorem 1 of arXiv:quant-ph/0608197v2.
+        
+        This is a consistency check mainly intended for debugging purposes.
+        
+        FIXME: The tolerances appear to be too tight!
+        
+        Returns
+        -------
+        (rnsOK, ls_trOK, ls_pos, ls_diag, normOK) : tuple of bool
+            rnsOK: Right orthonormalization is fullfilled (self.r[n] = eye)
+            ls_trOK: all self.l[n] have trace 1
+            ls_pos: all self.l[n] are positive-definite
+            ls_diag: all self.l[n] are diagonal
+            normOK: the state it normalized
         """
         rnsOK = True
         ls_trOK = True
@@ -352,14 +382,19 @@ class EvoMPS_MPS_Generic(object):
         The operator should be a q[n] x q[n] matrix or generating function 
         such that op[s, t] or op(s, t) equals <s|op|t>.
         
-        Assumes that the state is normalized.
+        The state must be up-to-date -- see self.update()!
         
         Parameters
         ----------
-        o : ndarray or callable
+        op : ndarray or callable
             The operator.
         n : int
-            The site number.
+            The site number (1 <= n <= N).
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
         """        
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
@@ -375,12 +410,19 @@ class EvoMPS_MPS_Generic(object):
         such that op[s, t, u, v] = <st|op|uv> or a function of the form 
         op(s, t, u, v) = <st|op|uv>.
         
+        The state must be up-to-date -- see self.update()!
+        
         Parameters
         ----------
-        o : ndarray or callable
+        op : ndarray or callable
             The operator array or function.
         n : int
             The leftmost site number (operator acts on n, n + 1).
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
         """
         A = self.A[n]
         Ap1 = self.A[n + 1]
@@ -394,25 +436,33 @@ class EvoMPS_MPS_Generic(object):
         res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], C, AA)
         return m.adot(self.l[n - 1], res)
         
-    def expect_1s_cor(self, op1, op2, n1, n2):
-        """Computes the correlation of two single site operators acting on two different sites.
+    def expect_1s_1s(self, op1, op2, n1, n2):
+        """Computes the expectation value of two single site operators acting 
+        on two different sites.
+        
+        The result is < op1 op2 >.
         
         See expect_1s().
         
-        n1 must be smaller than n2.
+        Requires n1 < n2.
         
-        Assumes that the state is normalized.
+        The state must be up-to-date -- see self.update()!
         
         Parameters
         ----------
-        op1 : ndarray
+        op1 : ndarray or callable
             The first operator, acting on the first site.
-        op2 : ndarray
+        op2 : ndarray or callable
             The second operator, acting on the second site.
         n1 : int
             The site number of the first site.
         n2 : int
             The site number of the second site (must be > n1).
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
         """        
         if callable(op1):
             op1 = sp.vectorize(op1, otypes=[sp.complex128])
@@ -434,10 +484,20 @@ class EvoMPS_MPS_Generic(object):
     def density_1s(self, n):
         """Returns a reduced density matrix for a single site.
         
+        The site number basis is used: rho[s, t] 
+        with 0 <= s, t < q[n].
+        
+        The state must be up-to-date -- see self.update()!
+        
         Parameters
         ----------
         n1 : int
             The site number.
+            
+        Returns
+        -------
+        rho : ndarray
+            Reduced density matrix in the number basis.
         """
         rho = sp.empty((self.q[n], self.q[n]), dtype=sp.complex128)
                     
@@ -450,14 +510,24 @@ class EvoMPS_MPS_Generic(object):
         return rho
         
     def density_2s(self, n1, n2):
-        """Returns a reduced density matrix for a pair of sites.
+        """Returns a reduced density matrix for a pair of (seperated) sites.
+        
+        The site number basis is used: rho[s * q[n1] + u, t * q[n1] + v]
+        with 0 <= s, t < q[n1] and 0 <= u, v < q[n2].
+        
+        The state must be up-to-date -- see self.update()!
         
         Parameters
         ----------
         n1 : int
             The site number of the first site.
         n2 : int
-            The site number of the second site (must be > n1).        
+            The site number of the second site (must be > n1).
+            
+        Returns
+        -------
+        rho : ndarray
+            Reduced density matrix in the number basis.
         """
         rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
         r_n2 = sp.empty_like(self.r[n2 - 1])
@@ -479,7 +549,26 @@ class EvoMPS_MPS_Generic(object):
         return rho
     
     def save_state(self, file):
+        """Saves the parameter tensors self.A to a file. 
+        
+        Uses numpy binary format.
+        
+        Parameters
+        ----------
+        file ; path or file
+            The file to save the state into.
+        """
         sp.save(file, self.A)
         
     def load_state(self, file):
+        """Loads the parameter tensors self.A from a file.
+        
+        The saved state must contain the right number of tensors with
+        the correct shape corresponding to self.N, self.D and self.q.
+        
+        Parameters
+        ----------
+        file ; path or file
+            The file to load the state from.
+        """
         self.A = sp.load(file)
