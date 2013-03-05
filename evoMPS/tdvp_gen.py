@@ -19,25 +19,33 @@ from mps_gen import EvoMPS_MPS_Generic
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
     def __init__(self, N, D, q, h_nn):
-        """Creates a new TDVP_MPS object.
+        """Creates a new EvoMPS_TDVP_Generic object.
         
-        The TDVP_MPS class implements the time-dependent variational principle 
-        for matrix product states for systems with open boundary conditions and
-        a Hamiltonian consisting of a sum over nearest-neighbour interaction terms.
+        This class implements the time-dependent variational principle (TDVP) for
+        matrix product states (MPS) of a finite spin chain with open boundary
+        conditions.
         
-        Bond dimensions will be adjusted where they are too high to be useful.
+        It is derived from EvoMPS_MPS_Generic, which implements basic operations
+        on the state, adding the ability to integrate the TDVP flow equations
+        given a nearest-neighbour Hamiltonian.
         
-        Array indices correspond to site numbers 1 to N.
+        Performs EvoMPS_MPS_Generic.__init__().
+        
+        Sites are numbered 1 to N.
+        self.A[n] is the parameter tensor for site n
+        with shape == (q[n], D[n - 1], D[n]).
         
         Parameters
         ----------
         N : int
             The number of lattice sites.
         D : ndarray
-            A 1-d array, length N + 1, of integers indicating the desired bond dimensions.
+            A 1d array, length N + 1, of integers indicating the desired 
+            bond dimensions.
         q : ndarray
-            A 1-d array, length N + 1, of integers indicating the 
-            dimension of the hilbert space for each site (first entry is ignored).
+            A 1d array, length N + 1, of integers indicating the 
+            dimension of the hilbert space for each site. 
+            Entry 0 is ignored (there is no site 0).
         h_nn : array or callable
             Hamiltonian term for each site ham(n, s, t, u, v) or 
             ham[n][s, t, u, v] for site n.
@@ -72,13 +80,21 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     
     
     def calc_C(self, n_low=-1, n_high=-1):
-        """Generates the C matrices used to calculate the K's and ultimately the B's
+        """Generates the C tensors used to calculate the K's and ultimately the B's.
+        
+        This is called automatically by self.update().
+        
+        C[n] contains a contraction of the Hamiltonian self.h_nn with the parameter
+        tensors A[n] and A[n + 1] over the local basis indices.
+        
+        This is prerequisite for calculating the tangent vector parameters B,
+        which optimally approximate the exact time evolution.
         
         These are to be used on one side of the super-operator when applying the
         nearest-neighbour Hamiltonian, similarly to C in eqn. (44) of 
         arXiv:1103.0936v2 [cond-mat.str-el], except being for the non-norm-preserving case.
 
-        Makes use only of the nearest-neighbour hamiltonian, and of the A's.
+        Makes use only of the nearest-neighbour Hamiltonian, and of the A's.
         
         C[n] depends on A[n] and A[n + 1].
         
@@ -104,21 +120,20 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
          
     
     def calc_K(self, n_low=-1, n_high=-1):
-        """Generates the K matrices used to calculate the B's
+        """Generates the K matrices used to calculate the B's.
+        
+        This is called automatically by self.update().
+        
+        K[n] is contains the action of the Hamiltonian on sites n to N.
         
         K[n] is recursively defined. It depends on C[m] and A[m] for all m >= n.
         
         It directly depends on A[n], A[n + 1], r[n], r[n + 1], C[n] and K[n + 1].
         
         This is equivalent to K on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el], except 
-        that it is for the non-gauge-preserving case, and includes a single-site
-        Hamiltonian term.
+        that it is for the non-norm-preserving case.
         
         K[1] is, assuming a normalized state, the expectation value H of Ĥ.
-        
-        Instead of an explicit single-site term here, one could also include the 
-        single-site Hamiltonian in the nearest-neighbour term, which may be more 
-        efficient.
         """
         if n_low < 1:
             n_low = 1
@@ -138,12 +153,25 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.H_expect = sp.asscalar(self.K[1])
     
     def update(self, restore_RCF=True):
+        """Updates secondary quantities to reflect the state parameters self.A.
+        
+        Must be used after taking a step or otherwise changing the 
+        parameters self.A before calculating
+        physical quantities or taking the next step.
+        
+        Also (optionally) restores the right canonical form.
+        
+        Parameters
+        ----------
+        restore_RCF : bool (True)
+            Whether to restore right canonical form.
+        """
         super(EvoMPS_TDVP_Generic, self).update(restore_RCF)
         self.calc_C()
         self.calc_K()
         
     def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
-        """Calculate the parameter matrix x* giving the desired B.
+        """Calculates the matrix x* that results in the TDVP tangent vector B.
         
         This is equivalent to eqn. (49) of arXiv:1103.0936v2 [cond-mat.str-el] except 
         that, here, norm-preservation is not enforced, such that the optimal 
@@ -192,15 +220,26 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         return x
         
     def calc_B(self, n, set_eta=True):
-        """Generates the B[n] tangent vector corresponding to physical evolution of the state.
+        """Generates the TDVP tangent vector parameters for a single site B[n].
+        
+        A TDVP time step is defined as: A[n] -= dtau * B[n]
+        where dtau is an infinitesimal imaginary time step.
         
         In other words, this returns B[n][x*] (equiv. eqn. (47) of 
         arXiv:1103.0936v2 [cond-mat.str-el]) 
         with x* the parameter matrices satisfying the Euler-Lagrange equations
         as closely as possible.
+        
+        Returns
+        -------
+            B_n : ndarray or None
+                The TDVP tangent vector parameters for site n or None
+                if none is defined.
         """
         if self.q[n] * self.D[n] - self.D[n - 1] > 0:
-            l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
+            l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
+                                                                   self.r[n], 
+                                                                   self.sanity_checks)
             
             Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
             
@@ -215,30 +254,20 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return B
         else:
             return None
-        
-    def calc_l_r_roots(self, n):
-        """Returns the matrix square roots (and inverses) needed to calculate B.
-        
-        Hermiticity of l[n] and r[n] is used to speed this up.
-        If an exception occurs here, it is probably because these matrices
-        are not longer Hermitian (enough).
-        """
-        l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i = tm.calc_l_r_roots(self.l[n - 1], 
-                                                               self.r[n], 
-                                                            self.sanity_checks)
 
-        
-        return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
     
-    def take_step(self, dtau): #simple, forward Euler integration     
+    def take_step(self, dtau):   
         """Performs a complete forward-Euler step of imaginary time dtau.
+        
+        The operation is A[n] -= dtau * B[n] with B[n] form self.calc_B(n).
         
         If dtau is itself imaginary, real-time evolution results.
         
-        Here, the A's are updated as the sites are visited. Since we want all
-        tangent vectors to be generated using the old state, we must delay
-        updating each A[n] until we are *two* steps away (due to the direct
-        dependency on A[n - 1] in calc_x).
+        We avoid storing all the B[n] at once by updating self.A[n] as
+        we move along the chain. Dependencies must be carefully considered.
+        Since we assume a nearest-neighbour Hamiltonian, we must not
+        alter A[n - 1] before calculating B[n]. Hence we must store
+        two B[n] tensors at any one time.
         
         The dependencies on l, r, C and K are not a problem because we store
         all these matrices separately and do not update them at all during take_step().
@@ -263,230 +292,18 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             B_prev = B
             
         return eta_tot
-
-    def take_step_implicit(self, dtau, midpoint=True):
-        """A backward (implicit) integration step.
         
-        Based on p. 8-10 of arXiv:1103.0936v2 [cond-mat.str-el].
+    def take_step_RK4(self, dtau):
+        """Take a step using the fourth-order explicit Runge-Kutta method.
         
-        NOTE: Not currently working as well as expected. Iterative solution of 
-              implicit equation stops converging at some point...
-        
-        This is made trickier by the gauge freedom. We solve the implicit equation iteratively, aligning the tangent
-        vectors along the gauge orbits for each step to obtain the physically relevant difference dA. The gauge-alignment is done
-        by solving a matrix equation.
-        
-        The iteration seems to be difficult. At the moment, iteration over the whole chain is combined with iteration over a single
-        site (a single A[n]). Iteration over the chain is needed because the evolution of a single site depends on the state of the
-        whole chain. The algorithm runs through the chain from N to 1, iterating a few times over each site (depending on how many
-        chain iterations we have done, since iterating over a single site becomes more fruitful as the rest of the chain stabilizes).
-        
-        In running_update mode, which is likely the most sensible choice, the current midpoint guess is updated after visiting each
-        site. I.e. The trial backwards step at site n is based on the updates that were made to site n + 1, n + 2 during the current chain
-        iteration.
+        This requires more memory than a simple forward Euler step. 
+        It is, however, far more accurate with a per-step error of
+        order dtau**4.
         
         Parameters
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
-        midpoint : bool
-            Whether to use approximately time-symmetric midpoint integration,
-            or just a backward-Euler step.
-        """        
-        #---------------------------
-        #Hard-coded params:
-        debug = True
-        dbg_bstep = False
-        safe_mode = True
-        
-        tol = sp.finfo(sp.complex128).eps * 3
-        max_iter = 10
-        itr_switch_mode = 10
-        #---------------------------
-        
-        if midpoint:
-            dtau = dtau / 2
-        
-        self.restore_RCF()
-
-        #Take a copy of the current state
-        A0 = sp.empty_like(self.A)
-        for n in xrange(1, self.N + 1):
-            A0[n] = self.A[n].copy()
-        
-        #Take initial forward-Euler step
-        self.take_step(dtau)     
-
-        itr = 0
-        delta = 1
-        delta_prev = 0                
-        final_check = False
-
-        while delta > tol * (self.N - 1) and itr < max_iter or final_check:
-            print "OUTER"
-            running_update = itr < itr_switch_mode
-            
-            A_np1 = A0[self.N]            
-            
-            #Prepare for next calculation of B from the new A
-            self.restore_RCF() #updates l and r
-            
-            if running_update:
-                self.calc_C() #we really do need all of these, since B directly uses C[n-1]
-                self.calc_K()            
-            
-            g0_n = sp.eye(self.D[self.N - 1], dtype=self.typ)       #g0_n is the gauge transform matrix needed to solve the implicit equation
-            
-            #Loop through the chain, optimizing the individual A's
-            delta = 0
-            for n in reversed(xrange(1, self.N)): #We start at N - 1, since the right vector can't be altered here.
-                print "SWEEP"
-                if not running_update: #save new A[n + 1] and replace with old version for building B
-                    A_np1_new = self.A[n + 1].copy()
-                    self.A[n + 1] = A_np1  
-                    A_np1 = self.A[n].copy()
-                    max_itr_n = 1 #wait until the next run-through of the chain to change A[n] again
-                else:
-                    max_itr_n = itr + 1 #do more iterations here as the outer loop progresses
-                
-                delta_n = 1
-                itr_n = 0
-                while True:
-                    print "INNER"
-                    #Find transformation to gauge-align A0 with the backwards-obtained A.. is this enough?
-                    M = m.mmul(A0[n][0], g0_n, self.r[n], m.H(self.A[n][0]))
-                    for s in xrange(1, self.q[n]):
-                        M += m.mmul(A0[n][s], g0_n, self.r[n], m.H(self.A[n][s]))
-                    
-                    g0_nm1 = la.solve(self.r[n - 1], M, sym_pos=True, overwrite_b=True)
-                    
-                    if not (delta_n > tol and itr_n < max_itr_n):
-                        break
-                    
-                    B = self.calc_B(n)
-                    
-                    if B is None:
-                        delta_n = 0
-                        fnorm = 0
-                        break
-                    
-                    g0_nm1_inv = la.inv(g0_nm1) #sadly, we need the inverse too...    
-                    r_dA = sp.zeros_like(self.r[n - 1])
-                    dA = sp.empty_like(self.A[n])
-                    sqsum = 0
-                    for s in xrange(self.q[n]):
-                        dA[s] = m.mmul(g0_nm1_inv, A0[n][s], g0_n)
-                        dA[s] -= self.A[n][s] 
-                        dA[s] -= dtau * B[s]
-                        if not final_check:
-                            self.A[n][s] += dA[s]
-    
-                    for s in xrange(self.q[n]):
-                        r_dA += m.mmul(dA[s], self.r[n], m.H(dA[s]))
-                        sqsum += sum(dA[s]**2)
-                    
-                    fnorm = sp.sqrt(sqsum)
-                    
-                    delta_n = sp.sqrt(sp.trace(m.mmul(self.l[n - 1], r_dA)))
-                    
-                    if running_update: #Since we want to use the current A[n] and A[n + 1], we need this:
-                        if safe_mode:
-                            self.restore_RCF()
-                            self.calc_C()
-                            self.calc_K()
-                        else:
-                            self.restore_RCF(start=n) #will also renormalize
-                            self.calc_C(n_low=n-1, n_high=n)
-                            self.calc_K(n_low=n, n_high=n+1)
-                                        
-                    itr_n += 1
-                    
-                    if final_check:
-                        break
-                    
-                if not running_update: #save new A[n + 1] and replace with old version for building B
-                    self.A[n + 1] = A_np1_new
-                
-                if debug:
-                    print "delta_%d: %g, (%d iterations)" % (n, delta_n.real, itr_n) + ", fnorm = " + str(fnorm)
-                delta += delta_n
-                
-                if safe_mode:
-                    self.calc_r()
-                else:
-                    self.calc_r(n - 2, n - 1) #We only need these for the next step.
-                
-                g0_n = g0_nm1                
-                            
-            itr += 1
-            if debug:
-                print "delta: %g  delta delta: %g (%d iterations)" % (delta.real, (delta - delta_prev).real, itr)
-            delta_prev = delta
-            
-            if debug:
-                if final_check:
-                    break
-                elif delta <= tol * (self.N - 1) or itr >= max_iter:
-                    print "Final check to get final delta:"
-                    final_check = True
-        
-        #Test backward step!        
-        if dbg_bstep:
-            Anew = sp.empty_like(self.A)
-            for n in xrange(1, self.N + 1):
-                Anew[n] = self.A[n].copy()
-            
-#            self.calc_l()
-#            self.simple_renorm()
-#            self.restore_RCF()
-            self.calc_C()
-            self.calc_K()        
-            self.take_step(-dtau)
-            self.restore_RCF()
-            
-            delta2 = 0            
-            for n in reversed(xrange(1, self.N + 1)):
-                #print n
-                dA = A0[n] - self.A[n]
-                #Surely this dA should also preserve the gauge choice, since both A's are in ON_R...                
-                #print dA/A0[n]
-                r_dA = sp.zeros_like(self.r[n - 1])
-                sqsum = 0
-                for s in xrange(self.q[n]):
-                    r_dA += m.mmul(dA[s], self.r[n], m.H(dA[s]))
-                    sqsum += sum(dA[s]**2)
-                delta_n = sp.sqrt(sp.trace(m.mmul(self.l[n - 1], r_dA)))                
-                delta2 += delta_n
-                if debug:
-                    print "A[%d] OK?: " % n + str(sp.allclose(dA, 0)) + ", delta = " + str(delta_n) + ", fnorm = " + str(sp.sqrt(sqsum))
-                #print delta_n
-            if debug:
-                print "Total delta: " + str(delta2)
-                
-            for n in xrange(1, self.N + 1):
-                self.A[n] = Anew[n]
-        else:
-            delta2 = 0
-            
-        if midpoint:
-            #Take a final step from the midpoint
-            #self.restore_RCF() #updates l and r            
-            self.calc_l()
-            self.simple_renorm()
-            self.calc_C()
-            self.calc_K()
-            self.take_step(dtau)
-            
-        return itr, delta, delta2
-        
-    def take_step_RK4(self, dtau):
-        """Take a step using the fourth-order explicit Runge-Kutta method.
-        
-        This requires more memory than a simple forward Euler step, and also
-        more than a backward Euler step. It is, however, far more accurate
-        and stable than forward Euler, and much faster than the backward
-        Euler method, since there is no need to iteratively solve an implicit
-        equation.
         """
         def upd():
             self.calc_l()
