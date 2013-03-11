@@ -47,7 +47,7 @@ evoMPS is implemented in Python using Scipy <http://www.scipy.org> and
 benefits from optimized linear algebra libraries being installed (BLAS and LAPACK).
 For more details, see INSTALL.
 
-evoMPS is being developed as part of an MSc project by Ashley Milsted,
+evoMPS was originally developed as part of an MSc project by Ashley Milsted,
 supervised by Tobias Osborne at the Institute for Theoretical Physics of
 Leibniz Universität Hannover <http://www.itp.uni-hannover.de/>.
 
