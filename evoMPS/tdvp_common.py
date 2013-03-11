@@ -15,16 +15,22 @@ import matmul as mm
 import nullspace as ns   
 
 def eps_l_noop(x, A1, A2):
-    """Implements the left epsilon map (result is conjugated)
+    """Implements the left epsilon map.
+    
+    For example, in the generic case: l[n] = eps_l_noop(l[n - 1], A[n], A[n])
+    
+    The input and output matrices are "column vectors" or "kets" and we
+    implement multiplication from the left as E.conj().T.dot(x.ravel()).
+    In other words <x|E = <eps_l_noop(x, A, A)|.
 
     Parameters
     ----------
     x : ndarray
-        The argument matrix. For example, using l[n - 1] gives a result l[n]
+        The argument matrix.
     A1: ndarray
-        The first MPS tensor (will be conjugated) for the current site.
+        The MPS ket tensor for the current site.
     A2: ndarray
-        The second MPS tensor for the current site.    
+        The MPS bra tensor for the current site.    
 
     Returns
     -------
@@ -37,12 +43,57 @@ def eps_l_noop(x, A1, A2):
     return out
     
 def eps_l_noop_inplace(x, A1, A2, out):
+    """Implements the left epsilon map for a pre-exisiting output matrix.
+    
+    The output must have shape (A1.shape[2], A2.shape[2]).
+    
+    See eps_l_noop().
+    
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    A1: ndarray
+        The MPS ket tensor for the current site.
+    A2: ndarray
+        The MPS bra tensor for the current site.
+    out: ndarray
+        The output matrix (must have correct dimensions).
+        
+    Returns
+    -------
+    res : ndarray
+        The resulting matrix.
+    """
     out.fill(0)
     for s in xrange(A1.shape[0]):
         out += A1[s].conj().T.dot(x.dot(A2[s]))
     return out
         
 def eps_l_op_1s(x, A1, A2, op):
+    """Implements the left epsilon map with a non-trivial single-site operator.
+    
+    For example the expectation value of a single-site operator <op> is equal 
+    to adot(eps_l_op_1s(l[n - 1], A[n], A[n], op), r[n]).
+    
+    See eps_l_noop().
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    A1: ndarray
+        The MPS ket tensor for the current site.
+    A2: ndarray
+        The MPS bra tensor for the current site.
+    op: ndarray
+        Single-site operator matrix elements op[s, t] = <s|op|t>
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         for t in xrange(A1.shape[0]):
@@ -53,15 +104,17 @@ def eps_l_op_1s(x, A1, A2, op):
     
 def eps_r_noop(x, A1, A2):
     """Implements the right epsilon map
+    
+    For example 
 
     Parameters
     ----------
     x : ndarray
         The argument matrix. For example, using l[n - 1] gives a result l[n]
     A1: ndarray
-        The first MPS tensor (will be conjugated) for the current site.
+        The MPS ket tensor for the current site.
     A2: ndarray
-        The second MPS tensor for the current site.    
+        The MPS bra tensor for the current site. 
 
     Returns
     -------
@@ -74,12 +127,57 @@ def eps_r_noop(x, A1, A2):
     return out
     
 def eps_r_noop_inplace(x, A1, A2, out):
+    """Implements the right epsilon map for a pre-exisiting output matrix.
+    
+    The output must have shape (A1.shape[1], A2.shape[1]).
+    
+    See eps_r_noop().
+    
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    A1: ndarray
+        The MPS ket tensor for the current site.
+    A2: ndarray
+        The MPS bra tensor for the current site. 
+    out: ndarray
+        The output matrix (must have correct dimensions).
+        
+    Returns
+    -------
+    res : ndarray
+        The resulting matrix.
+    """
     out.fill(0)
     for s in xrange(A1.shape[0]):
         out += A1[s].dot(x.dot(A2[s].conj().T))
     return out
     
 def eps_r_op_1s(x, A1, A2, op):
+    """Implements the right epsilon map with a non-trivial single-site operator.
+    
+    For example the expectation value of a single-site operator <op> is equal 
+    to adot(l[n - 1], eps_r_op_1s(r[n], A[n], A[n], op)).
+    
+    See eps_r_noop().
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    A1: ndarray
+        The MPS ket tensor for the current site.
+    A2: ndarray
+        The MPS bra tensor for the current site.
+    op: ndarray
+        Single-site operator matrix elements op[s, t] = <s|op|t>
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     out = np.zeros((A1.shape[1], A1.shape[1]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         for t in xrange(A1.shape[0]):
@@ -89,6 +187,31 @@ def eps_r_op_1s(x, A1, A2, op):
     return out
     
 def eps_r_op_2s_A(x, A1, A2, A3, A4, op):
+    """Implements the right epsilon map with a non-trivial nearest-neighbour operator.
+    
+    For example the expectation value of an operator <op> is equal 
+    to adot(l[n - 2], eps_r_op_2s_A(r[n], A[n], A[n], A[n], A[n], op)).
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    A1: ndarray
+        The MPS ket tensor for the first site.
+    A2: ndarray
+        The MPS ket tensor for the second site.
+    A3: ndarray
+        The MPS bra tensor for the first site.
+    A4: ndarray
+        The MPS bra tensor for the second site.
+    op: ndarray
+        Nearest-neighbour operator matrix elements op[s, t, u, v] = <st|op|uv>
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     res = np.zeros((A1.shape[1], A3.shape[1]), dtype=A1.dtype)
     zeros = np.zeros
     for u in xrange(A3.shape[0]):
@@ -103,6 +226,30 @@ def eps_r_op_2s_A(x, A1, A2, A3, A4, op):
     return res
     
 def eps_r_op_2s_AA12(x, AA12, A3, A4, op):
+    """Implements the right epsilon map with a non-trivial nearest-neighbour operator.
+    
+    Uses a pre-multiplied tensor for the ket AA12[s, t] = A1[s].dot(A2[t]). 
+    
+    See eps_r_op_2s_A().
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    AA12: ndarray
+        The combined MPS ket tensor for the first and second sites.
+    A3: ndarray
+        The MPS bra tensor for the first site.
+    A4: ndarray
+        The MPS bra tensor for the second site.
+    op: ndarray
+        Nearest-neighbour operator matrix elements op[s, t, u, v] = <st|op|uv>
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     res = np.zeros((AA12.shape[2], A3.shape[1]), dtype=A3.dtype)
     zeros_like = np.zeros_like
     for u in xrange(A3.shape[0]):
@@ -117,6 +264,29 @@ def eps_r_op_2s_AA12(x, AA12, A3, A4, op):
     return res
     
 def eps_r_op_2s_AA_func_op(x, AA12, AA34, op):
+    """Implements the right epsilon map with a non-trivial nearest-neighbour operator.
+    
+    Uses pre-multiplied tensors for the ket AA12[s, t] = A1[s].dot(A2[t])
+    and bra AA34[s, t] = A3[s].dot(A4[t]).
+    
+    See eps_r_op_2s_A().
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    AA12: ndarray
+        The combined MPS ket tensor for the first and second sites.
+    AA34: ndarray
+        The combined MPS bra tensor for the first and second sites.
+    op: callable
+        Nearest-neighbour operator matrix element function op(s, t, u, v) = <st|op|uv>
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     res = np.zeros((AA12.shape[2], AA34.shape[2]), dtype=AA12.dtype)
     zeros_like = np.zeros_like
     for u in xrange(AA34.shape[0]):
@@ -131,6 +301,29 @@ def eps_r_op_2s_AA_func_op(x, AA12, AA34, op):
     return res
     
 def eps_r_op_2s_C12(x, C12, A3, A4):
+    """Implements the right epsilon map with a non-trivial nearest-neighbour operator.
+    
+    Uses pre-multiplied tensors for the ket and operator 
+    C12 = calc_C_mat_op_AA(op, AA12) with AA12[s, t] = A1[s].dot(A2[t]).
+    
+    See eps_r_op_2s_A().
+
+    Parameters
+    ----------
+    x : ndarray
+        The argument matrix.
+    C12: ndarray
+        The combined MPS ket tensor for the first and second sites.
+    A3: ndarray
+        The MPS bra tensor for the first site.
+    A4: ndarray
+        The MPS bra tensor for the second site.
+
+    Returns
+    ------
+    res : ndarray
+        The resulting matrix.
+    """
     res = np.zeros((C12.shape[2], A3.shape[1]), dtype=A3.dtype)
     for u in xrange(A3.shape[0]):
         for v in xrange(A4.shape[0]):
