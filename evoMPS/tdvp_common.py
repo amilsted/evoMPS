@@ -579,9 +579,10 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False):
         G_nm1_i = tu.conj().T
     except sp.linalg.LinAlgError:
         print "Restore_ON_R: Falling back to eigh()!"
-        e,Gh = la.eigh(M)
-        G_nm1 = mm.H(Gh.dot(np.diag(1/sp.sqrt(e) + 0.j)))
-        G_nm1_i = la.inv(G_nm1)
+        e, Gh = la.eigh(M)
+        e = mm.simple_diag_matrix(e).sqrt()
+        G_nm1 = e.inv().dot(mm.H(Gh))
+        G_nm1_i = e.dot_left(Gh)
 
     if G_n_i is None:
         G_n_i = G_nm1_i
