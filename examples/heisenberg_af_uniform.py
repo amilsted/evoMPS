@@ -118,7 +118,7 @@ grnd_fname_fmt = "heis_af_uni_D%d_q%d_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy"
 
 grnd_fname = grnd_fname_fmt % (D, q, Jx, Jy, Jz, tol_im, step)
 
-load_state = False
+load_state = True
 expand = False
 real_time = False
 
