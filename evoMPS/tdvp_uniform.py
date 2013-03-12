@@ -63,7 +63,7 @@ class Excite_H_Op:
         
 class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
-    def __init__(self, D, q, h_nn, h_nn_cptr=None, dtype=None):
+    def __init__(self, D, q, ham, ham_sites=None, dtype=None):
         """Implements the TDVP algorithm for uniform MPS.
         
         Parameters
@@ -80,18 +80,32 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             dtype : numpy dtype = None
                 Specifies the array type.
         """
+
+        self.ham = ham
+        if ham_sites is None:
+            if not callable(ham):
+                self.ham_sites = len(ham.shape) / 2
+            else:
+                self.ham_sites = 2
+        else:
+            self.ham_sites = ham_sites
+        
+        if not (self.ham_sites == 2 or self.ham_sites == 3):
+            raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
         
         super(EvoMPS_TDVP_Uniform, self).__init__(D, q, dtype=dtype)
-                
-        self.h_nn = h_nn
-        self.h_nn_cptr = h_nn_cptr
                         
         self.eta = 0
     
     def _init_arrays(self, D, q):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q)
         
-        self.C = np.zeros((q, q, D, D), dtype=self.typ, order=self.odr)
+        ham_shape = []
+        for i in xrange(self.ham_sites):
+            ham_shape.append(q)
+        C_shape = tuple(ham_shape + [D, D])        
+        
+        self.C = np.zeros(C_shape, dtype=self.typ, order=self.odr)
         
         self.K = np.ones_like(self.A[0])
         self.K_left = None
@@ -101,15 +115,23 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         algorithm by avoiding excess loops and python calls.
         """
         hv = np.vectorize(h_nn_func, otypes=[np.complex128])
-        self.h_nn = np.fromfunction(hv, (self.q, self.q, self.q, self.q))  
-
-    def calc_C(self):
-        if not tc is None and not self.h_nn_cptr is None and np.iscomplexobj(self.C):
-            self.C = tc.calc_C(self.AA, self.h_nn_cptr, self.C)
-        elif not callable(self.h_nn):
-            self.C[:] = tm.calc_C_mat_op_AA(self.h_nn, self.AA)
+        
+        if self.ham_sites == 2:
+            self.h_nn = np.fromfunction(hv, (self.q, self.q, self.q, self.q))
         else:
-            self.C[:] = tm.calc_C_func_op_AA(self.h_nn, self.AA)
+            self.h_nn = np.fromfunction(hv, tuple([self.q] * 6))
+    
+    def calc_C(self):
+        if callable(self.ham):
+            ham = np.vectorize(self.ham, otypes=[sp.complex128])
+            ham = np.fromfunction(ham, tuple(self.C.shape[:-2] * 2))
+        else:
+            ham = self.ham
+        if self.ham_sites == 2:
+            self.C[:] = tm.calc_C_mat_op_AA(ham, self.AA)
+        else:
+            self.AAA = tm.calc_AAA(self.A, self.A, self.A)
+            self.C[:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA)
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, 
                    pseudo=True, brute_check=False):
@@ -130,7 +152,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return out
         
     def calc_K(self):
-        Hr = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
+        if self.ham_sites == 2:
+            Hr = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
+        else:
+            Hr = tm.eps_r_op_3s_C123_AAA456(self.r, self.C, self.AAA)
         
         self.h = m.adot(self.l, Hr)
         
@@ -166,29 +191,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return self.K_left, h
         
-    def calc_x(self, l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i, Vsh, out=None):
-        if out is None:
-            out = np.zeros((self.D, (self.q - 1) * self.D), dtype=self.typ, 
-                           order=self.odr)
-        
-        tmp = np.zeros_like(out)
-        for s in xrange(self.q):
-            tmp2 = m.mmul(self.A[s], self.K)
-            for t in xrange(self.q):
-                tmp2 += m.mmul(self.C[s, t], self.r, m.H(self.A[t]))
-            tmp += m.mmul(tmp2, r_sqrt_i, Vsh[s])
-        out += l_sqrt.dot(tmp)
-        
-        tmp.fill(0)
-        for s in xrange(self.q):
-            tmp2.fill(0)
-            for t in xrange(self.q):
-                tmp2 += m.mmul(m.H(self.A[t]), self.l, self.C[t, s])
-            tmp += m.mmul(tmp2, r_sqrt, Vsh[s])
-        out += l_sqrt_i.dot(tmp)
-        
-        return out
-        
     def get_B_from_x(self, x, Vsh, l_sqrt_i, r_sqrt_i, out=None):
         if out is None:
             out = np.zeros_like(self.A)
@@ -206,9 +208,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
-        self.x = tm.calc_x(self.K, self.C, self.C, self.r, self.l, self.A, 
-                           self.A, self.A, self.l_sqrt, self.l_sqrt_i,
-                           self.r_sqrt, self.r_sqrt_i, self.Vsh)
+        if self.ham_sites == 2:
+            self.x = tm.calc_x(self.K, self.C, self.C, self.r, self.l, self.A, 
+                               self.A, self.A, self.l_sqrt, self.l_sqrt_i,
+                               self.r_sqrt, self.r_sqrt_i, self.Vsh)
+        else:
+            self.x = tm.calc_x_3s(self.K, self.C, self.C, self.C, self.r, self.r, 
+                                  self.l, self.l, self.A, self.A, self.A, 
+                                  self.A, self.A, self.l_sqrt, self.l_sqrt_i,
+                                  self.r_sqrt, self.r_sqrt_i, self.Vsh)
         
         if set_eta:
             self.eta = sp.sqrt(m.adot(self.x, self.x))

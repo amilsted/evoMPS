@@ -358,6 +358,14 @@ def eps_l_op_2s_AA12_C34(x, AA12, C34):
             res += AA12[u, v].conj().T.dot(x.dot(C34[u, v]))
     return res
 
+def eps_r_op_3s_C123_AAA456(x, C123, AAA456):
+    res = np.zeros((C123.shape[3], AAA456.shape[3]), dtype=AAA456.dtype)
+    for u in xrange(AAA456.shape[0]):
+        for v in xrange(AAA456.shape[1]):
+            for w in xrange(AAA456.shape[2]):
+                res += C123[u, v, w].dot(x.dot(AAA456[u, v, w].conj().T))
+    return res
+
 def calc_AA(A, Ap1):
     Dp1 = Ap1.shape[2]
     Dm1 = A.shape[1]
