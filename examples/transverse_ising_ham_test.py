@@ -80,8 +80,8 @@ if h == -J:
         E += 2 * abs(sp.sin(sp.pi * (2 * n + 1) / (2 * (2 * N + 1))))
     print "Exact energy = %.15g" % E
 
-ham = [get_ham(J, h)] * (N - 1) + [get_ham_end(J, h)]
-#ham = [get_ham_3s(J, h)] * (N - 2) + [get_ham_end_3s(J, h)]
+#ham = [get_ham(J, h)] * (N - 1) + [get_ham_end(J, h)]
+ham = [get_ham_3s(J, h)] * (N - 2) + [get_ham_end_3s(J, h)]
 
 """
 Now we are ready to create an instance of the evoMPS class.
