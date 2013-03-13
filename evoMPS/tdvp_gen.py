@@ -65,7 +65,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
             
         super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
-    
+        
     
     def _init_arrays(self):
         super(EvoMPS_TDVP_Generic, self)._init_arrays()
@@ -87,7 +87,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
         self.H_expect = 0
-    
+
     
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C tensors used to calculate the K's and ultimately the B's.
@@ -164,6 +164,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                               self.r[n + 2], self.A[n], self.A[n + 1], 
                                               self.A[n + 2],
                                               sanity_checks=self.sanity_checks)
+
                 self.h_expect[n] = ex
             else:
                 self.K[n].fill(0)
@@ -218,7 +219,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             lm2 = None
             Cm1 = None
             Am1 = None
-
             
         if n > 2:
             lm3 = self.l[n - 3]
