@@ -311,23 +311,46 @@ class EvoMPS_MPS_Generic(object):
                 r0 = tm.eps_r_noop(self.r[1], self.A[1], self.A[1])
                 if not sp.allclose(r0, 1, atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: r_0 is bad / norm failure"
-                
+
         if diag_l:
+            truncate = False
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
             for n in xrange(1, self.N):
-                self.l[n], G_nm1, G_nm1_i = tm.restore_RCF_l(self.A[n],
-                                                             self.l[n - 1],
-                                                             G_nm1,
-                                                             self.sanity_checks)
-            
+                self.l[n], G_nm1, G_nm1_i, new_D = tm.restore_RCF_l(self.A[n],
+                                                                    self.l[n - 1],
+                                                                    G_nm1,
+                                                                    self.sanity_checks)
+                if not new_D is None:
+                    truncate = True
+                    self.D[n] = new_D
+
             #Apply remaining G_Nm1 to A[N]
             n = self.N
-            for s in xrange(self.q[n]):                
+            for s in xrange(self.q[n]):
                 self.A[n][s] = m.mmul(G_nm1, self.A[n][s])
-                
+
             #Deal with final, scalar l[N]
             tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
-            
+
+            if truncate:
+                print "reducing bond dimension!!"
+                tmp_r0 = self.r[0]
+                tmp_l = self.l
+                tmp_A = self.A
+
+                self._init_arrays()
+
+                for n in xrange(1, self.N + 1):
+                    for s in xrange(self.q[n]):
+                        self.A[n][s] = tmp_A[n][s, -self.D[n - 1]:, -self.D[n]:]
+                self.r[0] = tmp_r0
+                self.l[0] = tmp_l[0]
+                for n in xrange(1, self.N):
+                    self.l[n] = m.simple_diag_matrix(tmp_l[n].diag[-self.D[n]:])
+                    self.r[n] = m.eyemat(self.D[n])
+                self.r[self.N] = sp.array([[1]])
+                self.l[self.N] = tmp_l[self.N]
+
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
                     print "Sanity Fail in restore_RCF!: l_N is bad / norm failure"
