@@ -649,8 +649,8 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
         x += lm1_si.dot(x_part)
 
     return x
-    
-def restore_RCF_r(A, r, G_n_i, sanity_checks=False):
+
+def restore_RCF_r(A, r, G_n_i, sanity_checks=False, truncate_tol=1E-12):
     """Transforms a single A[n] to obtain right orthonormalization.
 
     Implements the condition for right-orthonormalization from sub-section
@@ -690,12 +690,29 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False):
         tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
         G_nm1 = mm.invtr(tu).conj().T #G is now lower-triangular
         G_nm1_i = tu.conj().T
+        new_D = None
     except sp.linalg.LinAlgError:
         print "Restore_ON_R: Falling back to eigh()!"
         e, Gh = la.eigh(M)
-        e = mm.simple_diag_matrix(e).sqrt()
-        G_nm1 = e.inv().dot(mm.H(Gh))
-        G_nm1_i = e.dot_left(Gh)
+
+        assert np.all(e == np.sort(e)), "need to reorder eigensystem"
+        #idx = np.argsort(e)
+        #e = e[idx]
+        #Gh = Gh[:, idx]
+
+        new_D = A.shape[1]
+        for ev in e:
+            if ev > truncate_tol:
+                break
+            new_D -= 1
+
+        e_sq = sp.sqrt(e[-new_D:])
+        e_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
+                                                 1. / e_sq))
+        e_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
+                                               e_sq))
+        G_nm1 = e_sq_i.dot(mm.H(Gh))
+        G_nm1_i = e_sq.dot_left(Gh)
 
     if G_n_i is None:
         G_n_i = G_nm1_i
@@ -706,8 +723,12 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False):
 
     for s in xrange(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
-        
-    r_nm1 = mm.eyemat(A.shape[1], A.dtype)
+
+    if new_D is None:
+        r_nm1 = mm.eyemat(A.shape[1], A.dtype)
+    else:
+        r_nm1 = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
+                                                np.ones(new_D)))
 
     if sanity_checks:
         r_n_ = mm.eyemat(A.shape[2], A.dtype)
@@ -718,18 +739,33 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False):
             print la.norm(r_nm1_ - r_nm1)
 
     return r_nm1, G_nm1_i, G_nm1
-    
-def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
+
+def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, truncate_tol=1E-12):
     if Gm1 is None:
         x = lm1
-    else: 
+    else:
         x = mm.mmul(mm.H(Gm1), lm1, Gm1)
-        
+
     M = eps_l_noop(x, A, A)
     ev, EV = la.eigh(M)
 
-    l = mm.simple_diag_matrix(ev, dtype=A.dtype)
+    assert np.all(ev == np.sort(ev)), "need to reorder eigensystem"
+    #idx = np.argsort(ev)
+    #ev = ev[idx]
+    #EV = EV[:, idx]
+
+    new_D = A.shape[2]
+    for e in ev:
+        if e > truncate_tol:
+            break
+        new_D -= 1
+
+    l = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
+                                        ev[-new_D:]), dtype=A.dtype)
     G_i = EV
+
+    if new_D == A.shape[2]:
+        new_D = None
 
     if Gm1 is None:
         Gm1 = mm.H(EV) #for left uniform case
@@ -750,5 +786,5 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
         if not sp.allclose(sp.dot(G, G_i), sp.eye(G_i.shape[0]),
                            atol=1E-12, rtol=1E-12):
             print "Sanity Fail in restore_RCF_l!: Bad GT!"
-    
-    return l, G, G_i
+
+    return l, G, G_i, new_D
