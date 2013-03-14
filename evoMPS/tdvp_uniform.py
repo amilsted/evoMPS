@@ -39,9 +39,12 @@ class Excite_H_Op:
         
         self.dtype = np.dtype(tdvp.typ)
         
-        self.prereq = (tdvp.calc_BHB_prereq(donor))
-        
-        self.calc_BHB = tdvp.calc_BHB
+        if tdvp.ham_sites == 2:
+            self.prereq = (tdvp.calc_BHB_prereq(donor))        
+            self.calc_BHB = tdvp.calc_BHB
+        else:
+            self.prereq = (tdvp.calc_BHB_prereq_3s(donor))
+            self.calc_BHB = tdvp.calc_BHB_3s
         
         self.calls = 0
         
@@ -173,7 +176,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
     def calc_K_l(self):
         #Using C is allowed because h is Hermitian
-        lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
+        if self.ham_sites == 2:
+            lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
+        else:
+            lH = tm.eps_l_op_3s_AA123_C456(self.l, self.AAA, self.C)
         
         h = m.adot(self.r, lH)
         
@@ -431,6 +437,229 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
         
         return res, M, y_pi
+    
+    def calc_BHB_prereq_3s(self, donor):
+        l = self.l
+        r_ = donor.r
+        r__sqrt = donor.r_sqrt
+        r__sqrt_i = donor.r_sqrt_i
+        A = self.A
+        AA = self.AA
+        A_ = donor.A
+        AA_ = donor.AA
+        AAA_ = donor.AAA
+        
+        eyed = np.eye(self.q**2)
+        eyed = eyed.reshape((self.q, self.q, self.q, self.q))
+        ham_ = self.ham - self.h.real * eyed
+        
+        V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
+        for s in xrange(donor.q):
+            V_[s] = m.H(donor.Vsh[s])
+        
+        Vri_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vri_[s] = r__sqrt_i.dot_left(V_[s])
+            
+        Vr_ = sp.zeros_like(V_)
+        for s in xrange(donor.q):
+            Vr_[s] = r__sqrt.dot_left(V_[s])
+            
+        C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                for u in xrange(self.q):
+                    C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
+        C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2)))
+        
+        C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
+                                    A_.shape[1], Vri_.shape[1]), 
+                                   dtype=self.typ)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                for u in xrange(self.q):
+                    for k in xrange(self.q):
+                        for j in xrange(self.q):
+                            C_AAA_r_Ah_Vrih[s, t, u, k, j] = AAA_[s, t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+        C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4)))
+        
+        C_AhAhlAA = np.empty((self.q, self.q, self.q, self.q,
+                              A_.shape[2], A.shape[2]), dtype=self.typ)
+        for t in xrange(self.q):
+            for j in xrange(self.q):
+                for i in xrange(self.q):
+                    for s in xrange(self.q):
+                        C_AhAhlAA[t, j, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
+        C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((1, 0, 3, 4), (0, 1, 2, 3)))
+        
+        C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
+                                    A_.shape[1], Vri_.shape[1]), dtype=self.typ)
+        for t in xrange(self.q):
+            for u in xrange(self.q):
+                for k in xrange(self.q):
+                    for j in xrange(self.q):
+                        C_AA_r_Ah_Vrih_[t, u, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+        C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (0, 1, 2, 3)))
+        
+        C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
+                               A_.shape[1], Vri_.shape[1]), dtype=self.typ)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                for u in xrange(self.q):
+                    for k in xrange(self.q):
+                        C_AAA_Vrh_[s, t, u, k] = AAA_[s, t, u].dot(Vr_[k].conj().T)
+        C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3)))
+        
+        C_A_r_Ah_Vrih = np.empty((self.q, self.q, self.q,
+                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+        for u in xrange(self.q):
+            for k in xrange(self.q):
+                for j in xrange(self.q):
+                    C_A_r_Ah_Vrih[u, k, j] = A_[u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+        C_A_r_Ah_Vrih = sp.tensordot(ham_, C_A_r_Ah_Vrih, ((5, 2, 1), (0, 1, 2)))
+        
+        C_AhlAA = np.empty((self.q, self.q, self.q,
+                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                for i in xrange(self.q):
+                    C_AhlAA[s, t, i] = A[i].conj().T.dot(l.dot(AA[s, t]))
+        C_AhlAA = sp.tensordot(ham_, C_AhlAA, ((3, 4, 0), (0, 1, 2)))
+        
+        C_AhAhlA = np.empty((self.q, self.q, self.q,
+                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+        for j in xrange(self.q):
+            for i in xrange(self.q):
+                for s in xrange(self.q):
+                    C_AhAhlA[j, i, s] = AA_[i, j].conj().T.dot(l.dot(A[s]))
+        C_AhAhlA = sp.tensordot(ham_, C_AhAhlA, ((1, 0, 3), (0, 1, 2)))
+        
+        C_AA_Vrh = np.empty((self.q, self.q, self.q,
+                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+        for t in xrange(self.q):
+            for u in xrange(self.q):
+                for k in xrange(self.q):
+                    C_AA_Vrh[t, u, k] = AA_[t, u].dot(Vr_[k].conj().T)
+        C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (0, 1, 2)))
+        
+        C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2)))
+        
+        rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
+        
+        #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
+        
+        return V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
+    
+    def calc_BHB_3s(self, x, p, donor, V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih,
+                    C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, 
+                    C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
+                    M_prev=None, y_pi_prev=None):
+        A = self.A
+        A_ = donor.A
+        
+        l = self.l
+        r_ = donor.r
+        
+        l_sqrt = self.l_sqrt
+        l_sqrt_i = self.l_sqrt_i
+        
+        r__sqrt = donor.r_sqrt
+        r__sqrt_i = donor.r_sqrt_i
+        
+        K__r = donor.K
+        K_l = self.K_left
+        
+        pseudo = donor is self
+        
+        B = donor.get_B_from_x(x, donor.Vsh, l_sqrt_i, r__sqrt_i)
+        
+        if self.sanity_checks:
+            tst = tm.eps_r_noop(r_, B, A_)
+            if not np.allclose(tst, 0):
+                print "Sanity check failed: Gauge-fixing violation!"
+
+        if self.sanity_checks:
+            B2 = np.zeros_like(B)
+            for s in xrange(self.q):
+                B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
+            if not sp.allclose(B, B2, rtol=self.itr_rtol*self.check_fac,
+                               atol=self.itr_atol*self.check_fac):
+                print "Sanity Fail in calc_BHB! Bad Vri!"
+        
+        BAA_ = tm.calc_AAA(B, A_, A_)
+        ABA_ = tm.calc_AAA(A, B, A_)
+        AAB = tm.calc_AAA(A, A, B)
+        
+        y = tm.eps_l_noop(l, B, self.A)
+        
+        if pseudo:
+            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo, out=M_prev)
+        #print m.adot(r, M)
+        if self.sanity_checks:
+            y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
+            if not sp.allclose(y, y2):
+                print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+        Mh = m.H(M)
+        
+        res = l_sqrt.dot(
+               tm.eps_r_op_3s_C123_AAA456(r_, BAA_, C_Vri_AA_) #1 OK
+               + sp.exp(+1.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, ABA_, C_Vri_AA_) #3 OK with 4
+               + sp.exp(+2.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, AAB, C_Vri_AA_) #3c
+              )
+        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
+        
+        exp = sp.exp
+        subres = sp.zeros_like(res)
+        for s in xrange(self.q):
+            subres += exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_AAA_r_Ah_Vrih[s])) #12
+            
+            for t in xrange(self.q):
+                subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
+                subres += (exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_AA_r_Ah_Vrih_[s, t])) #4 OK with 3
+                subres += (exp(-3.j * p) * A[s].conj().T.dot(A[t].conj().T).dot(Mh).dot(C_AAA_Vrh_[t, s])) #12b
+                
+                for u in xrange(self.q):
+                    subres += (A[s].conj().T.dot(l.dot(A[t]).dot(B[u])).dot(C_A_r_Ah_Vrih[s, t, u])) #2 OK
+                    subres += (sp.exp(+1.j * p) * C_AhlAA[u, t, s].dot(B[s]).dot(r_.dot(A[t].conj.T)).dot(Vri_[u].conj().T)) #3b
+                    subres += (sp.exp(-1.j * p) * C_AhAhlA[s, t, u].dot(B[t]).dot(A_[u]).dot(Vr_[s].conj().T)) #4b
+                    subres += (sp.exp(-2.j * p) * A[s].conj().T.dot(A[t].conj().T).dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
+                    
+        res += l_sqrt_i.dot(subres)
+        
+        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
+        
+        res += l_sqrt_i.dot(m.H(K_l).dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
+        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
+        
+        y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
+        y2 = sp.exp(+1.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, BAA_, C_) #9
+        y3 = sp.exp(+2.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, ABA_, C_) #11
+        y4 = sp.exp(+3.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, AAB, C_) #11b
+        
+        y = y1 + y2 + y3 + y4
+        if pseudo:
+            y = y - m.adot(l, y) * r_
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo, out=y_pi_prev)
+        #print m.adot(l, y_pi)
+        if self.sanity_checks:
+            y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
+            if not sp.allclose(y, y2):
+                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+        
+        res += l_sqrt.dot(tm.eps_r_noop(y_pi, self.A, Vri_))
+        
+        if self.sanity_checks:
+            expval = m.adot(x, res) / m.adot(x, x)
+            #print "expval = " + str(expval)
+            if expval < 0:
+                print "Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")"
+            if not abs(expval.imag) < 1E-9:
+                print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
+        
+        return res, M, y_pi        
     
     def _prepare_excite_op_top_triv(self, p):
         if callable(self.h_nn):
