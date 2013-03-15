@@ -585,13 +585,20 @@ class EvoMPS_MPS_Generic(object):
         
     def load_state(self, file):
         """Loads the parameter tensors self.A from a file.
-        
+
         The saved state must contain the right number of tensors with
-        the correct shape corresponding to self.N, self.D and self.q.
-        
+        the correct shape corresponding to self.N and self.q.
+        self.D will be recovered from the saved state.
+
         Parameters
         ----------
         file ; path or file
             The file to load the state from.
         """
-        self.A = sp.load(file)
+        tmp_A = sp.load(file)
+
+        self.D[0] = 1
+        for n in xrange(self.N):
+            self.D[n + 1] = tmp_A[n + 1].shape[2]
+        self._init_arrays()
+        self.A = tmp_A
