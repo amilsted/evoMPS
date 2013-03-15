@@ -703,9 +703,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p):
-        if callable(self.h_nn):
+        if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
-        if callable(donor.h_nn):
+        if callable(donor.ham):
             donor.set_ham_array_from_function(donor.ham)
             
         self.calc_lr()
