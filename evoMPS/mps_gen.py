@@ -319,7 +319,8 @@ class EvoMPS_MPS_Generic(object):
                 self.l[n], G_nm1, G_nm1_i, new_D = tm.restore_RCF_l(self.A[n],
                                                                     self.l[n - 1],
                                                                     G_nm1,
-                                                                    self.sanity_checks)
+                                                                    self.sanity_checks,
+                                                                    return_trunc_D=True)
                 if not new_D is None:
                     truncate = True
                     self.D[n] = new_D
@@ -333,7 +334,9 @@ class EvoMPS_MPS_Generic(object):
             tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
 
             if truncate:
-                print "reducing bond dimension!!"
+                print "Rank-deficiency detected! Reducing bond dimension..."
+                #print self.D
+                
                 tmp_r0 = self.r[0]
                 tmp_l = self.l
                 tmp_A = self.A
@@ -341,8 +344,8 @@ class EvoMPS_MPS_Generic(object):
                 self._init_arrays()
 
                 for n in xrange(1, self.N + 1):
-                    for s in xrange(self.q[n]):
-                        self.A[n][s] = tmp_A[n][s, -self.D[n - 1]:, -self.D[n]:]
+                    self.A[n][:] = tmp_A[n][:, -self.D[n - 1]:, -self.D[n]:]
+                        
                 self.r[0] = tmp_r0
                 self.l[0] = tmp_l[0]
                 for n in xrange(1, self.N):
@@ -350,6 +353,8 @@ class EvoMPS_MPS_Generic(object):
                     self.r[n] = m.eyemat(self.D[n])
                 self.r[self.N] = sp.array([[1]])
                 self.l[self.N] = tmp_l[self.N]
+                
+                #self.restore_RCF() 
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
@@ -358,8 +363,8 @@ class EvoMPS_MPS_Generic(object):
                 
                 for n in xrange(1, self.N + 1):
                     r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
-                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
-                        print "Sanity Fail in restore_RCF!: r_%u is bad" % n
+                    if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-11, rtol=1E-11):
+                        print "Sanity Fail in restore_RCF!: r_%u is bad (off by %g)" % (n, la.norm(r_nm1 - self.r[n - 1]))
         elif update_l:
             self.calc_l()
             

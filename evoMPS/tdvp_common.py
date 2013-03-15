@@ -658,8 +658,8 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
 
     return x
 
-def restore_RCF_r(A, r, G_n_i, sanity_checks=False, truncate_tol=1E-12):
-    """Transforms a single A[n] to obtain right orthonormalization.
+def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
+    """Transforms a single A[n] to obtain r[n - 1] = eye(D).
 
     Implements the condition for right-orthonormalization from sub-section
     3.1, theorem 1 of arXiv:quant-ph/0608197v2.
@@ -668,24 +668,33 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, truncate_tol=1E-12):
     passing the gauge transformation matrix from the previous step
     as an argument.
 
-    Finds a G[n-1] such that ON_R is fulfilled for n.
+    Finds a G[n-1] such that orthonormalization is fulfilled for n.
 
-    Eigenvalues = 0 are a problem here... IOW rank-deficient matrices.
-    Apparently, they can turn up during a run, but if they do we're screwed.
-
-    The fact that M should be positive definite is used to optimize this.
+    If rank-deficiency is encountered, the result fulfills the orthonormality
+    condition in the occupied subspace with the zeros at the top-left
+    (for example r = diag([0, 0, 1, 1, 1, 1, 1])).
 
     Parameters
     ----------
-    n : int
-        The site number.
+    A : ndarray
+        The parameter tensor for the nth site A[n].
+    r : ndarray or object with array interface
+        The matrix r[n].
     G_n_i : ndarray
         The inverse gauge transform matrix for site n obtained in the previous step (for n + 1).
-
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    zero_tol : float
+        Tolerance for detecting zeros.
+        
     Returns
     -------
+    r_nm1 : ndarray or simple_diag_matrix or eyemat
+        The new matrix r[n - 1].
     G_n_m1_i : ndarray
         The inverse gauge transformation matrix for the site n - 1.
+    G_nm1 : ndarray
+        The gauge transformation matrix for the site n - 1.
     """
     if G_n_i is None:
         GGh_n_i = r
@@ -699,20 +708,20 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, truncate_tol=1E-12):
         G_nm1 = mm.invtr(tu).conj().T #G is now lower-triangular
         G_nm1_i = tu.conj().T
         new_D = None
-    except sp.linalg.LinAlgError:
-        print "Restore_ON_R: Falling back to eigh()!"
-        e, Gh = la.eigh(M)
+    except sp.linalg.LinAlgError: #this usually means M is rank-deficient
+        e, Gh = la.eigh(M) #wraps lapack routines, which return eigenvalues in ascending order
+        
+        if sanity_checks:
+            assert np.all(e == np.sort(e)), "need to reorder eigensystem"
 
-        assert np.all(e == np.sort(e)), "need to reorder eigensystem"
-        #idx = np.argsort(e)
-        #e = e[idx]
-        #Gh = Gh[:, idx]
-
-        new_D = A.shape[1]
-        for ev in e:
-            if ev > truncate_tol:
-                break
-            new_D -= 1
+        new_D = np.count_nonzero(abs(e) > zero_tol)
+        if new_D != A.shape[1]:
+            print "r: zeros ", A.shape[1] - new_D
+#        new_D = A.shape[1]
+#        for ev in e:
+#            if ev > truncate_tol:
+#                break
+#            new_D -= 1
 
         e_sq = sp.sqrt(e[-new_D:])
         e_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
@@ -748,25 +757,66 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, truncate_tol=1E-12):
 
     return r_nm1, G_nm1_i, G_nm1
 
-def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, truncate_tol=1E-12):
+def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15, return_trunc_D=False):
+    """Transforms a single A[n] to obtain diagonal l[n].
+
+    Applied after restore_RCF_r(), this completes the full canonical form
+    of sub-section 3.1, theorem 1 of arXiv:quant-ph/0608197v2.
+
+    This function must be called for each n in turn, starting at 1,
+    passing the gauge transformation matrix from the previous step
+    as an argument.
+
+    Finds a G[n] such that orthonormalization is fulfilled for n.
+
+    If rank-deficiency is encountered, a truncated bond-dimension D is 
+    optionally returned. The diagonal entries of l[n] are sorted in
+    ascending order (for example l[n] = diag([0, 0, 0.1, 0.2, ...])).
+
+    Parameters
+    ----------
+    A : ndarray
+        The parameter tensor for the nth site A[n].
+    lm1 : ndarray or object with array interface
+        The matrix l[n - 1].
+    Gm1 : ndarray
+        The gauge transform matrix for site n obtained in the previous step (for n - 1).
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    zero_tol : float
+        Tolerance for detecting zeros.
+    return_trunc_D : bool
+        Whether to return a truncated bond dimension D[n] (or None if there is no rank-deficiency).
+        
+    Returns
+    -------
+    l : ndarray or simple_diag_matrix
+        The new, diagonal matrix l[n]. 
+    G : ndarray
+        The gauge transformation matrix for site n.
+    G_i : ndarray
+        Inverse of G.
+    
+    new_D : integer (returned for return_trunc_D == True)
+        Truncated bond dimension D[n].
+    """
     if Gm1 is None:
         x = lm1
     else:
         x = mm.mmul(mm.H(Gm1), lm1, Gm1)
 
     M = eps_l_noop(x, A, A)
-    ev, EV = la.eigh(M)
-
-    assert np.all(ev == np.sort(ev)), "need to reorder eigensystem"
-    #idx = np.argsort(ev)
-    #ev = ev[idx]
-    #EV = EV[:, idx]
-
-    new_D = A.shape[2]
-    for e in ev:
-        if e > truncate_tol:
-            break
-        new_D -= 1
+    ev, EV = la.eigh(M) #wraps lapack routines, which return eigenvalues in ascending order
+    
+    if sanity_checks:
+        assert np.all(ev == np.sort(ev)), "need to reorder eigensystem"
+    
+    new_D = np.count_nonzero(abs(ev) > zero_tol)
+#    new_D = A.shape[2]
+#    for e in ev:
+#        if e > truncate_tol:
+#            break
+#        new_D -= 1
 
     l = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
                                         ev[-new_D:]), dtype=A.dtype)
@@ -794,5 +844,8 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, truncate_tol=1E-12):
         if not sp.allclose(sp.dot(G, G_i), sp.eye(G_i.shape[0]),
                            atol=1E-12, rtol=1E-12):
             print "Sanity Fail in restore_RCF_l!: Bad GT!"
-
-    return l, G, G_i, new_D
+            
+    if return_trunc_D:
+        return l, G, G_i, new_D
+    else:
+        return l, G, G_i
