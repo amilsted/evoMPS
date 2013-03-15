@@ -113,16 +113,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K = np.ones_like(self.A[0])
         self.K_left = None
             
-    def set_h_nn_array_from_function(self, h_nn_func):
+    def set_ham_array_from_function(self, ham_func):
         """Generates an array form for h_nn, which can speed up parts of the
         algorithm by avoiding excess loops and python calls.
         """
-        hv = np.vectorize(h_nn_func, otypes=[np.complex128])
+        hv = np.vectorize(ham_func, otypes=[np.complex128])
         
         if self.ham_sites == 2:
-            self.h_nn = np.fromfunction(hv, (self.q, self.q, self.q, self.q))
+            self.ham = np.fromfunction(hv, (self.q, self.q, self.q, self.q))
         else:
-            self.h_nn = np.fromfunction(hv, tuple([self.q] * 6))
+            self.ham = np.fromfunction(hv, tuple([self.q] * 6))
     
     def calc_C(self):
         if callable(self.ham):
@@ -179,7 +179,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.ham_sites == 2:
             lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
         else:
-            lH = tm.eps_l_op_3s_AA123_C456(self.l, self.AAA, self.C)
+            lH = tm.eps_l_op_3s_AAA123_C456(self.l, self.AAA, self.C)
         
         h = m.adot(self.r, lH)
         
@@ -295,9 +295,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         A_ = donor.A
         AA_ = donor.AA
         
-        eyed = np.eye(self.q**2)
-        eyed = eyed.reshape((self.q, self.q, self.q, self.q))
-        h_nn_ = self.h_nn - self.h.real * eyed
+        eyed = np.eye(self.q**self.ham_sites)
+        eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
+        ham_ = self.ham - self.h.real * eyed
             
         V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
         for s in xrange(donor.q):
@@ -315,31 +315,31 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for u in xrange(self.q):
             for s in xrange(self.q):
                 C_AhlA[u, s] = m.H(A[u]).dot(l.dot(A[s]))
-        C_AhlA = sp.tensordot(h_nn_, C_AhlA, ((2, 0), (0, 1)))
+        C_AhlA = sp.tensordot(ham_, C_AhlA, ((2, 0), (0, 1)))
         
         C_A_Vrh_ = np.empty((self.q, self.q, A_.shape[1], Vr_.shape[1]), dtype=self.typ)
         for t in xrange(self.q):
             for v in xrange(self.q):
                 C_A_Vrh_[t, v] = A_[t].dot(m.H(Vr_[v]))
-        C_A_Vrh_ = sp.tensordot(h_nn_, C_A_Vrh_, ((1, 3), (0, 1)))
+        C_A_Vrh_ = sp.tensordot(ham_, C_A_Vrh_, ((1, 3), (0, 1)))
                 
         C_Vri_A_ = np.empty((self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
         for s in xrange(self.q):
             for t in xrange(self.q):
                 C_Vri_A_[s, t] = Vri_[s].dot(A_[t])
-        C_Vri_A_ = sp.tensordot(h_nn_, C_Vri_A_, ((2, 3), (0, 1)))
+        C_Vri_A_ = sp.tensordot(ham_, C_Vri_A_, ((2, 3), (0, 1)))
         
-        C = sp.tensordot(h_nn_, self.AA, ((2, 3), (0, 1)))
+        C = sp.tensordot(ham_, self.AA, ((2, 3), (0, 1)))
 
-        C_ = sp.tensordot(h_nn_, AA_, ((2, 3), (0, 1)))
+        C_ = sp.tensordot(ham_, AA_, ((2, 3), (0, 1)))
         
         rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
         
         #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
         
-        return h_nn_, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
+        return ham_, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
             
-    def calc_BHB(self, x, p, donor, h_nn_, C, C_, V_, Vr_, Vri_, 
+    def calc_BHB(self, x, p, donor, ham_, C, C_, V_, Vr_, Vri_, 
                  C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None): 
         """For a good approx. ground state, H should be Hermitian pos. semi-def.
         """        
@@ -394,6 +394,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                tm.eps_r_op_2s_AA12_C34(r_, BA_, C_Vri_A_) #1 OK
                + sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_Vri_A_) #3 OK with 4
               )
+        #res.fill(0)
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
@@ -449,8 +450,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         AA_ = donor.AA
         AAA_ = donor.AAA
         
-        eyed = np.eye(self.q**2)
-        eyed = eyed.reshape((self.q, self.q, self.q, self.q))
+        eyed = np.eye(self.q**self.ham_sites)
+        eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
         ham_ = self.ham - self.h.real * eyed
         
         V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
@@ -490,7 +491,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 for i in xrange(self.q):
                     for s in xrange(self.q):
                         C_AhAhlAA[t, j, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
-        C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((1, 0, 3, 4), (0, 1, 2, 3)))
+        C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (0, 1, 2, 3)))
         
         C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
                                     A_.shape[1], Vri_.shape[1]), dtype=self.typ)
@@ -531,7 +532,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for j in xrange(self.q):
             for i in xrange(self.q):
                 for s in xrange(self.q):
-                    C_AhAhlA[j, i, s] = AA_[i, j].conj().T.dot(l.dot(A[s]))
+                    C_AhAhlA[j, i, s] = AA[i, j].conj().T.dot(l.dot(A[s]))
         C_AhAhlA = sp.tensordot(ham_, C_AhAhlA, ((1, 0, 3), (0, 1, 2)))
         
         C_AA_Vrh = np.empty((self.q, self.q, self.q,
@@ -603,10 +604,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         Mh = m.H(M)
         
         res = l_sqrt.dot(
-               tm.eps_r_op_3s_C123_AAA456(r_, BAA_, C_Vri_AA_) #1 OK
-               + sp.exp(+1.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, ABA_, C_Vri_AA_) #3 OK with 4
+               tm.eps_r_op_3s_C123_AAA456(r_, BAA_, C_Vri_AA_) #1 1D
+               + sp.exp(+1.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, ABA_, C_Vri_AA_) #3
                + sp.exp(+2.j * p) * tm.eps_r_op_3s_C123_AAA456(r_, AAB, C_Vri_AA_) #3c
               )
+        #res.fill(0)
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
@@ -617,18 +619,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
             for t in xrange(self.q):
                 subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
-                subres += (exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_AA_r_Ah_Vrih_[s, t])) #4 OK with 3
+                subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[s, t])) #4
                 subres += (exp(-3.j * p) * A[s].conj().T.dot(A[t].conj().T).dot(Mh).dot(C_AAA_Vrh_[t, s])) #12b
                 
                 for u in xrange(self.q):
-                    subres += (A[s].conj().T.dot(l.dot(A[t]).dot(B[u])).dot(C_A_r_Ah_Vrih[s, t, u])) #2 OK
-                    subres += (sp.exp(+1.j * p) * C_AhlAA[u, t, s].dot(B[s]).dot(r_.dot(A[t].conj.T)).dot(Vri_[u].conj().T)) #3b
-                    subres += (sp.exp(-1.j * p) * C_AhAhlA[s, t, u].dot(B[t]).dot(A_[u]).dot(Vr_[s].conj().T)) #4b
-                    subres += (sp.exp(-2.j * p) * A[s].conj().T.dot(A[t].conj().T).dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
+                    subres += (A[s].conj().T.dot(l.dot(A[t]).dot(B[u])).dot(C_A_r_Ah_Vrih[s, t, u])) #2 -ive of that it should be....
+                    subres += (exp(+1.j * p) * C_AhlAA[u, t, s].dot(B[s]).dot(r_.dot(A_[t].conj().T)).dot(Vri_[u].conj().T)) #3b
+                    subres += (exp(-1.j * p) * C_AhAhlA[s, t, u].dot(B[t]).dot(A_[u]).dot(Vr_[s].conj().T)) #4b
+                    subres += (exp(-2.j * p) * A[s].conj().T.dot(A[t].conj().T).dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
                     
         res += l_sqrt_i.dot(subres)
         
-        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
+        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5
         
         res += l_sqrt_i.dot(m.H(K_l).dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
         
@@ -662,8 +664,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res, M, y_pi        
     
     def _prepare_excite_op_top_triv(self, p):
-        if callable(self.h_nn):
-            self.set_h_nn_array_from_function(self.h_nn)
+        if callable(self.ham):
+            self.set_ham_array_from_function(self.h_nn)
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
@@ -702,9 +704,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
     def _prepare_excite_op_top_nontriv(self, donor, p):
         if callable(self.h_nn):
-            self.set_h_nn_array_from_function(self.h_nn)
+            self.set_ham_array_from_function(self.ham)
         if callable(donor.h_nn):
-            donor.set_h_nn_array_from_function(donor.h_nn)
+            donor.set_ham_array_from_function(donor.ham)
             
         self.calc_lr()
         self.restore_CF()
