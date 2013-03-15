@@ -124,6 +124,18 @@ class EvoMPS_MPS_Uniform(object):
             A1 = self.A
         if A2 is None:
             A2 = self.A
+            
+        if self.D == 1:
+            x.fill(1)
+            if calc_l:
+                ev = tm.eps_l_noop(x, A1, A2)[0, 0]
+            else:
+                ev = tm.eps_r_noop(x, A1, A2)[0, 0]
+            
+            if rescale and not abs(ev - 1) < tol:
+                A1 *= 1 / sp.sqrt(ev)
+            
+            return x, True, 1
                         
         try:
             norm = la.get_blas_funcs("nrm2", [x])

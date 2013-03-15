@@ -87,7 +87,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=20
         print "Warning: Did not converge on solution for ppinv!"
     
     #Test
-    if sanity_checks:
+    if sanity_checks and x.shape[0] > 1:
         RHS_test = op.matvec(res)
         d = la.norm(RHS_test - x) / la.norm(x)
         if not d < sanity_tol:
