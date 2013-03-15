@@ -12,6 +12,7 @@ import scipy as sp
 import scipy.linalg as la
 import matplotlib.pyplot as plt
 import scipy.special as spe
+import copy
 
 import evoMPS.tdvp_uniform as tdvp
 
@@ -44,13 +45,13 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-D = 16 #The bond dimension
+D = 8 #The bond dimension
 q = 2 #The site dimension
 
 """
 Set the initial Hamiltonian parameters.
 """
-h = -1.0
+h = -0.5
 J = 1.00
 
 lam = -J / h
@@ -59,7 +60,7 @@ print "Exact energy = ", h * 2 / sp.pi * (1 + lam) * spe.ellipe((4 * lam / (1 + 
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham(J, h))
+s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham_3s_v2(J, h))
 
 """
 We're going to simulate a quench after we find the ground state.
@@ -89,15 +90,13 @@ If this script is run again with the same settings, an existing
 ground state will be loaded, if present.
 """
 
-broken_left = False
+grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground.npy"
 
-grnd_fname_fmt = "t_ising_uni_D%d_q%d_J%g_h%g_s%g_dtau%g_ground_%u.npy"
-
-grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))
+grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)
 
 expand = False
 
-if False:
+if True:
     try:
        a_file = open(grnd_fname, 'rb')
        s.load_state(a_file)
@@ -115,6 +114,32 @@ else:
     
 s.sanity_checks = True
 s.symm_gauge = True
+
+def excite_TT(p, k=6, brute=False):
+    s.update()
+    if brute:
+        ev = s.excite_top_triv_brute(p)
+    else:
+        ev = s.excite_top_triv(p, k=k, ncv=3 * k)    
+    return ev
+
+def excite_nTT(p, k=6, brute=False):
+    s.update()
+    s2 = copy.deepcopy(s)
+    
+    flip_x = la.expm(1.j * sp.pi / 2. * z_ss)
+    s2.apply_op_1s(flip_x)
+    s2.update()
+    
+    print (s.expect_1s(x_ss).real, s2.expect_1s(x_ss).real)
+    print (s.h.real, s2.h.real)
+    
+    if brute:
+        ev = s.excite_top_nontriv_brute(s2, p)
+    else:
+        ev = s.excite_top_nontriv(s2, p, k=k, ncv=3 * k)
+    
+    return ev
 
 if __name__ == "__main__":
     """
@@ -201,15 +226,11 @@ if __name__ == "__main__":
         elif loaded or (not real_time and i > 1 and eta < tol_im):
             real_time = True
             
-            if abs(h/J) < 1:
-                broken_left = Sx[i] > 0
-                print "Broken left: " + str(broken_left)
-            
-            grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))  
+            grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)  
             
             s.save_state(grnd_fname)
             J = J_real
-            s.ham = get_ham(J, h)
+            s.ham = get_ham_3s_v2(J, h)
             step = realstep * 1.j
             loaded = False
             print 'Starting real time evolution!'
