@@ -318,15 +318,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         If dtau is itself imaginary, real-time evolution results.
         
-        We avoid storing all the B[n] at once by updating self.A[n] as
-        we move along the chain. Dependencies must be carefully considered.
-        Since we assume a nearest-neighbour Hamiltonian, we must not
-        alter A[n - 1] before calculating B[n]. Hence we must store
-        two B[n] tensors at any one time.
-        
-        The dependencies on l, r, C and K are not a problem because we store
-        all these matrices separately and do not update them at all during take_step().
-        
         Parameters
         ----------
         dtau : complex
@@ -341,13 +332,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 B = self.calc_B(n)
                 eta_tot += self.eta[n]
             
+            #Only change A[n] after B[m] no longer depends on it! 
             if n >= self.ham_sites and len(B_prev) > 0:
                 self.A[n - self.ham_sites + 1] += -dtau * B_prev.pop()
             
             if not B is None:
                 B_prev.insert(0, B)
          
-        assert len(B_prev) == 0, "B_prev not empty!!"
+        assert len(B_prev) == 0, "take_step update incomplete!"
         
         return eta_tot
         
