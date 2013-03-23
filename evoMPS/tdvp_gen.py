@@ -173,7 +173,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.H_expect = sp.asscalar(self.K[1])
 
 
-    def update(self, restore_RCF=True):
+    def update(self, restore_RCF=True, auto_truncate=True, restore_RCF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after taking a step or otherwise changing the 
@@ -186,10 +186,23 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         ----------
         restore_RCF : bool (True)
             Whether to restore right canonical form.
+        auto_truncate : bool (True)
+            Whether to automatically truncate the bond-dimension if
+            rank-deficiency is detected. Requires restore_RCF.
+        restore_RCF_after_trunc : bool (True)
+            Whether to restore_RCF after truncation.
+
+        Returns
+        -------
+        truncated : bool (only if auto_truncate == True)
+            Whether truncation was performed.
         """
-        super(EvoMPS_TDVP_Generic, self).update(restore_RCF)
+        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_RCF, 
+                                                        auto_truncate=auto_truncate,
+                                                        restore_RCF_after_trunc=restore_RCF_after_trunc)
         self.calc_C()
         self.calc_K()
+        return trunc
         
     def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
         """Calculates the matrix x* that results in the TDVP tangent vector B.

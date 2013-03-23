@@ -171,7 +171,7 @@ class EvoMPS_MPS_Generic(object):
                 self.D[n] = qacc
                 
     
-    def update(self, restore_RCF=True):
+    def update(self, restore_RCF=True, auto_truncate=True, restore_RCF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -183,14 +183,27 @@ class EvoMPS_MPS_Generic(object):
         ----------
         restore_RCF : bool (True)
             Whether to restore right canonical form.
+        auto_truncate : bool (True)
+            Whether to automatically truncate the bond-dimension if
+            rank-deficiency is detected. Requires restore_RCF.
+        restore_RCF_after_trunc : bool (True)
+            Whether to restore_RCF after truncation.
+            
+        Returns
+        -------
+        truncated : bool (only if auto_truncate == True)
+            Whether truncation was performed.
         """
+        assert restore_RCF or not auto_truncate, "auto_truncate requires restore_RCF"
+        
         if restore_RCF:
             self.restore_RCF()
+            if auto_truncate:
+                return self.auto_truncate(restore_RCF=restore_RCF_after_trunc)
         else:
             self.calc_l()
             self.calc_r()
             self.simple_renorm()
-                
     
     def calc_l(self, n_low=-1, n_high=-1):
         """Updates the l matrices to reflect the current state parameters self.A.
@@ -248,8 +261,7 @@ class EvoMPS_MPS_Generic(object):
             for n in xrange(self.N):
                 self.r[n] *= 1 / norm    
     
-    def restore_RCF(self, update_l=True, normalize=True, diag_l=True,
-                    auto_truncate=True):
+    def restore_RCF(self, update_l=True, normalize=True, diag_l=True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
@@ -287,8 +299,6 @@ class EvoMPS_MPS_Generic(object):
             Whether to also attempt to normalize the state.
         diag_l : bool
             Whether to put l in diagonal form (defaults to True)
-        auto_truncate : bool (True)
-            Whether to truncate the bond-dimensions if rank-deficiency is detected.
         """   
         start = self.N
         
@@ -317,18 +327,12 @@ class EvoMPS_MPS_Generic(object):
                     print "Sanity Fail in restore_RCF!: r_0 is bad / norm failure"
 
         if diag_l:
-            rank_defi = False
-            new_D = self.D.copy()
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
             for n in xrange(1, self.N):
-                self.l[n], G_nm1, G_nm1_i, new_Dn = tm.restore_RCF_l(self.A[n],
-                                                                    self.l[n - 1],
-                                                                    G_nm1,
-                                                                    self.sanity_checks,
-                                                                    return_trunc_D=True)
-                if not new_Dn is None:
-                    rank_defi = True
-                    new_D[n] = new_Dn
+                self.l[n], G_nm1, G_nm1_i = tm.restore_RCF_l(self.A[n],
+                                                             self.l[n - 1],
+                                                             G_nm1,
+                                                             self.sanity_checks)
 
             #Apply remaining G_Nm1 to A[N]
             n = self.N
@@ -337,12 +341,6 @@ class EvoMPS_MPS_Generic(object):
 
             #Deal with final, scalar l[N]
             tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
-
-            if auto_truncate and rank_defi:
-                print "Rank-deficiency detected! Reducing bond dimension..."                
-                self.truncate(new_D, update_lr=False)
-                self.restore_RCF() #Truncation breaks canonical form
-                #TODO: Limit this restore_RCF to the affected sites...
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
@@ -357,7 +355,45 @@ class EvoMPS_MPS_Generic(object):
                         print (r_nm1 - self.r[n - 1]).diagonal().real
         elif update_l:
             self.calc_l()
+    
+    def auto_truncate(self, restore_RCF=True, zero_tol=1E-15):
+        """Automatically reduces the bond-dimension in case of rank-deficiency.
+        
+        Canonical form is required. Always perform self.restore_RCF() first!
+        
+        Parameters
+        ----------
+            restore_RCF : bool (True)
+                Whether to restore canonical form after truncation.
+            zero_tol : float
+                Tolerance for interpretation of values as zero.
+                
+        Returns
+        -------
+            truncated : bool
+                Whether truncation was performed.
+        """
+        new_D = self.D.copy()
+        
+        for n in xrange(1, self.N + 1):
+            try:
+                ldiag = self.l[n].diag
+            except AttributeError:
+                ldiag = self.l[n].diagonal()
             
+            new_D[n] = sp.count_nonzero(abs(ldiag) > zero_tol)
+        
+        if not sp.all(new_D == self.D):
+            self.truncate(new_D, update_lr=not restore_RCF)
+        
+            if restore_RCF:
+                self.restore_RCF()
+                                        
+            return True
+        else:
+            return False
+            
+        
     def truncate(self, new_D, update_lr=True):
         """Reduces the bond-dimensions by truncating the least-significant Schmidt vectors.
         
@@ -407,6 +443,8 @@ class EvoMPS_MPS_Generic(object):
                 self.r[n] = m.eyemat(self.D[n])
                 
             self.calc_r(n_high=last_trunc - 1)
+            
+            self.simple_renorm()
         
     
     def check_RCF(self):
