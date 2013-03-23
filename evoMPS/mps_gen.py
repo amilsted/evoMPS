@@ -9,6 +9,7 @@ import scipy as sp
 import scipy.linalg as la
 import matmul as m
 import tdvp_common as tm
+import copy
 
 class EvoMPS_MPS_Generic(object):
     
@@ -247,7 +248,8 @@ class EvoMPS_MPS_Generic(object):
             for n in xrange(self.N):
                 self.r[n] *= 1 / norm    
     
-    def restore_RCF(self, update_l=True, normalize=True, diag_l=True):
+    def restore_RCF(self, update_l=True, normalize=True, diag_l=True,
+                    auto_truncate=True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
@@ -285,6 +287,8 @@ class EvoMPS_MPS_Generic(object):
             Whether to also attempt to normalize the state.
         diag_l : bool
             Whether to put l in diagonal form (defaults to True)
+        auto_truncate : bool (True)
+            Whether to truncate the bond-dimensions if rank-deficiency is detected.
         """   
         start = self.N
         
@@ -313,17 +317,18 @@ class EvoMPS_MPS_Generic(object):
                     print "Sanity Fail in restore_RCF!: r_0 is bad / norm failure"
 
         if diag_l:
-            truncate = False
+            rank_defi = False
+            new_D = self.D.copy()
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
             for n in xrange(1, self.N):
-                self.l[n], G_nm1, G_nm1_i, new_D = tm.restore_RCF_l(self.A[n],
+                self.l[n], G_nm1, G_nm1_i, new_Dn = tm.restore_RCF_l(self.A[n],
                                                                     self.l[n - 1],
                                                                     G_nm1,
                                                                     self.sanity_checks,
                                                                     return_trunc_D=True)
-                if not new_D is None:
-                    truncate = True
-                    self.D[n] = new_D
+                if not new_Dn is None:
+                    rank_defi = True
+                    new_D[n] = new_Dn
 
             #Apply remaining G_Nm1 to A[N]
             n = self.N
@@ -333,28 +338,11 @@ class EvoMPS_MPS_Generic(object):
             #Deal with final, scalar l[N]
             tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
 
-            if truncate:
-                print "Rank-deficiency detected! Reducing bond dimension..."
-                #print self.D
-                
-                tmp_r0 = self.r[0]
-                tmp_l = self.l
-                tmp_A = self.A
-
-                self._init_arrays()
-
-                for n in xrange(1, self.N + 1):
-                    self.A[n][:] = tmp_A[n][:, -self.D[n - 1]:, -self.D[n]:]
-                        
-                self.r[0] = tmp_r0
-                self.l[0] = tmp_l[0]
-                for n in xrange(1, self.N):
-                    self.l[n] = m.simple_diag_matrix(tmp_l[n].diag[-self.D[n]:])
-                    self.r[n] = m.eyemat(self.D[n])
-                self.r[self.N] = sp.array([[1]])
-                self.l[self.N] = tmp_l[self.N]
-                
-                #self.restore_RCF() 
+            if auto_truncate and rank_defi:
+                print "Rank-deficiency detected! Reducing bond dimension..."                
+                self.truncate(new_D, update_lr=False)
+                self.restore_RCF() #Truncation breaks canonical form
+                #TODO: Limit this restore_RCF to the affected sites...
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
@@ -362,12 +350,64 @@ class EvoMPS_MPS_Generic(object):
                     print "l_N = " + str(self.l[self.N].squeeze().real)
                 
                 for n in xrange(1, self.N + 1):
-                    r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
+                    r_nm1 = tm.eps_r_noop(self.r[n], self.A[n], self.A[n])
+                    #r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-11, rtol=1E-11):
                         print "Sanity Fail in restore_RCF!: r_%u is bad (off by %g)" % (n, la.norm(r_nm1 - self.r[n - 1]))
+                        print (r_nm1 - self.r[n - 1]).diagonal().real
         elif update_l:
             self.calc_l()
             
+    def truncate(self, new_D, update_lr=True):
+        """Reduces the bond-dimensions by truncating the least-significant Schmidt vectors.
+        
+        The parameters must be in canonical form to ensure that
+        the discarded parameters correspond to the smallest Schmidt 
+        coefficients. Always perform self.restore_RCF() first!
+        
+        Each bond-dimension can either be reduced or left unchanged.
+        
+        The resulting parameters self.A will not generally have canonical 
+        form after truncation.
+        
+        Parameters
+        ----------
+        new_D : list or ndarray of int
+            The new bond-dimensions in a vector of length N + 1.
+        update_lr : bool (True)
+            Whether to update self.l and self.r after truncation (turn off if you plan to update them yourself).
+        """
+        new_D = sp.array(new_D)
+        assert new_D.shape == self.D.shape, "new_D must have same shape as self.D"
+        assert sp.all(new_D <= self.D), "new bond-dimensions must be less than or equal to current dimensions"
+    
+        last_trunc = sp.argwhere(self.D - new_D).max()
+        
+        if update_lr:
+            tmp_r0 = self.r[0]
+            tmp_l = self.l
+            
+        tmp_A = self.A
+        
+        self.D = new_D
+        self._init_arrays()
+
+        for n in xrange(1, self.N + 1):
+            self.A[n][:] = tmp_A[n][:, -self.D[n - 1]:, -self.D[n]:]
+        
+        if update_lr:
+            self.r[0] = tmp_r0
+            
+            for n in xrange(1, self.N):
+                self.l[n] = m.simple_diag_matrix(tmp_l[n].diag[-self.D[n]:])
+                
+            self.l[self.N] = tmp_l[self.N]
+            
+            for n in xrange(self.N - 1, last_trunc - 1, - 1):
+                self.r[n] = m.eyemat(self.D[n])
+                
+            self.calc_r(n_high=last_trunc - 1)
+        
     
     def check_RCF(self):
         """Tests for right canonical form.

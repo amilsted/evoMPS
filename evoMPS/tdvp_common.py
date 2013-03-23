@@ -658,7 +658,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
 
     return x
 
-def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
+def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15, return_trunc_D=False):
     """Transforms a single A[n] to obtain r[n - 1] = eye(D).
 
     Implements the condition for right-orthonormalization from sub-section
@@ -686,7 +686,9 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         Whether to perform additional sanity checks.
     zero_tol : float
         Tolerance for detecting zeros.
-        
+    return_trunc_D : bool
+        Whether to return a truncated bond dimension D[n] (or None if there is no rank-deficiency).
+            
     Returns
     -------
     r_nm1 : ndarray or simple_diag_matrix or eyemat
@@ -695,6 +697,9 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         The inverse gauge transformation matrix for the site n - 1.
     G_nm1 : ndarray
         The gauge transformation matrix for the site n - 1.
+        
+    new_D : integer (returned for return_trunc_D == True)
+        Truncated bond dimension D[n].
     """
     if G_n_i is None:
         GGh_n_i = r
@@ -717,11 +722,6 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         new_D = np.count_nonzero(abs(e) > zero_tol)
         if new_D != A.shape[1]:
             print "r: zeros ", A.shape[1] - new_D
-#        new_D = A.shape[1]
-#        for ev in e:
-#            if ev > truncate_tol:
-#                break
-#            new_D -= 1
 
         e_sq = sp.sqrt(e[-new_D:])
         e_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
@@ -735,8 +735,13 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         G_n_i = G_nm1_i
 
     if sanity_checks:
-        if not sp.allclose(G_nm1.dot(G_nm1_i), np.eye(G_nm1.shape[0]), atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_ONR!: Bad GT!"
+        if new_D is None:
+            trunceye = sp.eye(A.shape[1])
+        else:
+            trunceye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
+                                                   np.ones(new_D)))
+        if not sp.allclose(G_nm1.dot(G_nm1_i), trunceye, atol=1E-13, rtol=1E-13):
+            print "Sanity Fail in restore_RCF_r!: Bad GT!"
 
     for s in xrange(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
@@ -755,7 +760,10 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
             print "Sanity Fail in restore_RCF_r!: r is bad"
             print la.norm(r_nm1_ - r_nm1)
 
-    return r_nm1, G_nm1_i, G_nm1
+    if return_trunc_D:
+        return r_nm1, G_nm1_i, G_nm1, new_D
+    else:
+        return r_nm1, G_nm1_i, G_nm1
 
 def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15, return_trunc_D=False):
     """Transforms a single A[n] to obtain diagonal l[n].
@@ -812,11 +820,6 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15, return_trunc
         assert np.all(ev == np.sort(ev)), "need to reorder eigensystem"
     
     new_D = np.count_nonzero(abs(ev) > zero_tol)
-#    new_D = A.shape[2]
-#    for e in ev:
-#        if e > truncate_tol:
-#            break
-#        new_D -= 1
 
     l = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
                                         ev[-new_D:]), dtype=A.dtype)
@@ -841,9 +844,10 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15, return_trunc
     G = mm.H(EV)
 
     if sanity_checks:
-        if not sp.allclose(sp.dot(G, G_i), sp.eye(G_i.shape[0]),
+        eye = sp.eye(A.shape[2])
+        if not sp.allclose(sp.dot(G, G_i), eye,
                            atol=1E-12, rtol=1E-12):
-            print "Sanity Fail in restore_RCF_l!: Bad GT!"
+            print "Sanity Fail in restore_RCF_l!: Bad GT! (off by %g)" % la.norm(sp.dot(G, G_i) - eye)
             
     if return_trunc_D:
         return l, G, G_i, new_D
