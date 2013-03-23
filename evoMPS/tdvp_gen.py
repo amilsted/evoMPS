@@ -334,18 +334,21 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """
         eta_tot = 0
         
-        B_prev = None
-        for n in xrange(1, self.N + 2):
+        B_prev = []
+        for n in xrange(1, self.N + self.ham_sites):
             #V is not always defined (e.g. at the right boundary vector, and possibly before)
             if n <= self.N:
                 B = self.calc_B(n)
                 eta_tot += self.eta[n]
             
-            if n > 1 and not B_prev is None:
-                self.A[n - 1] += -dtau * B_prev
-                
-            B_prev = B
+            if n >= self.ham_sites and len(B_prev) > 0:
+                self.A[n - self.ham_sites + 1] += -dtau * B_prev.pop()
             
+            if not B is None:
+                B_prev.insert(0, B)
+         
+        assert len(B_prev) == 0, "B_prev not empty!!"
+        
         return eta_tot
         
     def take_step_RK4(self, dtau):
