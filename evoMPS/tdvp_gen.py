@@ -311,7 +311,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return None
 
     
-    def take_step(self, dtau):   
+    def take_step(self, dtau, save_memory=True):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A[n] -= dtau * B[n] with B[n] form self.calc_B(n).
@@ -322,25 +322,37 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
+        save_memory : bool
+            Whether to save memory by avoiding storing all B[n] at once.
         """
         eta_tot = 0
         
-        B_prev = []
-        for n in xrange(1, self.N + self.ham_sites):
-            #V is not always defined (e.g. at the right boundary vector, and possibly before)
-            if n <= self.N:
-                B = self.calc_B(n)
+        if save_memory:
+            B_prev = []
+            for n in xrange(1, self.N + self.ham_sites):
+                #V is not always defined (e.g. at the right boundary vector, and possibly before)
+                if n <= self.N:
+                    B = self.calc_B(n)
+                    eta_tot += self.eta[n]
+                
+                #Only change A[n] after B[m] no longer depends on it! 
+                if n >= self.ham_sites and len(B_prev) > 0:
+                    self.A[n - self.ham_sites + 1] += -dtau * B_prev.pop()
+                
+                if not B is None:
+                    B_prev.insert(0, B)
+             
+            assert len(B_prev) == 0, "take_step update incomplete!"
+        else:
+            B = [None]
+            for n in xrange(1, self.N + 1):
+                B.append(self.calc_B(n))
                 eta_tot += self.eta[n]
-            
-            #Only change A[n] after B[m] no longer depends on it! 
-            if n >= self.ham_sites and len(B_prev) > 0:
-                self.A[n - self.ham_sites + 1] += -dtau * B_prev.pop()
-            
-            if not B is None:
-                B_prev.insert(0, B)
-         
-        assert len(B_prev) == 0, "take_step update incomplete!"
-        
+                
+            for n in xrange(1, self.N + 1):
+                if not B[n] is None:
+                    self.A[n] += -dtau * B[n]
+                
         return eta_tot
         
     def take_step_RK4(self, dtau):
