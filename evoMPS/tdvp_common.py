@@ -717,10 +717,13 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         new_D = np.count_nonzero(abs(e) > zero_tol)
         
         e_sq = sp.sqrt(e[-new_D:])
+        
+        #Replace almost-zero values with zero and perform a pseudo-inverse
         e_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
                                                  1. / e_sq))
         e_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
                                                e_sq))
+                                               
         G_nm1 = e_sq_i.dot(mm.H(Gh))
         G_nm1_i = e_sq.dot_left(Gh)
 
@@ -755,7 +758,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
 
     return r_nm1, G_nm1_i, G_nm1
 
-def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
+def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
     """Transforms a single A[n] to obtain diagonal l[n].
 
     Applied after restore_RCF_r(), this completes the full canonical form
@@ -780,8 +783,6 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
         The gauge transform matrix for site n obtained in the previous step (for n - 1).
     sanity_checks : bool (False)
         Whether to perform additional sanity checks.
-    zero_tol : float
-        Tolerance for detecting zeros.
         
     Returns
     -------
