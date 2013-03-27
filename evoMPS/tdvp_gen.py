@@ -334,13 +334,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 if n <= self.N:
                     B = self.calc_B(n)
                     eta_tot += self.eta[n]
-                
-                #Only change A[n] after B[m] no longer depends on it! 
-                if n >= self.ham_sites and len(B_prev) > 0:
-                    self.A[n - self.ham_sites + 1] += -dtau * B_prev.pop()
-                
-                if not B is None:
                     B_prev.insert(0, B)
+                
+                #Only change A[n] after B[m] no longer depends on it!
+                if n >= self.ham_sites and len(B_prev) > 0:
+                    B = B_prev.pop()
+                    if not B is None:
+                        self.A[n - self.ham_sites + 1] += -dtau * B
              
             assert len(B_prev) == 0, "take_step update incomplete!"
         else:
