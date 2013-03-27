@@ -541,7 +541,43 @@ class EvoMPS_MPS_Generic(object):
         C = tm.calc_C_mat_op_AA(op, AA)
         res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], C, AA)
         return m.adot(self.l[n - 1], res)
-        
+
+    def expect_3s(self, op, n):
+        """Computes the expectation value of a nearest-neighbour three-site operator.
+
+        The operator should be a q[n] x q[n + 1] x q[n + 2] x q[n] x
+        q[n + 1] x q[n + 2] array such that op[s, t, u, v, w, x] =
+        <stu|op|vwx> or a function of the form op(s, t, u, v, w, x) =
+        <stu|op|vwx>.
+
+        The state must be up-to-date -- see self.update()!
+
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator array or function.
+        n : int
+            The leftmost site number (operator acts on n, n + 1, n + 2).
+
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
+        """
+        A = self.A[n]
+        Ap1 = self.A[n + 1]
+        Ap2 = self.A[n + 2]
+        AAA = tm.calc_AAA(A, Ap1, Ap2)
+
+        if callable(op):
+            op = sp.vectorize(op, otypes=[sp.complex128])
+            op = sp.fromfunction(op, (A.shape[0], Ap1.shape[0], Ap2.shape[0],
+                                      A.shape[0], Ap1.shape[0], Ap2.shape[0]))
+
+        C = tm.calc_C_3s_mat_op_AAA(op, AAA)
+        res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], C, AAA)
+        return m.adot(self.l[n - 1], res)
+
     def expect_1s_1s(self, op1, op2, n1, n2):
         """Computes the expectation value of two single site operators acting 
         on two different sites.
