@@ -328,23 +328,23 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         eta_tot = 0
         
         if save_memory:
-            B_prev = []
+            B = sp.empty((self.N + 1), dtype=sp.ndarray)
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
                 if n <= self.N:
-                    B = self.calc_B(n)
+                    B[n] = self.calc_B(n)
                     eta_tot += self.eta[n]
-                    B_prev.insert(0, B)
                 
                 #Only change A[n] after B[m] no longer depends on it!
-                if n >= self.ham_sites and len(B_prev) > 0:
-                    B = B_prev.pop()
-                    if not B is None:
-                        self.A[n - self.ham_sites + 1] += -dtau * B
+                if n >= self.ham_sites:
+                    m = n - self.ham_sites + 1
+                    if not B[m] is None:
+                        self.A[m] += -dtau * B[m]
+                        B[m] = None
              
-            assert len(B_prev) == 0, "take_step update incomplete!"
+            assert all(x is None for x in B), "take_step update incomplete!"
         else:
-            B = [None]
+            B = [None] #There is no site zero
             for n in xrange(1, self.N + 1):
                 B.append(self.calc_B(n))
                 eta_tot += self.eta[n]
