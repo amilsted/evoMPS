@@ -328,14 +328,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         eta_tot = 0
         
         if save_memory:
-            B = sp.empty((self.N + 1), dtype=sp.ndarray)
+            B = [None] * (self.N + 1)
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
                 if n <= self.N:
                     B[n] = self.calc_B(n)
                     eta_tot += self.eta[n]
                 
-                #Only change A[n] after B[m] no longer depends on it!
+                #Only change an A after the next B no longer depends on it!
                 if n >= self.ham_sites:
                     m = n - self.ham_sites + 1
                     if not B[m] is None:
