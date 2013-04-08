@@ -71,7 +71,7 @@ q.fill(qn)
 """
 Set the initial Hamiltonian parameters.
 """
-h = -1.00
+h = -2.00
 J = 1.0
 
 if h == -J:
@@ -90,7 +90,7 @@ s = tdvp.EvoMPS_TDVP_Generic(N, D, q, ham)
 
 s.randomize()
 
-step = 0.1
+step = 0.02
 tol = 1E-10
 
 """
@@ -137,7 +137,9 @@ prevH = 0
 while (eta > tol):    
     row = [str(t)]
     
-    s.update()    
+    trunc = s.update(restore_RCF_after_trunc=False)
+    if trunc:
+        print "Truncated: ", s.D        
     
     row.append("%.8g" % eta)
         
