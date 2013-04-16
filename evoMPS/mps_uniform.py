@@ -13,6 +13,7 @@ import tdvp_common as tm
 import matmul as m
 import math as ma
 import logging
+import helpers_cuda as ch
 
 log = logging.getLogger(__name__)
 
@@ -425,6 +426,14 @@ class EvoMPS_MPS_Uniform(object):
                     log.warning("Sanity check failed: Largest ev after re-scale = %s", ev)
         
         return x, i < max_itr - 1, i
+        
+    def _calc_lr_cuda(self, x, tmp, calc_l=False, rescale=True,
+                 max_itr=1000, rtol=1E-14, atol=1E-14):
+
+        x, conv, i, ev = ch.calc_lr(self.A, x, calc_l=calc_l, rescale=rescale, max_itr=max_itr, atol=atol, rtol=rtol)
+        
+        return x, conv, i
+        
     
     def calc_lr(self):
         """Determines the dominant left and right eigenvectors of the transfer 
@@ -446,6 +455,13 @@ class EvoMPS_MPS_Uniform(object):
         self.l_before_CF = np.asarray(self.l_before_CF)
         self.r_before_CF = np.asarray(self.r_before_CF)
         
+        if self.ev_use_cuda:
+            self.l, self.conv_l, self.itr_l = self._calc_lr_cuda(self.l_before_CF, 
+                                                    tmp, 
+                                                    calc_l=True,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
         if self.ev_use_arpack:
             self.l, self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
                                                    calc_l=True,
@@ -462,6 +478,13 @@ class EvoMPS_MPS_Uniform(object):
                                         
         self.l_before_CF = self.l.copy()
 
+        if self.ev_use_cuda:
+            self.r, self.conv_r, self.itr_r = self._calc_lr_cuda(self.r_before_CF, 
+                                                    tmp, 
+                                                    calc_l=False,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
         if self.ev_use_arpack:
             self.r, self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
                                                    calc_l=False,
@@ -1280,3 +1303,4 @@ class EvoMPS_MPS_Uniform(object):
         #self.r[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
         #self.r[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
         #self.r[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
+
