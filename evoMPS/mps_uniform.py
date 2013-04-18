@@ -139,7 +139,7 @@ class EvoMPS_MPS_Uniform(object):
                         
         try:
             norm = la.get_blas_funcs("nrm2", [x])
-        except ValueError:
+        except (ValueError, AttributeError):
             norm = np.linalg.norm
     
         n = x.size #we will scale x so that stuff doesn't get too small
@@ -227,7 +227,7 @@ class EvoMPS_MPS_Uniform(object):
                         
         try:
             norm = la.get_blas_funcs("nrm2", [x])
-        except ValueError:
+        except (ValueError, AttributeError):
             norm = np.linalg.norm
             
 #        try:
@@ -563,6 +563,53 @@ class EvoMPS_MPS_Uniform(object):
         Or = tm.eps_r_op_1s(self.r, self.A, self.A, op)
         
         return m.adot(self.l, Or)
+        
+    def expect_1s_1s(self, op1, op2, d):
+        """Computes the expectation value of two single site operators acting 
+        on two different sites.
+        
+        The result is < op1_n op2_n+d > with the operators acting on sites
+        n and n + d.
+        
+        See expect_1s().
+        
+        Requires d > 0.
+        
+        The state must be up-to-date -- see self.update()!
+        
+        Parameters
+        ----------
+        op1 : ndarray or callable
+            The first operator, acting on the first site.
+        op2 : ndarray or callable
+            The second operator, acting on the second site.
+        d : int
+            The distance (number of sites) between the two sites acted on non-trivially.
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
+        """        
+        
+        assert d > 0, 'd must be greater than 1'
+        
+        if callable(op1):
+            op1 = sp.vectorize(op1, otypes=[sp.complex128])
+            op1 = sp.fromfunction(op1, (self.q, self.q))
+        
+        if callable(op2):
+            op2 = sp.vectorize(op2, otypes=[sp.complex128])
+            op2 = sp.fromfunction(op2, (self.q, self.q)) 
+        
+        r_n = tm.eps_r_op_1s(self.r, self.A, self.A, op2)
+
+        for n in xrange(d - 1):
+            r_n = tm.eps_r_noop(r_n, self.A, self.A)
+
+        r_n = tm.eps_r_op_1s(r_n, self.A, self.A, op1)
+         
+        return m.adot(self.l, r_n)
             
     def expect_2s(self, op):
         if callable(op):
