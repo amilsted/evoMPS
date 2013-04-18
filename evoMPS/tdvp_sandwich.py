@@ -232,6 +232,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
     def __init__(self, N, uni_ground):
         super(EvoMPS_TDVP_Sandwich, self).__init__(N, uni_ground)
         
+        assert uni_ground.ham_sites == 2, 'Sandwiches only supported for nearest-neighbour Hamiltonians at present!'
+        
         self.uni_l.update()
         self.uni_l.calc_lr()
         self.uni_l.calc_B()
@@ -239,10 +241,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.uni_l_kmr = la.norm(self.uni_l.r / la.norm(self.uni_l.r) - 
                                    self.uni_l.K / la.norm(self.uni_l.K))
         
-        if callable(self.uni_l.h_nn):
-            self.h_nn = lambda n, s, t, u, v: self.uni_l.h_nn(s, t, u, v)
+        if callable(self.uni_l.ham):
+            self.h_nn = lambda n, s, t, u, v: self.uni_l.ham(s, t, u, v)
         else:
-            self.h_nn = [self.uni_l.h_nn] * (self.N + 1)
+            self.h_nn = [self.uni_l.ham] * (self.N + 1)
 
         self.eps = sp.finfo(self.typ).eps
 
@@ -619,12 +621,12 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
     def grow_left(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
         if not callable(self.h_nn):
-            self.h_nn = [self.uni_l.h_nn] * m + list(self.h_nn)
+            self.h_nn = [self.uni_l.ham] * m + list(self.h_nn)
             
     def grow_right(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_right(m)
         if not callable(self.h_nn):
-            self.h_nn = list(self.h_nn) + [self.uni_r.h_nn] * m
+            self.h_nn = list(self.h_nn) + [self.uni_r.ham] * m
 
     def shrink_left(self, m):
         super(EvoMPS_TDVP_Sandwich, self).shrink_left(m)

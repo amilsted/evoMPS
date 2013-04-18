@@ -75,11 +75,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 The bond-dimension
             q : int
                 The single-site Hilbert space dimension
-            h_nn : callable or ndarray
-                Nearest-neighbour Hamiltonian element
-            h_nn_cprt : capsule = None
-                A capsule containing a pointer to a C implementation with the
-                capsule name 'h_nn'.
+            ham : callable or ndarray
+                Local Hamiltonian term (acting on two or three adjacent sites)
             dtype : numpy dtype = None
                 Specifies the array type.
         """
