@@ -657,6 +657,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         
         dR, phiR, gRr = self.uni_r.fidelity_per_site(other.uni_r, full_output=True, left=False)
         
+        gLl = gLl.reshape(self.uni_l.D, self.uni_l.D)
+        gRr = gRr.reshape(self.uni_r.D, self.uni_r.D)
+        
         gr = mm.H(la.inv(gRr).dot(sp.asarray(self.uni_r.r)))
         gri = mm.H(la.inv(sp.asarray(self.uni_r.r)).dot(gRr))
         

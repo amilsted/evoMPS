@@ -126,7 +126,7 @@ class EvoMPS_MPS_Generic(object):
             self.update()
 
         
-    def add_noise(self, fac, do_update=True):
+    def add_noise(self, fac=1.0, do_update=True):
         """Adds some random (white) noise of a given magnitude to the parameter 
         tensors A.
         
@@ -134,6 +134,8 @@ class EvoMPS_MPS_Generic(object):
         ----------
         fac : number
             A factor determining the amplitude of the random noise.
+        do_update : bool (True)
+            Whether to perform self.update() after randomizing.
         """
         for n in xrange(1, self.N + 1):
             self.A[n].real += (sp.rand(*self.A[n].shape) - 0.5) * 2 * fac
@@ -672,8 +674,6 @@ class EvoMPS_MPS_Generic(object):
             Reduced density matrix in the number basis.
         """
         rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
-        r_n2 = sp.empty_like(self.r[n2 - 1])
-        r_n1 = sp.empty_like(self.r[n1 - 1])
         
         for s2 in xrange(self.q[n2]):
             for t2 in xrange(self.q[n2]):
@@ -689,6 +689,36 @@ class EvoMPS_MPS_Generic(object):
                         tmp = m.adot(self.l[n1 - 1], r_n1)
                         rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
         return rho
+    
+    def apply_op_1s(self, op, n, do_update=True):
+        """Applies a single-site operator to a single site.
+        
+        By default, this performs self.update(), which also restores
+        state normalization.        
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The single-site operator. See self.expect_1s().
+        n: int
+            The site to apply the operator to.
+        do_update : bool
+            Whether to update after applying the operator.
+        """
+        if callable(op):
+            op = sp.vectorize(op, otypes=[sp.complex128])
+            op = sp.fromfunction(op, (self.q[n], self.q[n]))
+            
+        newAn = sp.zeros_like(self.A[n])
+        
+        for s in xrange(self.q[n]):
+            for t in xrange(self.q[n]):
+                newAn[s] += self.A[n][t] * op[s, t]
+                
+        self.A[n] = newAn
+        
+        if do_update:
+            self.update()
     
     def save_state(self, file):
         """Saves the parameter tensors self.A to a file. 

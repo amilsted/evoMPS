@@ -319,7 +319,9 @@ def H(m, out=None):
         out = sp.conjugate(m.T, out)
         return out
     
-def randomize_cmplx(x, a=-0.5, b=0.5, aj=-0.5, bj=0.5):        
+def randomize_cmplx(x, a=-0.5, b=0.5, aj=-0.5, bj=0.5):
+    """Randomizes a complex matrix in place.
+    """
     x[:] = (((b - a) * sp.random.ranf(x.shape) + a) 
             + 1.j * ((bj - aj) * sp.random.ranf(x.shape) + aj))
     return x
