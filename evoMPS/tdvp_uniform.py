@@ -16,7 +16,7 @@ import scipy.sparse.linalg as las
 import scipy.optimize as opti
 import tdvp_common as tm
 import matmul as m
-from mps_uniform import EvoMPS_MPS_Uniform, EOp
+from mps_uniform import EvoMPS_MPS_Uniform
 from mps_uniform_pinv import pinv_1mE
 
 try:
@@ -77,6 +77,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 The single-site Hilbert space dimension
             ham : callable or ndarray
                 Local Hamiltonian term (acting on two or three adjacent sites)
+            ham_sites : int
+                The number of sites acted on non-trivially by ham. Should be specified for callable ham.
             dtype : numpy dtype = None
                 Specifies the array type.
         """
@@ -710,16 +712,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         donor.calc_lr()
         donor.restore_CF()
         
-        #Phase-alignment
-        if self.D == 1:
-            ev = 0
-            for s in xrange(self.q):
-                ev += self.A[s] * donor.A[s].conj()
-            donor.A *= ev / abs(ev)
-        else:
-            opE = EOp(donor, self.A, donor.A, False)
-            ev = las.eigs(opE, which='LM', k=1)
-            donor.A *= ev[0] / abs(ev[0])
+        self.phase_align(donor)
         
         self.update()
         donor.update()
@@ -1040,20 +1033,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         state = np.load(file)
         return self.import_state(state, expand=expand, expand_q=expand_q, shrink_q=shrink_q, refac=refac, imfac=imfac)
             
-    def expand_q(self, newq):
-        oldK = self.K
-        
-        super(EvoMPS_TDVP_Uniform, self).expand_q(newq)
-        #self._init_arrays(self.D, newq) 
-        
-        self.K = oldK
-        
-    def shrink_q(self, newq):
-        oldK = self.K
-                
-        super(EvoMPS_TDVP_Uniform, self).shrink_q(newq)
-        #self._init_arrays(self.D, newq) 
-        
+    def set_q(self, newq):
+        oldK = self.K        
+        super(EvoMPS_TDVP_Uniform, self).set_q(newq)        
         self.K = oldK
                     
     def expand_D(self, newD, refac=100, imfac=0):
