@@ -94,19 +94,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         This is called automatically by self.update().
         
-        C[n] contains a contraction of the Hamiltonian self.h_nn with the parameter
-        tensors A[n] and A[n + 1] over the local basis indices.
+        C[n] contains a contraction of the Hamiltonian self.ham with the parameter
+        tensors over the local basis indices.
         
         This is prerequisite for calculating the tangent vector parameters B,
         which optimally approximate the exact time evolution.
         
         These are to be used on one side of the super-operator when applying the
         nearest-neighbour Hamiltonian, similarly to C in eqn. (44) of 
-        arXiv:1103.0936v2 [cond-mat.str-el], except being for the non-norm-preserving case.
+        arXiv:1103.0936v2 [cond-mat.str-el], for the non-norm-preserving case.
 
         Makes use only of the nearest-neighbour Hamiltonian, and of the A's.
         
-        C[n] depends on A[n] and A[n + 1].
+        C[n] depends on A[n] through A[n + self.ham_sites - 1].
         
         """
         if self.ham is None:
@@ -314,7 +314,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     def take_step(self, dtau, save_memory=True):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
-        The operation is A[n] -= dtau * B[n] with B[n] form self.calc_B(n).
+        The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
         
         If dtau is itself imaginary, real-time evolution results.
         

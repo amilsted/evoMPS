@@ -18,16 +18,24 @@ import tdvp_common as tm
 import matmul as m
 from mps_uniform import EvoMPS_MPS_Uniform
 from mps_uniform_pinv import pinv_1mE
-
-try:
-    import tdvp_calc_C as tc
-except ImportError:
-    tc = None
-    print "Warning! Cython version of Calc_C was not available. Performance may suffer for large q."
-
         
 class Excite_H_Op:
     def __init__(self, tdvp, donor, p):
+        """Creates an Excite_H_Op object, which is a LinearOperator.
+        
+        This wraps the effective Hamiltonian in terms of MPS tangent vectors
+        as a LinearOperator that can be used with SciPy's sparse linear
+        algebra routines.
+        
+        Parameters
+        ----------
+        tdvp : EvoMPS_TDVP_Uniform
+            tdvp object providing the required operations in the matrix representation.
+        donor : EvoMPS_TDVP_Uniform
+            Second tdvp object (can be the same as tdvp), for example containing a different ground state.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        """
         self.donor = donor
         self.p = p
         
@@ -85,9 +93,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         self.ham = ham
         if ham_sites is None:
-            if not callable(ham):
+            try:
                 self.ham_sites = len(ham.shape) / 2
-            else:
+            except AttributeError: #TODO: Try to count arguments using inspect module
                 self.ham_sites = 2
         else:
             self.ham_sites = ham_sites
@@ -113,8 +121,17 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K_left = None
             
     def set_ham_array_from_function(self, ham_func):
-        """Generates an array form for h_nn, which can speed up parts of the
-        algorithm by avoiding excess loops and python calls.
+        """Generates a Hamiltonian array from a function.
+        
+        Given a function ham_func(s, t, u, v) this generates an array
+        ham[s, t, u, v] (example for self.ham_sites == 2). 
+        Using an array instead of a function can significantly
+        speed up parts of the algorithm.
+        
+        Parameters
+        ----------
+        ham_func : callable
+            Local Hamiltonian term with self.ham_sites * 2 required arguments.
         """
         hv = np.vectorize(ham_func, otypes=[np.complex128])
         
@@ -124,6 +141,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.ham = np.fromfunction(hv, tuple([self.q] * 6))
     
     def calc_C(self):
+        """Generates the C tensor used to calculate the K and ultimately B.
+        
+        This is called automatically by self.update().
+        
+        C contains a contraction of the Hamiltonian self.ham with the parameter
+        tensors over the local basis indices.
+        
+        This is prerequisite for calculating the tangent vector parameters B,
+        which optimally approximate the exact time evolution.
+
+        Makes use only of the nearest-neighbour Hamiltonian, and of the A's.
+        
+        C depends on A.
+        
+        """
         if callable(self.ham):
             ham = np.vectorize(self.ham, otypes=[sp.complex128])
             ham = np.fromfunction(ham, tuple(self.C.shape[:-2] * 2))
@@ -137,6 +169,35 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, 
                    pseudo=True, brute_check=False):
+        """Uses an iterative method to calculate the result of applying 
+        the (pseudo) inverse of (1 - exp(1.j * p) * E) to a vector |x>.
+        
+        Parameters
+        ----------
+        x : ndarray
+            The matrix representation of the vector |x>.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        out : ndarray
+            Appropriately-sized output matrix.
+        left : bool
+            Whether to act left on |x> (instead of right).
+        A1 : ndarray
+            Ket parameter tensor.
+        A2 : ndarray
+            Bra parameter tensor.
+        r : ndarray
+            Right eigenvector of E corresponding to the largest eigenvalue.
+        pseudo : bool
+            Whether to calculate the pseudo inverse (or just the inverse).
+        brute_check : bool
+            Whether to check the answer using dense methods (scales as D**6!).
+            
+        Returns
+        -------
+        out : ndarray
+            The result of applying the inverse operator, in matrix form.
+        """
         if A1 is None:
             A1 = self.A
             
@@ -154,6 +215,17 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return out
         
     def calc_K(self):
+        """Generates the K matrix used to calculate B.
+        
+        This also updates the energy-density expectation value self.h.
+        
+        This is called automatically by self.update().
+        
+        K contains the (non-trivial) action of the Hamiltonian on the right 
+        half of the infinite chain.
+        
+        It directly depends on A, r, and C.
+        """
         if self.ham_sites == 2:
             Hr = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
         else:
@@ -174,6 +246,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 print "Off by: " + str(la.norm(res - QHr))
         
     def calc_K_l(self):
+        """Generates the left K matrix.
+        
+        See self.calc_K().
+        
+        K contains the (non-trivial) action of the Hamiltonian on the left 
+        half of the infinite chain.
+        
+        It directly depends on A, l, and C.
+        
+        Returns
+        -------
+        K_left : ndarray
+            The left K matrix.
+        h : complex
+            The energy-density expectation value.
+        """
         #Using C is allowed because h is Hermitian
         if self.ham_sites == 2:
             lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
@@ -197,6 +285,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return self.K_left, h
         
     def get_B_from_x(self, x, Vsh, l_sqrt_i, r_sqrt_i, out=None):
+        """Calculates a gauge-fixing B-tensor given parameters x.
+        
+        Parameters
+        ----------
+        x : ndarray
+            The parameter matrix.
+        Vsh : ndarray
+            Parametrization tensor.
+        l_sqrt_i : ndarray
+            The matrix self.l to the power of -1/2.
+        r_sqrt_i : ndarray
+            The matrix self.r to the power of -1/2.
+        out : ndarray
+            Output tensor of appropriate shape.
+        """
         if out is None:
             out = np.zeros_like(self.A)
             
@@ -206,9 +309,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return out
         
     def calc_l_r_roots(self):
+        """Calculates the (inverse) square roots of self.l and self.r.
+        """
         self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, self.sanity_checks)
         
     def calc_B(self, set_eta=True):
+        """Calculates a gauge-fixing tangent-vector parameter tensor capturing the projected infinitesimal time evolution of the state.
+        
+        A TDVP time step is defined as: A -= dtau * B
+        where dtau is an infinitesimal imaginary time step.        
+        
+        Parameters
+        ----------
+        set_eta : bool
+            Whether to set self.eta to the norm of the tangent vector.
+        """
         self.calc_l_r_roots()
                 
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
@@ -237,17 +352,56 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return B
         
     def update(self, restore_CF=True):
+        """Updates secondary quantities to reflect the state parameters self.A.
+        
+        Must be used after taking a step or otherwise changing the 
+        parameters self.A before calculating
+        physical quantities or taking the next step.
+        
+        Also (optionally) restores canonical form by calling self.restore_CF().
+        
+        Parameters
+        ----------
+        restore_CF : bool (True)
+            Whether to restore canonical form.
+        """
         super(EvoMPS_TDVP_Uniform, self).update(restore_CF=restore_CF)
         self.calc_C()
         self.calc_K()
         
     def take_step(self, dtau, B=None):
+        """Performs a complete forward-Euler step of imaginary time dtau.
+        
+        The operation is A -= dtau * B with B from self.calc_B() by default.
+        
+        If dtau is itself imaginary, real-time evolution results.
+        
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        B : ndarray
+            A custom parameter-space tangent vector to step along.
+        """
         if B is None:
             B = self.calc_B()
         
         self.A += -dtau * B
             
     def take_step_RK4(self, dtau, B_i=None):
+        """Take a step using the fourth-order explicit Runge-Kutta method.
+        
+        This requires more memory than a simple forward Euler step. 
+        It is, however, far more accurate with a per-step error of
+        order dtau**4.
+        
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        B_i : ndarray
+            B calculated using self.calc_B() (if known, to avoid calculating it again).
+        """
         def update():
             self.calc_lr()
             #self.restore_CF() #this really messes things up...
@@ -286,6 +440,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.A = A0 - dtau /6 * B_fin
         
     def calc_BHB_prereq(self, donor):
+        """Calculates prerequisites for the application of the effective Hamiltonian in terms of tangent vectors.
+        
+        This is called (indirectly) by the self.excite.. functions.
+        
+        Parameters
+        ----------
+        donor: EvoMPS_TDVP_Uniform
+            Second state (may be the same, or another ground state).
+            
+        Returns
+        -------
+        A lot of stuff.
+        """
         l = self.l
         r_ = donor.r
         r__sqrt = donor.r_sqrt
@@ -340,7 +507,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
     def calc_BHB(self, x, p, donor, ham_, C, C_, V_, Vr_, Vri_, 
                  C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None): 
-        """For a good approx. ground state, H should be Hermitian pos. semi-def.
+        """Calculates the result of applying the effective Hamiltonian in terms
+        of tangent vectors to a particular tangent vector specified by x.
+        
+        Note: For a good approx. ground state, H should be Hermitian pos. semi-def.
+        
+        Parameters
+        ----------
+        x : ndarray
+            The tangent vector parameters according to the gauge-fixing parametrization.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        donor: EvoMPS_TDVP_Uniform
+            Second state (may be the same, or another ground state).
+        ...others...
+            Prerequisites returned by self.calc_BHB_prereq().
         """        
         A = self.A
         A_ = donor.A
@@ -439,6 +620,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res, M, y_pi
     
     def calc_BHB_prereq_3s(self, donor):
+        """As for self.calc_BHB_prereq(), but for Hamiltonian terms acting on three sites.
+        """
         l = self.l
         r_ = donor.r
         r__sqrt = donor.r_sqrt
@@ -554,6 +737,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, 
                     C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
                     M_prev=None, y_pi_prev=None):
+        """As for self.calc_BHB(), but for Hamiltonian terms acting on three sites.
+        """
         A = self.A
         A_ = donor.A
         
@@ -676,6 +861,46 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None,
                         which='SM', return_eigenvectors=False):
+        """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
+        using tangent vectors of the current state as ansatz states.
+        
+        This is best used with an approximate ground state to find approximate
+        excitation energies.
+        
+        This uses topologically trivial ansatz states. Given a ground state
+        degeneracy, topologically non-trivial low-lying eigenstates 
+        (such as kinks or solitons) may also exist. See self.excite_top_nontriv().
+        
+        Many of the parameters are passed on to scipy.sparse.linalg.eigsh().
+        
+        Parameters
+        ----------
+        p : float
+            Momentum in units of inverse lattice spacing.
+        k : int
+            Number of eigenvalues to calculate.
+        tol : float
+            Tolerance (defaults to machine precision).
+        max_itr : int
+            Maximum number of iterations.
+        v0 : ndarray
+            Starting vector.
+        ncv : int
+            Number of Arnoldi vectors to store.
+        sigma : float
+            Eigenvalue shift to use.
+        which : string
+            Which eigenvalues to find ('SM' means the k smallest).
+        return_eigenvectors : bool
+            Whether to return eigenvectors as well as eigenvalues.
+            
+        Returns
+        -------
+        ev : ndarray
+            List of eigenvalues.
+        eV : ndarray
+            Matrix of eigenvectors (if return_eigenvectors == True).
+        """
         op = self._prepare_excite_op_top_triv(p)
         
         res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
@@ -697,7 +922,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             H[:, i] = op.matvec(x)
 
         if not np.allclose(H, m.H(H)):
-            print "H is not Hermitian!"
+            print "Warning! H is not Hermitian!"
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
@@ -750,7 +975,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             H[:, i] = op.matvec(x)
 
         if not np.allclose(H, m.H(H)):
-            print "H is not Hermitian!"
+            print "Warning! H is not Hermitian!"
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
