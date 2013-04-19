@@ -487,7 +487,23 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
-    def restore_SCF(self):
+    def restore_SCF(self, ret_g=False):
+        """Restores symmetric canonical form.
+        
+        In this canonical form, self.l == self.r and are diagonal matrices
+        with the Schmidt coefficients corresponding to the half-chain
+        decomposition form the diagonal entries.
+        
+        Parameters
+        ----------
+        ret_g : bool
+            Whether to return the gauge-transformation matrices used.
+            
+        Returns
+        -------
+        g, g_i : ndarray
+            Gauge transformation matrix g and its inverse g_i.
+        """
         X = la.cholesky(self.r, lower=True)
         Y = la.cholesky(self.l, lower=False)
         
@@ -1096,11 +1112,3 @@ class EvoMPS_MPS_Uniform(object):
         self.r[:oldD, oldD:].fill(la.norm(oldr) / oldD**2)
         self.r[oldD:, oldD:].fill(la.norm(oldr) / oldD**2)
         
-    def fuzz_state(self, f=1.0):
-        norm = la.norm(self.A)
-        fac = f*(norm / (self.q * self.D**2))        
-        
-        R = np.empty_like(self.A)
-        m.randomize_cmplx(R, -fac/2.0, fac/2.0)
-        
-        self.A += R
