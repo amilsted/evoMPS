@@ -14,12 +14,12 @@ many-particle quantum systems using matrix product states
 
 It can be used to efficiently find ground states and simulate dynamics.
 
-The evoMPS implementation assumes a nearest-neighbour Hamiltonian and one of the 
-following situations:
+The evoMPS implementation assumes a nearest-neighbour or next-nearest-neighbour
+Hamiltonian and one of the following situations:
 
 * states on a finite chain with open boundary conditions
 * spatially uniform states on an infinite chain
-* otherwise uniform states with a localized nonuniformity on an infinite chain
+* otherwise uniform states with a localized nonuniformity on an infinite chain (only nearest-neighbour at present)
 
 It is based on algorithms published by: 
 
@@ -98,6 +98,8 @@ and real time evolution is as easy as multiplying the time step size by a factor
 Contact
 -------
 
-Please send bug reports or comments to:
+Please send comments to:
 
 ashmilsted at <google's well-known email service>
+
+To submit ideas or bug reports, please use the GitHub Issues system <http://github.com/amilsted/evoMPS/>.
