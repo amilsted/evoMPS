@@ -417,30 +417,60 @@ class EvoMPS_MPS_Uniform(object):
 
         self.l = S
         self.r = S
-    
-    def restore_CF(self, ret_g=False):
+
+    def restore_CF(self, ret_g=False, zero_tol=1E-15):
         if self.symm_gauge:
             self.restore_SCF()
         else:
+
             #First get G such that r = eye
-            G = la.cholesky(self.r, lower=True)
-            G_i = m.invtr(G, lower=True)
+            try:
+                G = la.cholesky(self.r, lower=True)
+                G_i = m.invtr(G, lower=True)
+                new_D_r = self.D
+            except la.LinAlgError:
+                ev, EV = la.eigh(self.r)
+                new_D_r = np.count_nonzero(ev > zero_tol)
+                ev_sq = sp.sqrt(ev[-new_D_r:])
+                ev_sq_i = m.simple_diag_matrix(
+                    np.append(np.zeros(self.A.shape[1] - new_D_r), 1. / ev_sq))
+                ev_sq = m.simple_diag_matrix(
+                    np.append(np.zeros(self.A.shape[1] - new_D_r), ev_sq))
+                G = ev_sq.dot_left(EV)
+                G_i = ev_sq_i.dot(m.H(EV))
+                print ev
+                print new_D_r
+                #exit()
 
             self.l = m.mmul(m.H(G), self.l, G)
-            
+
             #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
             ev, EV = la.eigh(self.l)
-            
+
+            new_D_l = np.count_nonzero(ev > zero_tol)
+            if new_D_l != self.A.shape[1]:
+                print ev
+                print new_D_l
+
             G = G.dot(EV)
             G_i = m.H(EV).dot(G_i)
-            
+
             for s in xrange(self.q):
                 self.A[s] = m.mmul(G_i, self.A[s], G)
-                
+
             #ev contains the squares of the Schmidt coefficients,
-            self.S_hc = - np.sum(ev * sp.log2(ev))
-            
-            self.l = m.simple_diag_matrix(ev, dtype=self.typ)
+            self.S_hc = - np.sum(ev[-new_D_l:] * sp.log2(ev[-new_D_l:]))
+
+            if min(new_D_r, new_D_l) != self.A.shape[1]:
+                self.D = min(new_D_r, new_D_l)
+                print self.D
+                tmp_A = self.A
+                self._init_arrays(self.D, self.q)
+                self.l = m.simple_diag_matrix(ev[-self.D:], dtype=self.typ)
+                self.A = tmp_A[..., -self.D:, -self.D:]
+                print self.A.shape
+            else:
+                self.l = m.simple_diag_matrix(ev, dtype=self.typ)
 
             if self.sanity_checks:
                 M = np.zeros_like(self.r)
