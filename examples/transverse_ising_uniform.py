@@ -18,71 +18,41 @@ import evoMPS.tdvp_uniform as tdvp
 First, we define our Hamiltonian and some observables.
 """
 
-def h_nn(s, t, u, v):
-    """The nearest neighbour Hamiltonian representing the interaction.
+x_ss = sp.array([[0, 1], 
+                 [1, 0]])
+y_ss = 1.j * sp.array([[0, -1], 
+                       [1, 0]])
+z_ss = sp.array([[1, 0], 
+                 [0, -1]])
 
-    -J * sigmaX_n_s,t * sigmaX_n+1_u,v - h * sigmaZ_s,t
-    
-    The global variable J determines the strength.
-    """
-    res = 0
-    
-    if s != u and t != v:
-        res = -J
-        
-    if s == u and t == v:
-        res += -h * (-1)**s
-        
-    return res
-    
-def z_ss(s, t):
-    """Spin observable: z-direction
-    """
-    if s == t:
-        return (-1)**s
-    else:
-        return 0
-        
-def x_ss(s, t):
-    """Spin observable: x-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return 1
-        
-def y_ss(s, t):
-    """Spin observable: y-direction
-    """
-    if s == t:
-        return 0
-    else:
-        return 1.j * (-1)**t
+def get_ham(J, h):
+    ham = -J * (sp.kron(x_ss, x_ss) + h * sp.kron(z_ss, sp.eye(2))).reshape(2, 2, 2, 2)
+    return ham
 
 """
 Next, we set up some global variables to be used as parameters to 
 the evoMPS class.
 """
 
-D = 16 #The bond dimension
+D = 32 #The bond dimension
 q = 2 #The site dimension
-
-"""
-Now we are ready to create an instance of the evoMPS class.
-"""
-s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
 
 """
 Set the initial Hamiltonian parameters.
 """
-h = -1.00
+h = -0.50
 J = 1.00
+
+"""
+Now we are ready to create an instance of the evoMPS class.
+"""
+s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham(J, h))
 
 """
 We're going to simulate a quench after we find the ground state.
 Set the new J parameter for the real time evolution here.
 """
-J_real = 0.25
+h_real = -1.5
 
 """
 Now set the step sizes for the imaginary and the real time evolution.
@@ -96,8 +66,8 @@ Now set the tolerance for the imaginary time evolution.
 When the state tolerance falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 1E-10
-total_steps = 20000
+tol_im = 1E-9
+num_realtime_steps = 200
 
 """
 The following handles loading the ground state from a file.
@@ -130,7 +100,7 @@ else:
     loaded = False
     real_time = False
     
-s.sanity_checks = True
+s.sanity_checks = False
 s.symm_gauge = True
 
 if __name__ == "__main__":
@@ -138,20 +108,19 @@ if __name__ == "__main__":
     Prepare some loop variables and some vectors to hold data from each step.
     """
     t = 0. + 0.j
-    imsteps = 0
     
     reCF = []
     reNorm = []
     
-    T = sp.zeros((total_steps), dtype=sp.complex128)
-    E = sp.zeros((total_steps), dtype=sp.complex128)
-    lN = sp.zeros((total_steps), dtype=sp.complex128)
+    T = []
+    E = []
+    lN = []
     
-    Sx = sp.zeros((total_steps), dtype=sp.complex128)
-    Sy = sp.zeros((total_steps), dtype=sp.complex128)
-    Sz = sp.zeros((total_steps), dtype=sp.complex128)
+    Sx = []
+    Sy = []
+    Sz = []
     
-    Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
+    Mx = []   #Magnetization in x-direction.
        
        
     """
@@ -165,24 +134,26 @@ if __name__ == "__main__":
     print "\t".join(col_heads)
     print
     
-    for i in xrange(total_steps):
-        T[i] = t
+    im_steps = 0
+    realtime_steps = 0
+    while realtime_steps < num_realtime_steps:
+        T.append(t)
         
-        row = [str(i)]
+        row = [str(im_steps + realtime_steps)]
         row.append(str(t))
         
         eta = s.eta.real
         row.append("%.4g" % eta)
         
-        s.update()
+        s.update(auto_truncate=not real_time)
         
-        E[i] = s.h
-        row.append("%.15g" % E[i].real)
+        E.append(s.h)
+        row.append("%.15g" % E[-1].real)
         
-        if i > 0:        
-            dE = E[i].real - E[i - 1].real
+        if len(E) > 1:
+            dE = E[-1].real - E[-2].real
         else:
-            dE = E[i]
+            dE = E[-1]
         
         row.append("%.2e" % (dE.real))
             
@@ -190,12 +161,12 @@ if __name__ == "__main__":
         Compute obserables!
         """
         
-        Sx[i] = s.expect_1s(x_ss) 
-        Sy[i] = s.expect_1s(y_ss)
-        Sz[i] = s.expect_1s(z_ss)
-        row.append("%.3g" % Sx[i].real)
-        row.append("%.3g" % Sy[i].real)
-        row.append("%.3g" % Sz[i].real)
+        Sx.append(s.expect_1s(x_ss))
+        Sy.append(s.expect_1s(y_ss))
+        Sz.append(s.expect_1s(z_ss))
+        row.append("%.3g" % Sx[-1].real)
+        row.append("%.3g" % Sy[-1].real)
+        row.append("%.3g" % Sz[-1].real)
         
         entr = s.S_hc
         row.append("%.3g" % entr.real)
@@ -203,7 +174,7 @@ if __name__ == "__main__":
         """
         Switch to real time evolution if we have the ground state.
         """
-        if expand and (loaded or (not real_time and i > 1 and eta < tol_im)):
+        if expand and (loaded or (not real_time and im_steps > 1 and eta < tol_im)):
             grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step)        
             
             if not loaded:
@@ -215,17 +186,17 @@ if __name__ == "__main__":
             s.update()
             
             loaded = False
-        elif loaded or (not real_time and i > 1 and eta < tol_im):
+        elif loaded or (not real_time and im_steps > 1 and eta < tol_im):
             real_time = True
             
             if abs(h/J) < 1:
-                broken_left = Sx[i] > 0
+                broken_left = Sx[-1] > 0
                 print "Broken left: " + str(broken_left)
             
             grnd_fname = grnd_fname_fmt % (D, q, J, h, tol_im, step, int(broken_left))  
             
             s.save_state(grnd_fname)
-            J = J_real
+            s.ham = get_ham(J, h_real)
             step = realstep * 1.j
             loaded = False
             print 'Starting real time evolution!'
@@ -238,10 +209,11 @@ if __name__ == "__main__":
         if not real_time:
             print "\t".join(row)
             s.take_step(step)
-            imsteps += 1
+            im_steps += 1
         else:
             print "\t".join(row)
             s.take_step_RK4(step)
+            realtime_steps += 1
         
         t += 1.j * sp.conj(step)
     
@@ -249,8 +221,12 @@ if __name__ == "__main__":
     Simple plots of the results.
     """
     
-    if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-        tau = T.imag[0:imsteps]
+    T = sp.array(T)
+    E = sp.array(E)
+    Sx = sp.array(Sx)
+    
+    if im_steps > 0: #Plot imaginary time evolution of K1 and Mx
+        tau = T.imag[0:im_steps]
         
         fig1 = plt.figure(1)
         fig2 = plt.figure(2) 
@@ -261,11 +237,11 @@ if __name__ == "__main__":
         M_tau.set_xlabel('tau')
         M_tau.set_ylabel('M_x')    
         
-        K1_tau.plot(tau, E.real[0:imsteps])
-        M_tau.plot(tau, Sx.real[0:imsteps])
+        K1_tau.plot(tau, E.real[0:im_steps])
+        M_tau.plot(tau, Sx.real[0:im_steps])
     
     #Now plot the real time evolution of K1 and Mx
-    t = T.real[imsteps + 1:]
+    t = T.real[im_steps + 1:]
     fig3 = plt.figure(3)
     fig4 = plt.figure(4)
     
@@ -276,7 +252,7 @@ if __name__ == "__main__":
     M_t.set_xlabel('t')
     M_t.set_ylabel('M_x')
     
-    K1_t.plot(t, E.real[imsteps + 1:])
-    M_t.plot(t, Sx.real[imsteps + 1:])
+    K1_t.plot(t, E.real[im_steps + 1:])
+    M_t.plot(t, Sx.real[im_steps + 1:])
     
     plt.show()
