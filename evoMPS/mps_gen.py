@@ -173,7 +173,7 @@ class EvoMPS_MPS_Generic(object):
                 self.D[n] = qacc
                 
     
-    def update(self, restore_RCF=True, auto_truncate=True, restore_RCF_after_trunc=True):
+    def update(self, restore_RCF=True, auto_truncate=False, restore_RCF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -191,17 +191,20 @@ class EvoMPS_MPS_Generic(object):
         restore_RCF_after_trunc : bool (True)
             Whether to restore_RCF after truncation.
             
-        Returns
-        -------
-        truncated : bool (only if auto_truncate == True)
-            Whether truncation was performed.
         """
         assert restore_RCF or not auto_truncate, "auto_truncate requires restore_RCF"
         
         if restore_RCF:
             self.restore_RCF()
             if auto_truncate:
-                return self.auto_truncate(restore_RCF=restore_RCF_after_trunc)
+                data = self.auto_truncate(update=False, 
+                                          return_update_data=not restore_RCF_after_trunc)
+                if data:
+                    print "Auto-truncated! New D: ", self.D
+                    if restore_RCF_after_trunc:
+                        self.restore_RCF()
+                    else:
+                        self._update_after_truncate(*data)
         else:
             self.calc_l()
             self.calc_r()
@@ -358,22 +361,25 @@ class EvoMPS_MPS_Generic(object):
         elif update_l:
             self.calc_l()
     
-    def auto_truncate(self, restore_RCF=True, zero_tol=1E-15):
+    def auto_truncate(self, update=True, zero_tol=1E-15, return_update_data=False):
         """Automatically reduces the bond-dimension in case of rank-deficiency.
         
         Canonical form is required. Always perform self.restore_RCF() first!
         
         Parameters
         ----------
-            restore_RCF : bool (True)
-                Whether to restore canonical form after truncation.
+            update : bool (True)
+                Whether to call self.update() after truncation.
             zero_tol : float
                 Tolerance for interpretation of values as zero.
-                
+            return_update_data : bool
+                Whether to return additional data needed to perform a minimal update.
         Returns
         -------
             truncated : bool
-                Whether truncation was performed.
+                Whether truncation was performed (if return_update_data == False).
+            data : stuff
+                Additional data needed by self._update_after_truncate() (if return_update_data == True).
         """
         new_D = self.D.copy()
         
@@ -386,17 +392,20 @@ class EvoMPS_MPS_Generic(object):
             new_D[n] = sp.count_nonzero(abs(ldiag) > zero_tol)
         
         if not sp.all(new_D == self.D):
-            self.truncate(new_D, update_lr=not restore_RCF)
+            data = self.truncate(new_D, update=update, return_update_data=return_update_data)
         
-            if restore_RCF:
-                self.restore_RCF()
-                                        
-            return True
+            if update:
+                self.update()
+            
+            if return_update_data:
+                return data
+            else:
+                return True
         else:
             return False
             
         
-    def truncate(self, new_D, update_lr=True):
+    def truncate(self, new_D, update=True, return_update_data=False):
         """Reduces the bond-dimensions by truncating the least-significant Schmidt vectors.
         
         The parameters must be in canonical form to ensure that
@@ -412,8 +421,14 @@ class EvoMPS_MPS_Generic(object):
         ----------
         new_D : list or ndarray of int
             The new bond-dimensions in a vector of length N + 1.
-        update_lr : bool (True)
-            Whether to update self.l and self.r after truncation (turn off if you plan to update them yourself).
+        update : bool (True)
+            Whether to call self.update() after truncation (turn off if you plan to do it yourself).
+        return_update_data : bool
+                Whether to return additional data needed to perform a minimal update.
+        Returns
+        -------
+            data : stuff
+                Additional data needed by self._update_after_truncate() (if return_update_data == True).
         """
         new_D = sp.array(new_D)
         assert new_D.shape == self.D.shape, "new_D must have same shape as self.D"
@@ -421,11 +436,8 @@ class EvoMPS_MPS_Generic(object):
     
         last_trunc = sp.argwhere(self.D - new_D).max()
         
-        if update_lr:
-            tmp_r0 = self.r[0]
-            tmp_l = self.l
-            
         tmp_A = self.A
+        old_l = self.l
         
         self.D = new_D
         self._init_arrays()
@@ -433,18 +445,24 @@ class EvoMPS_MPS_Generic(object):
         for n in xrange(1, self.N + 1):
             self.A[n][:] = tmp_A[n][:, -self.D[n - 1]:, -self.D[n]:]
         
-        if update_lr:
-            self.r[0] = tmp_r0
+        if update:
+            self.update()
+        
+        if return_update_data:    
+            return last_trunc, old_l
+            
+    def _update_after_truncate(self, n_last_trunc, old_l):
+            self.r[0][0, 0] = 1
             
             for n in xrange(1, self.N):
-                self.l[n] = m.simple_diag_matrix(tmp_l[n].diag[-self.D[n]:])
+                self.l[n] = m.simple_diag_matrix(old_l[n].diag[-self.D[n]:])
                 
-            self.l[self.N] = tmp_l[self.N]
+            self.l[self.N][0, 0] = 1
             
-            for n in xrange(self.N - 1, last_trunc - 1, - 1):
+            for n in xrange(self.N - 1, n_last_trunc - 1, - 1):
                 self.r[n] = m.eyemat(self.D[n])
                 
-            self.calc_r(n_high=last_trunc - 1)
+            self.calc_r(n_high=n_last_trunc - 1)
             
             self.simple_renorm()
         

@@ -589,20 +589,12 @@ class EvoMPS_MPS_Uniform(object):
                 np.append(np.zeros(self.A.shape[1] - new_D_r), ev_sq))
             G = ev_sq.dot_left(EV)
             G_i = ev_sq_i.dot(m.H(EV))
-            print ev
-            print new_D_r
-            #exit()
 
         self.l = m.mmul(m.H(G), self.l, G)
         
         #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
         ev, EV = la.eigh(self.l)
 
-        new_D_l = np.count_nonzero(ev > zero_tol)
-        if new_D_l != self.A.shape[1]:
-            print ev
-            print new_D_l
-        
         G = G.dot(EV)
         G_i = m.H(EV).dot(G_i)
         
@@ -610,18 +602,9 @@ class EvoMPS_MPS_Uniform(object):
             self.A[s] = m.mmul(G_i, self.A[s], G)
             
         #ev contains the squares of the Schmidt coefficients,
-        self.S_hc = - np.sum(ev[-new_D_l:] * sp.log2(ev[-new_D_l:]))
+        self.S_hc = - np.sum(ev * sp.log2(ev))
         
-        if min(new_D_r, new_D_l) != self.A.shape[1]:
-            self.D = min(new_D_r, new_D_l)
-            print self.D
-            tmp_A = self.A
-            self._init_arrays(self.D, self.q)
-            self.l = m.simple_diag_matrix(ev[-self.D:], dtype=self.typ)
-            self.A = tmp_A[..., -self.D:, -self.D:]
-            print self.A.shape
-        else:
-            self.l = m.simple_diag_matrix(ev, dtype=self.typ)
+        self.l = m.simple_diag_matrix(ev, dtype=self.typ)
 
         if self.sanity_checks:
             M = np.zeros_like(self.r)
@@ -675,6 +658,42 @@ class EvoMPS_MPS_Uniform(object):
         else:
             return self.restore_RCF(ret_g=ret_g)
     
+    def auto_truncate(self, update=True, zero_tol=1E-15):
+        new_D_l = np.count_nonzero(self.l.diag > zero_tol)
+        
+        if 0 < new_D_l < self.A.shape[1]:
+            self.truncate(new_D_l, update=False)
+            
+            if update:
+                self.update()
+                
+            return True
+        else:
+            return False
+    
+    def truncate(self, newD, update=True):
+        assert newD < self.D, 'new bond-dimension must be smaller!'
+        
+        tmp_A = self.A
+        tmp_l = self.l.diag
+        
+        self._init_arrays(newD, self.q)
+        
+        if self.symm_gauge:
+            self.l = m.simple_diag_matrix(tmp_l[:self.D], dtype=self.typ)
+            self.r = m.simple_diag_matrix(tmp_l[:self.D], dtype=self.typ)
+            self.A = tmp_A[:, :self.D, :self.D]
+        else:
+            self.l = m.simple_diag_matrix(tmp_l[-self.D:], dtype=self.typ)
+            self.r = m.eyemat(self.D, dtype=self.typ)
+            self.A = tmp_A[:, -self.D:, -self.D:]
+            
+        self.l_before_CF = self.l.A
+        self.r_before_CF = self.r.A
+
+        if update:
+            self.update()
+    
     def calc_AA(self):
         """Calculates the products A[s] A[t] for s, t in range(self.q).
         The result is stored in self.AA.
@@ -682,7 +701,7 @@ class EvoMPS_MPS_Uniform(object):
         self.AA = tm.calc_AA(self.A, self.A)
         
         
-    def update(self, restore_CF=True):
+    def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -694,10 +713,23 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         restore_CF : bool (True)
             Whether to restore canonical form.
+        auto_truncate : bool (True)
+            Whether to automatically truncate the bond-dimension if
+            rank-deficiency is detected. Requires restore_CF.
+        restore_CF_after_trunc : bool (True)
+            Whether to restore_CF after truncation.
         """
+        assert restore_CF or not auto_truncate, "auto_truncate requires restore_CF"
+        
         self.calc_lr()
         if restore_CF:
             self.restore_CF()
+            if auto_truncate and self.auto_truncate(update=False):
+                print "Auto-truncated! New D: ", self.D
+                self.calc_lr()
+                if restore_CF_after_trunc:
+                    self.restore_CF()
+                
         self.calc_AA()
         
         

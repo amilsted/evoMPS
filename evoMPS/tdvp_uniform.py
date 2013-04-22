@@ -351,7 +351,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
-    def update(self, restore_CF=True):
+    def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after taking a step or otherwise changing the 
@@ -364,8 +364,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         ----------
         restore_CF : bool (True)
             Whether to restore canonical form.
+        auto_truncate : bool (True)
+            Whether to automatically truncate the bond-dimension if
+            rank-deficiency is detected. Requires restore_CF.
+        restore_CF_after_trunc : bool (True)
+            Whether to restore_CF after truncation.
         """
-        super(EvoMPS_TDVP_Uniform, self).update(restore_CF=restore_CF)
+        super(EvoMPS_TDVP_Uniform, self).update(restore_CF=restore_CF,
+                                                auto_truncate=auto_truncate,
+                                                restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
         self.calc_K()
         
