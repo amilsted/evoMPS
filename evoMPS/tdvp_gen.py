@@ -55,7 +55,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.ham = ham
         if ham_sites is None:
             if not callable(ham):
-                self.ham_sites = len(ham[0].shape) / 2
+                self.ham_sites = len(ham[1].shape) / 2
             else:
                 self.ham_sites = 2
         else:
