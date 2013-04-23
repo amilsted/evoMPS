@@ -33,14 +33,14 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-N = 7 #The length of the finite spin chain.
+N = 20 #The length of the finite spin chain.
 
 
 """
 The bond dimension for each site is given as a vector, length N + 1.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 8 #The maximum bond dimension
+bond_dim = 32 #The maximum bond dimension
 
 D = sp.empty(N + 1, dtype=sp.int32)
 D.fill(bond_dim)
@@ -58,7 +58,7 @@ q.fill(qn)
 """
 Set the initial Hamiltonian parameters.
 """
-h = 1.00
+h = 0.50
 J = 1.00
 
 """
@@ -153,7 +153,7 @@ for i in xrange(total_steps):
     row = [str(i)]
     row.append(str(t))
     
-    s.update()
+    s.update(auto_truncate=True, restore_RCF_after_trunc=False)
         
     H[i] = s.H_expect
     row.append("%.15g" % H[i].real)

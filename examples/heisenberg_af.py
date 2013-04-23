@@ -69,14 +69,14 @@ Next, we set up some global variables to be used as parameters to
 the evoMPS class.
 """
 
-N = 20 #The length of the finite spin chain.
+N = 16 #The length of the finite spin chain.
 
 
 """
 The bond dimension for each site is given as a vector, length N.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 16 #The maximum bond dimension
+bond_dim = 32 #The maximum bond dimension
 
 
 """
@@ -101,7 +101,7 @@ J_real = 2
 Now set the step sizes for the imaginary and the real time evolution.
 These are currently fixed.
 """
-step = 0.05
+step = 0.1
 realstep = 0.01
 
 """
@@ -109,8 +109,8 @@ Now set the tolerance for the imaginary time evolution.
 When the change in the energy falls below this level, the
 real time simulation of the quench will begin.
 """
-tol_im = 5E-15
-total_steps = 500
+tol_im = 1E-4
+total_steps = 2000
 
 """
 The following handles loading the ground state from a file.
@@ -157,46 +157,21 @@ Print a table header.
 """
 print "Bond dimensions: " + str(s.D)
 print
-col_heads = ["Step", "t", "l[N]", "Restore CF?", "Renorm?", "K[1]", "dK[1]", 
+col_heads = ["Step", "t", "H", "dH", 
              "sig_x_3", "sig_y_3", "sig_z_3",
-             "E_vn_3,4", "M_x", "Next step",
-             "(itr", "delta", "delta_chk)"] #These last three are for testing the midpoint method.
+             "E_vn_3,4", "M_x", "eta"] #These last three are for testing the midpoint method.
 print "\t".join(col_heads)
 print
-
+eta = 1
 for i in xrange(total_steps):
     T[i] = t
     
     row = [str(i)]
     row.append(str(t))
     
-    s.calc_r()
-    s.calc_l()
-
-    lN[i] = s.l[N][0, 0]
-    row.append("%.3g" % lN[i].real)
-
-    restoreCF = (i % 4 == 0) #Restore canonical form every 4 steps.
-    reCF.append(restoreCF)
-    if restoreCF:
-        s.restore_RCF()
-        row.append("Yes")
-    else:
-        row.append("No")
-    
-    #Renormalize if the norm is drifting.
-    reNormalize = not sp.allclose(s.l[N][0, 0], 1., atol=s.eps, rtol=0)
-    reNorm.append(reNormalize)
-    if reNormalize:
-        row.append("True")
-        s.simple_renorm()
-    else:
-        row.append("False")
-    
-    s.calc_C()    
-    s.calc_K()
+    s.update()
         
-    K1[i] = s.K[1][0, 0]    
+    K1[i] = s.H_expect
     row.append("%.15g" % K1[i].real)
     
     if i > 0:        
@@ -232,32 +207,27 @@ for i in xrange(total_steps):
     """
     Switch to real time evolution if we have the ground state.
     """
-#    if loaded or (not real_time and abs(dK1) < tol_im):
-#        real_time = True
-#        s.SaveState(grnd_fname)
-#        J = J_real
-#        step = realstep * 1.j
-#        loaded = False
-#        print 'Starting real time evolution!'
-    
-    row.append(str(1.j * sp.conj(step)))
+    if loaded or (not real_time and eta < tol_im):
+        real_time = True
+        s.save_state(grnd_fname)
+        s.ham = [get_ham(S, J, J_real, J)] * N
+        step = realstep * 1.j
+        loaded = False
+        print 'Starting real time evolution!'
+
     
     """
     Carry out next step!
     """
     if not real_time:
-        print "\t".join(row)
         s.take_step(step)     
         imsteps += 1
-    elif False: #Midpoint method. Currently disabled. Change to True to test!
-        itr, delta, delta_check = s.take_step_implicit(step)
-        row.append(str(itr))
-        row.append("%.3g" % delta.real)
-        row.append("%.3g" % delta_check.real)
-        print "\t".join(row)
     else:
-        print "\t".join(row)
         s.take_step_RK4(step)
+    
+    eta = s.eta.real.sum()
+    row.append(str(eta))
+    print "\t".join(row)
     
     t += 1.j * sp.conj(step)
 

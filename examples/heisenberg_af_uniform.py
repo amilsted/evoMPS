@@ -74,7 +74,7 @@ else:
 """
 The bond dimension:
 """
-D = 16
+D = 32
 
 """
 Set the Hamiltonian parameters.
@@ -85,6 +85,7 @@ Jx = Jy = Jz = 1
 Initialize the simulation object:
 """
 s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham(S, Jx, Jy, Jz))
+s.ev_use_cuda = True
 #s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
 
 """
@@ -235,7 +236,7 @@ if __name__ == "__main__":
             
             s.save_state(grnd_fname)
             
-            s.h_nn = get_ham(S, Jx_2, Jy_2, Jz_2)
+            s.ham = get_ham(S, Jx_2, Jy_2, Jz_2)
             
             step = realstep * 1.j
             loaded = False
