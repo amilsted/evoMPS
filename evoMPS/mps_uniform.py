@@ -1066,8 +1066,48 @@ class EvoMPS_MPS_Uniform(object):
         
         if do_update:
             self.update()
+    
+    def expect_string_per_site_1s(self, op):
+        """Calculates the per-site factor of a string expectation value.
+        
+        The string operator is the product over all sites of a single-site
+        operator 'op'. 
+        
+        The expectation value is related to the infinite power of the per-site 
+        fidelity of the original state and the state obtained by applying the 
+        string. Since the operator need not preserve the norm, this can be 
+        greater than 1, in which case the expectation value diverges.
+        
+        The expectation value of a string is only well-defined if the string
+        is a symmetry of the state such that the per-site factor == 1, although
+        an absolute value of 1 ensures that it does not diverge or go to zero.
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The single-site operator. See self.expect_1s().
             
-            
+        Returns
+        -------
+        ev : complex
+            The per-site factor of the expectation value.
+        """
+        if callable(op):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+        
+        Aop = np.tensordot(op, self.A, axes=([1],[0]))
+        
+        if self.D == 1:
+            ev = 0
+            for s in xrange(self.q):
+                ev += Aop[s] * self.A[s].conj()
+            return ev
+        else:            
+            opE = EOp(Aop, self.A, False)
+            ev = las.eigs(opE, v0=np.asarray(self.r), which='LM', k=1, ncv=6)
+            return ev[0]                
+                
     def set_q(self, newq):
         """Alter the single-site Hilbert-space dimension q.
         
