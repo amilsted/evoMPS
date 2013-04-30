@@ -90,6 +90,8 @@ class EvoMPS_MPS_Uniform(object):
         
         self.pow_itr_max = 2000
         self.ev_use_arpack = True
+        self.ev_arpack_nev = 1
+        self.ev_arpack_ncv = None
                 
         self.symm_gauge = False
         
@@ -182,7 +184,7 @@ class EvoMPS_MPS_Uniform(object):
                                 tm.eps_r_noop(self.r, self.A, self.A), self.r))
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        tol=1E-14, ncv=6):
+                        tol=1E-14, ncv=None, k=1):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -211,11 +213,11 @@ class EvoMPS_MPS_Uniform(object):
         opE = EOp(A1, A2, calc_l)
         x *= n / norm(x.ravel())
         try:
-            ev, eV = las.eigs(opE, which='LM', k=1, v0=x.ravel(), tol=tol, ncv=ncv)
+            ev, eV = las.eigs(opE, which='LM', k=k, v0=x.ravel(), tol=tol, ncv=ncv)
             conv = True
         except las.ArpackNoConvergence:
             print "Reset! (l? %s)" % str(calc_l)
-            ev, eV = las.eigs(opE, which='LM', k=1, tol=tol, ncv=ncv)
+            ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
             conv = True
             
         #print ev2
@@ -400,7 +402,9 @@ class EvoMPS_MPS_Uniform(object):
         if self.ev_use_arpack:
             self.l, self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.l_before_CF, tmp,
                                                    calc_l=True,
-                                                   tol=self.itr_rtol)
+                                                   tol=self.itr_rtol,
+                                                   k=self.ev_arpack_nev,
+                                                   ncv=self.ev_arpack_ncv)
         else:
             self.l, self.conv_l, self.itr_l = self._calc_lr(self.l_before_CF, 
                                                     tmp, 
@@ -414,7 +418,9 @@ class EvoMPS_MPS_Uniform(object):
         if self.ev_use_arpack:
             self.r, self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.r_before_CF, tmp, 
                                                    calc_l=False,
-                                                   tol=self.itr_rtol)
+                                                   tol=self.itr_rtol,
+                                                   k=self.ev_arpack_nev,
+                                                   ncv=self.ev_arpack_ncv)
         else:
             self.r, self.conv_r, self.itr_r = self._calc_lr(self.r_before_CF, 
                                                     tmp, 
@@ -487,7 +493,7 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 print "Sanity check failed: Bad norm = " + str(norm)
     
-    def restore_SCF(self, ret_g=False):
+    def restore_SCF(self, ret_g=False, zero_tol=1E-15):
         """Restores symmetric canonical form.
         
         In this canonical form, self.l == self.r and are diagonal matrices
@@ -504,9 +510,36 @@ class EvoMPS_MPS_Uniform(object):
         g, g_i : ndarray
             Gauge transformation matrix g and its inverse g_i.
         """
-        X = la.cholesky(self.r, lower=True)
-        Y = la.cholesky(self.l, lower=False)
-        
+        try:
+            X = la.cholesky(self.r, lower=True)
+            Xi = m.invtr(X, lower=True)
+        except la.LinAlgError:
+            ev, EV = la.eigh(self.r)
+            
+            new_D = np.count_nonzero(ev > zero_tol)
+            ev_sq = sp.sqrt(ev[-new_D:])
+            ev_sq_i = m.simple_diag_matrix(
+                np.append(np.zeros(self.A.shape[1] - new_D), 1. / ev_sq))
+            ev_sq = m.simple_diag_matrix(
+                np.append(np.zeros(self.A.shape[1] - new_D), ev_sq))
+            X = ev_sq.dot_left(EV)
+            Xi = ev_sq_i.dot(m.H(EV))
+            
+        try:
+            Y = la.cholesky(self.l, lower=False)
+            Yi = m.invtr(Y, lower=False)
+        except la.LinAlgError:
+            ev, EV = la.eigh(self.l)
+            
+            new_D = np.count_nonzero(ev > zero_tol)
+            ev_sq = sp.sqrt(ev[-new_D:])
+            ev_sq_i = m.simple_diag_matrix(
+                np.append(np.zeros(self.D - new_D), 1. / ev_sq))
+            ev_sq = m.simple_diag_matrix(
+                np.append(np.zeros(self.D - new_D), ev_sq))
+            Y = ev_sq.dot(EV.conj().T)
+            Yi = ev_sq_i.dot_left(EV)            
+            
         U, sv, Vh = la.svd(Y.dot(X))
         
         #s contains the Schmidt coefficients,
@@ -516,9 +549,9 @@ class EvoMPS_MPS_Uniform(object):
         S = m.simple_diag_matrix(sv, dtype=self.typ)
         Srt = S.sqrt()
         
-        g = m.mmul(Srt, Vh, m.invtr(X, lower=True))
+        g = m.mmul(Srt, Vh, Xi)
         
-        g_i = m.mmul(m.invtr(Y, lower=False), U, Srt)
+        g_i = m.mmul(Yi, U, Srt)
         
         for s in xrange(self.q):
             self.A[s] = m.mmul(g, self.A[s], g_i)
