@@ -856,7 +856,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     
     def _prepare_excite_op_top_triv(self, p):
         if callable(self.ham):
-            self.set_ham_array_from_function(self.h_nn)
+            self.set_ham_array_from_function(self.ham)
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
@@ -1020,7 +1020,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 self.calc_AA()
                 self.calc_C()
                 
-                h = self.expect_2s(self.h_nn)
+                if self.ham_sites == 2:
+                    h = self.expect_2s(self.ham)
+                else:
+                    h = self.expect_3s(self.ham)
                 
                 print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
                 
@@ -1115,7 +1118,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_AA()
         self.calc_C()
         
-        h = self.expect_2s(self.h_nn)
+        if self.ham_sites == 2:
+            h = self.expect_2s(self.ham)
+        else:
+            h = self.expect_3s(self.ham)
         
         #Must restore everything needed for take_step
         self.A = A0
@@ -1283,8 +1289,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
         
     def expect_2s(self, op):
-        if op == self.h_nn:
+        if op is self.ham and self.ham_sites == 2:
             res = tm.eps_r_op_2s_C12_AA34(self.r, self.C, self.AA)
             return m.adot(self.l, res)
         else:
             return super(EvoMPS_TDVP_Uniform, self).expect_2s(op)
+            
+    def expect_3s(self, op):
+        if op is self.ham and self.ham_sites == 3:
+            res = tm.eps_r_op_3s_C123_AAA456(self.r, self.C, self.AAA)
+            return m.adot(self.l, res)
+        else:
+            return super(EvoMPS_TDVP_Uniform, self).expect_3s(op)

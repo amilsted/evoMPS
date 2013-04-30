@@ -947,7 +947,8 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q, self.q, self.q))        
         
-        res = tm.eps_r_op_2s_AA_func_op(self.r, self.AA, self.AA, op)
+        C = tm.calc_C_mat_op_AA(op, self.AA)
+        res = tm.eps_r_op_2s_C12_AA34(self.r, C, self.AA)
         
         return m.adot(self.l, res)
         
