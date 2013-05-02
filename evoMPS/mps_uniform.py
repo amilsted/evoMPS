@@ -510,35 +510,9 @@ class EvoMPS_MPS_Uniform(object):
         g, g_i : ndarray
             Gauge transformation matrix g and its inverse g_i.
         """
-        try:
-            X = la.cholesky(self.r, lower=True)
-            Xi = m.invtr(X, lower=True)
-        except la.LinAlgError:
-            ev, EV = la.eigh(self.r)
-            
-            new_D = np.count_nonzero(ev > zero_tol)
-            ev_sq = sp.sqrt(ev[-new_D:])
-            ev_sq_i = m.simple_diag_matrix(
-                np.append(np.zeros(self.A.shape[1] - new_D), 1. / ev_sq))
-            ev_sq = m.simple_diag_matrix(
-                np.append(np.zeros(self.A.shape[1] - new_D), ev_sq))
-            X = ev_sq.dot_left(EV)
-            Xi = ev_sq_i.dot(m.H(EV))
-            
-        try:
-            Y = la.cholesky(self.l, lower=False)
-            Yi = m.invtr(Y, lower=False)
-        except la.LinAlgError:
-            ev, EV = la.eigh(self.l)
-            
-            new_D = np.count_nonzero(ev > zero_tol)
-            ev_sq = sp.sqrt(ev[-new_D:])
-            ev_sq_i = m.simple_diag_matrix(
-                np.append(np.zeros(self.D - new_D), 1. / ev_sq))
-            ev_sq = m.simple_diag_matrix(
-                np.append(np.zeros(self.D - new_D), ev_sq))
-            Y = ev_sq.dot(EV.conj().T)
-            Yi = ev_sq_i.dot_left(EV)            
+        X, Xi = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol)
+        
+        Y, Yi = tm.herm_fac_with_inv(self.l, lower=False, zero_tol=zero_tol)          
             
         U, sv, Vh = la.svd(Y.dot(X))
         
@@ -608,20 +582,8 @@ class EvoMPS_MPS_Uniform(object):
             Gauge transformation matrix g and its inverse g_i.
         """
         #First get G such that r = eye
-        try:
-            G = la.cholesky(self.r, lower=True)
-            G_i = m.invtr(G, lower=True)
-            new_D_r = self.D
-        except la.LinAlgError:
-            ev, EV = la.eigh(self.r)
-            new_D_r = np.count_nonzero(ev > zero_tol)
-            ev_sq = sp.sqrt(ev[-new_D_r:])
-            ev_sq_i = m.simple_diag_matrix(
-                np.append(np.zeros(self.A.shape[1] - new_D_r), 1. / ev_sq))
-            ev_sq = m.simple_diag_matrix(
-                np.append(np.zeros(self.A.shape[1] - new_D_r), ev_sq))
-            G = ev_sq.dot_left(EV)
-            G_i = ev_sq_i.dot(m.H(EV))
+        G, G_i = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol)
+        #TODO: Is the new r really the identity?
 
         self.l = m.mmul(m.H(G), self.l, G)
         

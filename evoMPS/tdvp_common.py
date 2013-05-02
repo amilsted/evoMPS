@@ -658,6 +658,71 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
 
     return x
 
+def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_evd=False, sanity_checks=False):
+    """Factorizes a Hermitian matrix using either Cholesky or eigenvalue decomposition.
+    
+    Decomposes a Hermitian A as A = X*X or, if lower == True, A = XX*.
+    
+    Tries Cholesky first by default, then falls back to EVD if the matrix is 
+    not positive-definite. If Cholesky decomposition is used, X is upper (or lower)
+    triangular. For the EVD decomposition, the inverse becomes a pseudo-inverse
+    and all eigenvalues below the zero-tolerance are set to zero.
+    
+    Parameters
+    ----------
+    A : ndarray
+        The Hermitian matrix to be factorized.
+    lower : bool
+        Refers to Cholesky factorization. If True, factorize as A = XX*, otherwise as A = X*X
+    zero_tol : float
+        Tolerance for detection of zeros in EVD case.
+    return_rank : bool
+        Whether to return the rank of A. The detected rank is affected by zero_tol.
+    force_evd : bool
+        Whether to force eigenvalue instead of Cholesky decomposition.
+    sanity_checks : bool
+        Whether to perform soem basic sanity checks.
+    """    
+    if sanity_checks:
+        if not sp.allclose(A, A.conj().T):
+            print "Sanity fail in herm_fac_with_inv(): A is not Hermitian!"
+    
+    if not force_evd:
+        try:
+            x = la.cholesky(A, lower=lower)
+            xi = mm.invtr(x, lower=lower)
+            nonzeros = A.shape[0]
+        except sp.linalg.LinAlgError: #this usually means a is not pos. def.
+            force_evd = True
+            
+    if force_evd:
+        ev, EV = la.eigh(A) #wraps lapack routines, which return eigenvalues in ascending order
+        
+        if sanity_checks:
+            assert np.all(ev == np.sort(ev)), "unexpected eigenvalue ordering"
+
+        nonzeros = np.count_nonzero(abs(ev) > zero_tol)
+        
+        ev_sq = sp.sqrt(ev[-nonzeros:])
+        
+        #Replace almost-zero values with zero and perform a pseudo-inverse
+        ev_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
+                                                 1. / ev_sq))
+        ev_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
+                                               ev_sq))
+                   
+        if lower:
+            x = ev_sq.dot_left(EV)
+            xi = ev_sq_i.dot(EV.conj().T)
+        else:
+            x = ev_sq.dot(EV.conj().T)
+            xi = ev_sq_i.dot_left(EV)   
+    
+    if return_rank:
+        return x, xi, nonzeros
+    else:
+        return x, xi
+
 def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
     """Transforms a single A[n] to obtain r[n - 1] = eye(D).
 
@@ -702,30 +767,11 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         GGh_n_i = G_n_i.dot(r.dot(G_n_i.conj().T))
 
     M = eps_r_noop(GGh_n_i, A, A)
-
-    try:
-        tu = la.cholesky(M) #Assumes M is pos. def.. It should raise LinAlgError if not.
-        G_nm1 = mm.invtr(tu).conj().T #G is now lower-triangular
-        G_nm1_i = tu.conj().T
-        new_D = None
-    except sp.linalg.LinAlgError: #this usually means M is rank-deficient
-        e, Gh = la.eigh(M) #wraps lapack routines, which return eigenvalues in ascending order
-        
-        if sanity_checks:
-            assert np.all(e == np.sort(e)), "unexpected eigenvalue ordering"
-
-        new_D = np.count_nonzero(abs(e) > zero_tol)
-        
-        e_sq = sp.sqrt(e[-new_D:])
-        
-        #Replace almost-zero values with zero and perform a pseudo-inverse
-        e_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                                 1. / e_sq))
-        e_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                               e_sq))
-                                               
-        G_nm1 = e_sq_i.dot(mm.H(Gh))
-        G_nm1_i = e_sq.dot_left(Gh)
+    
+    X, Xi, new_D = herm_fac_with_inv(M, zero_tol=zero_tol, return_rank=True, 
+                                     sanity_checks=sanity_checks)
+    G_nm1= Xi.conj().T
+    G_nm1_i = X.conj().T
 
     if G_n_i is None:
         G_n_i = G_nm1_i
