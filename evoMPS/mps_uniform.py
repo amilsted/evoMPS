@@ -261,17 +261,17 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, conv, opE.calls
         
-    def _calc_E_largest_two_eigenvalues(self, tol=1E-6, ncv=10):
+    def _calc_E_largest_eigenvalues(self, tol=1E-6, k=2, ncv=10):
         opE = EOp(self.A, self.A, False)
         
         r = np.asarray(self.r)
         
-        ev = las.eigs(opE, which='LM', k=2, v0=r.ravel(), tol=tol, ncv=ncv,
-                          return_eigenvectors=False)
+        ev = las.eigs(opE, which='LM', k=k, v0=r.ravel(), tol=tol, ncv=ncv,
+                      return_eigenvectors=False)
                           
         return ev
         
-    def calc_E_gap(self, tol=1E-6, ncv=10):
+    def calc_E_gap(self, tol=1E-6, k=2, ncv=None):
         """
         Calculates the spectral gap of E by calculating the second-largest eigenvalue.
         
@@ -288,14 +288,14 @@ class EvoMPS_MPS_Uniform(object):
         ncv : int
             Number of Arnoldii basis vectors to store.
         """
-        ev = self._calc_E_largest_two_eigenvalues(tol=tol, ncv=ncv)
+        ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
                           
         ev1_mag = abs(ev).max()
         ev2_mag = abs(ev).min()
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-6, ncv=10):
+    def correlation_length(self, tol=1E-6, k=2, ncv=None, one_tol=1E-14):
         """
         Calculates the correlation length in units of the lattice spacing.
         
@@ -310,15 +310,22 @@ class EvoMPS_MPS_Uniform(object):
         ncv : int
             Number of Arnoldii basis vectors to store.
         """
-        ev = self._calc_E_largest_two_eigenvalues(tol=tol, ncv=ncv)
-                          
-        ev1_mag = abs(ev).max()
-        ev2_mag = abs(ev).min()
+        ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         
-        if not abs(1 - ev1_mag) < self.itr_rtol:
+        print ev
+                          
+        ind = sp.argmin(abs(1 - abs(ev)) > one_tol)
+        
+        if ind > 0:
+            mag = abs(ev[ind - 1])
+        else:
+            print "Warning: No eigenvalues with magnitude significantly different to 1 detected."
+            return sp.NaN
+        
+        if mag > 1:
             print "Warning: Largest eigenvalue != 1"
         
-        return -1 / sp.log(ev2_mag)
+        return -1 / sp.log(mag)
                 
     def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
