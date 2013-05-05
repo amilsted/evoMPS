@@ -37,7 +37,7 @@ def eps_l_noop(x, A1, A2):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[2], A1.shape[2]), dtype=A1.dtype)
+    out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         out += A1[s].conj().T.dot(x.dot(A2[s]))
     return out
@@ -465,6 +465,28 @@ def calc_K(Kp1, C, lm1, rp1, A, Ap1, sanity_checks=False):
     
     return K, op_expect
     
+def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
+    D = A.shape[2]
+    q = A.shape[0]
+    qm1 = Am1.shape[0]
+    
+    K = sp.zeros((D, D), dtype=A.dtype)
+    
+    Hl = sp.zeros_like(K)
+
+    for s in xrange(qm1):
+        Am1sh = Am1[s].conj().T
+        for t in xrange(q):
+            Hl += A[t].conj().T.dot(Am1sh).dot(lm2.dot(Cm1[s, t]))
+        
+        K += A[s].conj().T.dot(Km1.dot(A[s]))
+        
+    op_expect = mm.adot(Hl, r)
+        
+    K += Hl
+    
+    return K, op_expect
+    
 def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
     Dm1 = A.shape[1]
     q = A.shape[0]
@@ -547,6 +569,37 @@ def calc_Vsh(A, r_s, sanity_checks=False):
             M += mm.mmul(mm.H(Vsh[s]), r_s, mm.H(A[s]))
         if not sp.allclose(M, 0):
             print "Sanity Fail in calc_Vsh!: Bad Vsh"
+
+    return Vsh
+
+def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    
+    L = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
+
+    for s in xrange(q):
+        L[:,s,:] = lm1_sqrt.dot(A[s]).conj().T
+
+    L = L.reshape((D, q * Dm1))
+    V = ns.nullspace_qr(L)
+
+    if sanity_checks:
+        if not sp.allclose(L.dot(V), 0):
+            print "Sanity Fail in calc_Vsh_l!: LV != 0"
+        if not sp.allclose(V.conj().T.dot(V), sp.eye(V.shape[1])):
+            print "Sanity Fail in calc_Vsh_l!: V H(V) != eye"
+        
+    V = V.reshape((q, Dm1, q * Dm1 - D))
+
+    Vsh = sp.transpose(V.conj(), axes=(0, 2, 1))
+    Vsh = sp.asarray(Vsh, order='C')
+
+    if sanity_checks:
+        M = eps_l_noop(lm1_sqrt, A, V)
+        if not sp.allclose(M, 0):
+            print "Sanity Fail in calc_Vsh_l!: Bad Vsh"
 
     return Vsh
 
@@ -657,6 +710,52 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
         x += lm1_si.dot(x_part)
 
     return x
+    
+def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    
+    x = sp.zeros((q * Dm1 - D, D), dtype=A.dtype)
+    x_part = sp.empty_like(x)
+    x_subpart = sp.empty_like(A[0])
+    
+    H = mm.H
+    
+    if not C is None:
+        x_part.fill(0)
+        for s in xrange(q):
+            x_subpart.fill(0)
+            qp1 = Ap1.shape[0]
+            for t in xrange(qp1):
+                x_subpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
+            x_part += Vsh[s].dot(lm1_s.dot(x_subpart))
+            
+        try:
+            x += r_si.dot_left(x_part)
+        except AttributeError:
+            x += x_part.dot(r_si)
+
+    
+    x_part.fill(0)
+    for s in xrange(q):     #~2nd line
+        x_subpart.fill(0)
+
+        if not lm2 is None:
+            qm1 = Am1.shape[0]
+            for t in xrange(qm1):
+                x_subpart += H(Am1[t]).dot(lm2.dot(Cm1[t, s]))
+        
+        if not Km1 is None:
+            x_subpart += Km1.dot(A[s]) #~3rd line
+        
+        x_part += Vsh[s].dot(lm1_si.dot(x_subpart))
+    try:
+        x += r_s.dot_left(x_part)
+    except AttributeError:
+        x += x_part.dot(r_s)
+
+    return x
 
 def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_evd=False, sanity_checks=False):
     """Factorizes a Hermitian matrix using either Cholesky or eigenvalue decomposition.
@@ -756,10 +855,10 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
     -------
     r_nm1 : ndarray or simple_diag_matrix or eyemat
         The new matrix r[n - 1].
-    G_n_m1_i : ndarray
-        The inverse gauge transformation matrix for the site n - 1.
     G_nm1 : ndarray
         The gauge transformation matrix for the site n - 1.
+    G_n_m1_i : ndarray
+        The inverse gauge transformation matrix for the site n - 1.
     """
     if G_n_i is None:
         GGh_n_i = r
@@ -802,7 +901,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
             print "Sanity Fail in restore_RCF_r!: r is bad"
             print la.norm(r_nm1_ - r_nm1)
 
-    return r_nm1, G_nm1_i, G_nm1
+    return r_nm1, G_nm1, G_nm1_i
 
 def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
     """Transforms a single A[n] to obtain diagonal l[n].
@@ -875,3 +974,83 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
             print "Sanity Fail in restore_RCF_l!: Bad GT! (off by %g)" % la.norm(sp.dot(G, G_i) - eye)
             
     return l, G, G_i
+
+def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
+    if Gm1 is None:
+        GhGm1 = lm1
+    else:
+        GhGm1 = Gm1.conj().T.dot(lm1.dot(Gm1))
+
+    M = eps_l_noop(GhGm1, A, A)
+    
+    G, Gi, new_D = herm_fac_with_inv(M, zero_tol=zero_tol, return_rank=True, 
+                                     sanity_checks=sanity_checks)
+
+    if Gm1 is None:
+        Gm1 = G
+
+    if sanity_checks:
+        if new_D is None:
+            eye = sp.eye(A.shape[2])
+        else:
+            eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
+                                                   np.ones(new_D)))
+        if not sp.allclose(G.dot(Gi), eye, atol=1E-13, rtol=1E-13):
+            print "Sanity Fail in restore_LCF_l!: Bad GT!"
+
+    for s in xrange(A.shape[0]):
+        A[s] = Gm1.dot(A[s]).dot(Gi)
+
+    if new_D == A.shape[2]:
+        l = mm.eyemat(A.shape[2], A.dtype)
+    else:
+        l = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
+                                                np.ones(new_D)))
+
+    if sanity_checks:
+        lm1_ = mm.eyemat(A.shape[1], A.dtype)
+
+        l_ = eps_l_noop(lm1_, A, A)
+        if not sp.allclose(l_, l.A, atol=1E-13, rtol=1E-13):
+            print "Sanity Fail in restore_LCF_l!: l is bad"
+            print la.norm(l_ - l)
+
+    return l, G, Gi
+    
+def restore_LCF_r(A, r, Gi, sanity_checks=False):
+    if Gi is None:
+        x = r
+    else:
+        x = Gi.dot(r.dot(Gi.conj().T))
+
+    M = eps_r_noop(x, A, A)
+    ev, EV = la.eigh(M) #wraps lapack routines, which return eigenvalues in ascending order
+    
+    if sanity_checks:
+        assert np.all(ev == np.sort(ev)), "unexpected eigenvalue ordering"
+    
+    rm1 = mm.simple_diag_matrix(ev, dtype=A.dtype)
+    Gm1 = EV.conj().T
+
+    if Gi is None:
+        Gi = EV #for left uniform case
+        r = rm1 #for sanity check
+
+    for s in xrange(A.shape[0]):
+        A[s] = Gm1.dot(A[s].dot(Gi))
+
+    if sanity_checks:
+        rm1_ = eps_r_noop(r, A, A)
+        if not sp.allclose(rm1_, rm1, atol=1E-12, rtol=1E-12):
+            print "Sanity Fail in restore_LCF_r!: r is bad!"
+            print la.norm(rm1_ - rm1)
+
+    Gm1_i = EV
+
+    if sanity_checks:
+        eye = sp.eye(A.shape[1])
+        if not sp.allclose(sp.dot(Gm1, Gm1_i), eye,
+                           atol=1E-12, rtol=1E-12):
+            print "Sanity Fail in restore_LCF_r!: Bad GT! (off by %g)" % la.norm(sp.dot(Gm1, Gm1_i) - eye)
+            
+    return rm1, Gm1, Gm1_i

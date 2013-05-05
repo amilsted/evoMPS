@@ -42,16 +42,19 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.eps = sp.finfo(self.typ).eps
         
         self.N = N
+        self.N_centre = N / 2
         self.D = sp.repeat(uni_ground.D, self.N + 2)
         self.q = sp.repeat(uni_ground.q, self.N + 2)
         
         self.uni_l = copy.deepcopy(uni_ground)
         self.uni_l.symm_gauge = False
         self.uni_l.sanity_checks = self.sanity_checks
+        self.uni_l.update()
 
         self.uni_r = copy.deepcopy(uni_ground)
         self.uni_r.sanity_checks = self.sanity_checks
         self.uni_r.symm_gauge = False
+        self.uni_r.update()
         
         self.grown_left = 0
         self.grown_right = 0
@@ -98,17 +101,18 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not implemented in sandwich case")
 
-    def update(self, restore_rcf=True):
+    def update(self, restore_cf=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
         Return the excess energy.
         """
-        if restore_rcf:
-            self.restore_RCF()
+        if restore_cf:
+            self.restore_CF()
         else:
             self.calc_l()
             self.calc_r()
+            self.simple_renorm()
     
 
     def calc_l(self, n_low=-1, n_high=-1):        
@@ -135,18 +139,28 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         
         super(EvoMPS_MPS_Sandwich, self).calc_r(n_low=n_low, n_high=n_high)
         
-    def simple_renorm(self, update_r=True):
-        raise NotImplementedError("simple_renorm not implemented in sandwich case")
+    def simple_renorm(self, update_lr=True):
+        """Renormalizes the state in by multiplying one of the parameter
+        tensors by a factor.
+        """
+        norm = mm.adot(self.l[self.N_centre - 1], self.r[self.N_centre - 1])
+        
+        if abs(1 - norm) > 1E-15:
+            self.A[self.N_centre] *= 1 / sp.sqrt(norm)
+            
+            if update_lr:
+                self.calc_l(n_low=self.N_centre)
+                self.calc_r(n_high=self.N_centre)
 
-    def restore_RCF_dbg(self):
+    def restore_CF_dbg(self):
         for n in xrange(self.N + 2):
             print (n, self.l[n].trace().real, self.r[n].trace().real,
                    mm.adot(self.l[n], self.r[n]).real)
 
         norm_r = mm.adot(self.uni_r.l, self.r[self.N])
         norm_l = mm.adot(self.l[0], self.uni_l.r)
-        print norm_r
-        print norm_l
+        print "norm of uni_r: ", norm_r
+        print "norm of uni_l: ", norm_l
 
         #r_m1 = self.eps_r(0, self.r[0])
         #print mm.adot(self.l[0], r_m1).real
@@ -155,141 +169,203 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         h = sp.empty((self.N + 1), dtype=self.typ)
         for n in xrange(self.N + 1):
-            h[n] = self.expect_2s(self.h_nn, n)
+            h[n] = self.expect_2s(self.h_nn[n], n)
         h *= 1/norm
 
-        self.uni_l.A = self.A[0].copy()
-        self.uni_l.l = self.l[0].copy()
+        self.uni_l.A = self.A[0]
+        self.uni_l.l = self.l[0]
         self.uni_l.calc_AA()
-        h_left = self.uni_l.expect_2s(self.uni_l.h_nn) / norm_l
+        h_left = self.uni_l.expect_2s(self.uni_l.ham.copy()) / norm_l
 
-        self.uni_r.A = self.A[self.N + 1].copy()
-        self.uni_r.r = self.r[self.N].copy()
+        self.uni_r.A = self.A[self.N + 1]
+        self.uni_r.r = self.r[self.N]
         self.uni_r.calc_AA()
-        h_right = self.uni_l.expect_2s(self.uni_r.h_nn) / norm_r
+        h_right = self.uni_l.expect_2s(self.uni_r.ham.copy()) / norm_r
 
         return h, h_left, h_right
 
-    def restore_RCF_r(self):
-        G_n_i = None
-        for n in reversed(xrange(1, self.N + 2)):
-            self.r[n - 1], G_n_i, G_n = tm.restore_RCF_r(self.A[n], self.r[n], 
-                                             G_n_i, sanity_checks=self.sanity_checks)
-
-        #self.r[self.N + 1] = self.r[self.N]
-
-        #Now G_n_i contains g_0_i
-        for s in xrange(self.q[0]): #Note: This does not change the scale of A[0]
-            self.A[0][s] = mm.mmul(G_n, self.A[0][s], G_n_i)
-
-        self.uni_l.r = mm.mmul(G_n, self.uni_l.r, mm.H(G_n))
-        self.l[0] = mm.mmul(mm.H(G_n_i), self.l[0], G_n_i)
-
-    def restore_RCF_l(self):
-        G_nm1 = None
-        l_nm1 = self.l[0]
-        for n in xrange(self.N + 1):
-            self.l[n], G_nm1, G_nm1_i = tm.restore_RCF_l(self.A[n], l_nm1, 
-                                      G_nm1, sanity_checks=self.sanity_checks)
+    def _restore_CF_ONR(self):
+        nc = self.N_centre
+        
+        #Want: r[n >= nc] = eye
+        Gi = None
+        for n in xrange(self.N + 1, nc, -1):
+            self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n], 
+                                             Gi, sanity_checks=self.sanity_checks)
+                                             
+            if n == self.N + 1:
+                self.uni_r.l = Gm1_i.conj().T.dot(self.uni_r.l.dot(Gm1_i))
+                
+            Gi = Gm1_i
+        
+        self.r[self.N + 1] = self.r[self.N]
+        
+        #G is now G_nc
+        for s in xrange(self.q[nc]):
+            self.A[nc][s] = self.A[nc][s].dot(Gi)
+        
+        #Now want: l[n < nc] = eye
+        Gm1 = None
+        lm1 = self.l[0]
+        for n in xrange(nc):
+            self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], lm1, Gm1, 
+                                                sanity_checks=self.sanity_checks)
             
             if n == 0:
-                self.uni_l.r = mm.mmul(G_nm1, self.uni_l.r, G_nm1_i) #since r is not eye
+                self.uni_l.r = G.dot(self.uni_l.r.dot(G.conj().T))
 
-            l_nm1 = self.l[n]
-
-        #Now G_nm1 = G_N
-        for s in xrange(self.q[self.N + 1]):
-            self.A[self.N + 1][s] = mm.mmul(G_nm1, self.A[self.N + 1][s], G_nm1_i)
-
-        ##This should not be necessary if G_N is really unitary
-        #self.r[self.N] = mm.mmul(G_nm1, self.r[self.N], mm.H(G_nm1))
-        #self.r[self.N + 1] = self.r[self.N]
-        self.uni_r.l = mm.mmul(mm.H(G_nm1_i), self.uni_r.l, G_nm1_i)
+            lm1 = self.l[n]
+            Gm1 = G
         
-        self.S_hc = sp.zeros((self.N), dtype=sp.complex128)
-        for n in xrange(1, self.N + 1):
-            self.S_hc[n-1] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
+        #Gm1 is now G_nc-1
+        for s in xrange(self.q[nc]):
+            self.A[nc][s] = Gm1.dot(self.A[nc][s])
 
-    def restore_RCF(self, dbg=False):
+
+    def _restore_CF_diag(self):
+        nc = self.N_centre
+
+        self.S_hc = sp.zeros((self.N + 1), dtype=sp.complex128)
+        
+        #Want: r[0 <= n < nc] diagonal
+        Ui = sp.eye(self.D[nc], dtype=self.typ)
+        for n in xrange(nc, 0, -1):
+            self.r[n - 1], Um1, Um1_i = tm.restore_LCF_r(self.A[n], self.r[n], 
+                                                         Ui, sanity_checks=self.sanity_checks)
+            
+            self.S_hc[n - 1] = -sp.sum(self.r[n - 1].diag * sp.log2(self.r[n - 1].diag))
+                                             
+            Ui = Um1_i
+            
+        #Now U is U_0
+        U = Um1
+        for s in xrange(self.q[0]):
+            self.A[0][s] = U.dot(self.A[0][s]).dot(Ui)
+        self.uni_l.r = U.dot(self.uni_l.r.dot(U.conj().T))
+        
+        #And now: l[nc <= n <= N] diagonal
+        Um1 = mm.eyemat(self.D[nc - 1], dtype=self.typ)
+        for n in xrange(nc, self.N + 1):
+            self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1, 
+                                                sanity_checks=self.sanity_checks)
+                                                
+            self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
+                                             
+            Um1 = U
+            
+        #Now, Um1 = U_N
+        Um1_i = Ui
+        for s in xrange(self.q[0]):
+            self.A[self.N + 1][s] = Um1.dot(self.A[self.N + 1][s]).dot(Um1_i)
+        self.uni_r.l = Um1_i.conj().T.dot(self.uni_r.l.dot(Um1_i))
+
+    def restore_CF(self, dbg=False):
         if dbg:
             self.calc_l()
             self.calc_r()
+            self.simple_renorm()
             print "BEFORE..."
-            h_before, h_left_before, h_right_before = self.restore_RCF_dbg()
+            h_before, h_left_before, h_right_before = self.restore_CF_dbg()
 
             print (h_left_before, h_before, h_right_before)
 
-        self.restore_RCF_r()
-
+        self._restore_CF_ONR()
+        
+        nc = self.N_centre
+        self.r[nc - 1] = tm.eps_r_noop(self.r[nc], self.A[nc], self.A[nc])
+        self.simple_renorm(update_lr=False)
+        
         if dbg:
             self.calc_l()
-            print "MIDDLE..."
-            h_mid, h_left_mid, h_right_mid = self.restore_RCF_dbg()
+            self.calc_r()
+            print "AFTER ONR..."
+            h_mid, h_left_mid, h_right_mid = self.restore_CF_dbg()
 
             print (h_left_mid, h_mid, h_right_mid)
 
-        fac = 1 / self.l[0].trace().real
-        if dbg:
-            print "Scale l[0]: %g" % fac
-        self.l[0] *= fac
-        self.uni_l.r *= 1/fac
+        self._restore_CF_diag()
 
-        self.restore_RCF_l()
-
-        if dbg:
-            print "Uni left:"
+        #l[0] is identity, r_L = ?
         self.uni_l.A = self.A[0]
         self.uni_l.l = self.l[0]
-        self.uni_l.calc_lr() #Ensures largest ev of E=1
-        self.l[0] = self.uni_l.l #No longer diagonal!
-        self.A[0] = self.uni_l.A
+        self.uni_l.l_before_CF = self.uni_l.l
+        self.uni_l.r_before_CF = self.uni_l.r
+        
         if self.sanity_checks:
-            if not sp.allclose(self.l[0], sp.diag(sp.diag(self.l[0])), atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_RCF!: True l[0] not diagonal!"
-                print la.norm(self.l[0] - sp.diag(sp.diag(self.l[0])))
-        self.l[0] = mm.simple_diag_matrix(sp.diag(self.l[0]))
+            self.uni_l.A = self.uni_l.A.copy()
+            #self.uni_l.l = self.uni_l.l.copy()
+            r_old = self.uni_l.r.copy()
+            self.uni_l.calc_lr() #Ensures largest ev of E=1
+            if dbg:
+                print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
+            #uniform calc_lr() scales for RCF, but we have LCF, 
+            #so we have to correct the scaling here
+            fac = self.uni_l.D / self.uni_l.l.trace().real
+            if dbg:
+                print "Scale l[0]: %g" % fac
+            self.uni_l.l *= fac
+            self.uni_l.r *= 1/fac
 
-        fac = 1 / sp.trace(self.l[0]).real
-        if dbg:
-            print "Scale l[0]: %g" % fac
-        self.l[0] *= fac
-        self.uni_l.r *= 1/fac
+            if not sp.allclose(self.uni_l.l, self.l[0], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: True l[0] and l[L] mismatch!", la.norm(self.l[0] - self.uni_l.l)
 
-        self.uni_l.l = self.l[0]
+            if not sp.allclose(self.uni_l.r, r_old, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: Bad r[L]!", la.norm(r_old - self.uni_l.r)
 
-        if dbg:
-            print "Uni right:"
+            if not sp.allclose(self.uni_l.A, self.A[0], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: A[0] was scaled!", la.norm(self.A[0] - self.uni_l.A)
+                
+            self.uni_l.l = self.l[0]
+            self.uni_l.r = r_old
+            self.uni_l.A = self.A[0]
+
+        #r[N] is identity, l_R = ?
         self.uni_r.A = self.A[self.N + 1]
         self.uni_r.r = self.r[self.N]
-        self.uni_r.calc_lr() #Ensures largest ev of E=1
-        self.r[self.N] = self.uni_r.r
-        self.A[self.N + 1] = self.uni_r.A
-        if self.sanity_checks:
-            if not sp.allclose(self.r[self.N], sp.eye(self.D[self.N]), atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_RCF!: True r[N] not eye!"
-        self.r[self.N] = mm.eyemat(self.D[self.N], dtype=self.typ)
-        self.uni_r.r = self.r[self.N]
-        self.r[self.N + 1] = self.r[self.N]
+        self.uni_r.l_before_CF = self.uni_r.l
+        self.uni_r.r_before_CF = self.uni_r.r
 
+        if self.sanity_checks:
+            self.uni_r.A = self.uni_r.A.copy()
+            self.uni_r.r = self.uni_r.r.copy()
+            l_old = self.uni_r.l.copy()
+            self.uni_r.calc_lr() #Ensures largest ev of E=1
+            if dbg:
+                print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
+            
+            if not sp.allclose(self.uni_r.A, self.A[self.N + 1], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: A[R] was scaled! ", la.norm(self.A[self.N + 1] - self.uni_r.A)
+            
+            if not sp.allclose(l_old, self.uni_r.l, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: Bad l[R]! ", la.norm(l_old - self.uni_r.l)
+
+            if not sp.allclose(self.r[self.N], self.uni_r.r, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: r[N] and r[R] mismatch!", la.norm(self.r[self.N] - self.uni_r.r)
+            
+            self.uni_r.l = l_old
+            self.uni_r.r = self.r[self.N]
+            self.uni_r.A = self.A[self.N + 1]
+        
+        #Set l[N + 1] as well...
         self.l[self.N + 1][:] = tm.eps_l_noop(self.l[self.N], 
                                               self.A[self.N + 1], 
                                               self.A[self.N + 1])
-
+                
         if self.sanity_checks:
             l_n = self.l[0]
             for n in xrange(0, self.N + 1):
                 l_n = tm.eps_l_noop(l_n, self.A[n], self.A[n])
                 if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_RCF!: l_%u is bad" % n
+                    print "Sanity Fail in restore_CF!: l_%u is bad" % n
 
             r_nm1 = self.r[self.N + 1]
             for n in reversed(xrange(1, self.N + 2)):
                 r_nm1 = tm.eps_r_noop(r_nm1, self.A[n], self.A[n])
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_RCF!: r_%u is bad" % (n - 1)
+                    print "Sanity Fail in restore_CF!: r_%u is bad" % (n - 1)
         if dbg:
             print "AFTER..."
-            h_after, h_left_after, h_right_after = self.restore_RCF_dbg()
+            h_after, h_left_after, h_right_after = self.restore_CF_dbg()
 
             print (h_left_after, h_after, h_right_after)
 
@@ -297,45 +373,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
             print (h_after.sum() - h_before.sum() + h_left_after - h_left_before
                    + h_right_after - h_right_before)
-    
-    def restore_RCF_bulk_only(self):
-        self.uni_l.calc_lr()
-        g, gi = self.uni_l.restore_CF(ret_g=True)
-
-        m = self.uni_l.A.mean()
-        print sp.sqrt(sp.conj(m) / m)
-        self.uni_l.A *= sp.sqrt(sp.conj(m) / m)
-        
-        self.uni_l.calc_lr()
-        
-        self.A[0] = self.uni_l.A
-        for s in xrange(self.A[1].shape[0]):
-            self.A[1][s] = gi.dot(self.A[1][s])
-        self.l[0] = self.uni_l.l
-        
-        self.uni_r.calc_lr()
-        g, gi = self.uni_r.restore_CF(ret_g=True)
-        
-        m = self.uni_r.A.mean()
-        print sp.sqrt(sp.conj(m) / m)
-        self.uni_r.A *= sp.sqrt(sp.conj(m) / m)
-        
-        self.uni_r.calc_lr()
-        
-        self.A[self.N + 1] = self.uni_r.A
-        for s in xrange(self.A[1].shape[0]):
-            self.A[self.N][s] = self.A[self.N][s].dot(g)
-        self.r[self.N] = self.uni_r.r
-        self.r[self.N + 1] = self.r[self.N]
-        
-        self.calc_r()
-        
-        norm = mm.adot(self.l[0], self.r[0])
-        
-        self.A[1] *= 1 / sp.sqrt(norm)
-        
-        self.calc_l()
-        self.calc_r()
+                   
         
     def check_RCF(self):
         raise NotImplementedError("check_RCF not implemented in sandwich case")

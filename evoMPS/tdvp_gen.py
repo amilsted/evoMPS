@@ -171,37 +171,108 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
         if n_low == 1:
             self.H_expect = sp.asscalar(self.K[1])
+            
+            
+    def calc_K_l(self, n_low=-1, n_high=-1):
+        """Generates the K matrices used to calculate the B's.
+        
+        This is called automatically by self.update().
+        
+        K[n] is contains the action of the Hamiltonian on sites n to N.
+        
+        K[n] is recursively defined. It depends on C[m] and A[m] for all m >= n.
+        
+        It directly depends on A[n], A[n + 1], r[n], r[n + 1], C[n] and K[n + 1].
+        
+        This is equivalent to K on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el], except 
+        that it is for the non-norm-preserving case.
+        
+        K[1] is, assuming a normalized state, the expectation value H of Ĥ.
+        """
+        if n_low < 2:
+            n_low = 2
+        if n_high < 1:
+            n_high = self.N
+            
+        self.K[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
+            
+        for n in xrange(n_low, n_high + 1):
+            #if n <= self.N - self.ham_sites + 1:
+            if self.ham_sites == 2:
+                self.K[n], ex = tm.calc_K_l(self.K[n - 1], self.C[n - 1], self.l[n - 2], 
+                                          self.r[n], self.A[n], self.A[n - 1], 
+                                          sanity_checks=self.sanity_checks)
+            else:
+                assert False, 'not yet supported'
 
+            self.h_expect[n - 1] = ex
+            #else:
+            #    self.K[n].fill(0)
+                
+        if n_high == self.N:
+            self.H_expect = sp.asscalar(self.K[self.N])
+            
 
-    def update(self, restore_RCF=True, auto_truncate=True, restore_RCF_after_trunc=True):
+    def update(self, restore_CF=True, auto_truncate=True, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after taking a step or otherwise changing the 
         parameters self.A before calculating
         physical quantities or taking the next step.
         
-        Also (optionally) restores the right canonical form.
+        Also (optionally) restores the canonical form.
         
         Parameters
         ----------
-        restore_RCF : bool (True)
-            Whether to restore right canonical form.
+        restore_CF : bool (True)
+            Whether to restore canonical form.
         auto_truncate : bool (True)
             Whether to automatically truncate the bond-dimension if
-            rank-deficiency is detected. Requires restore_RCF.
-        restore_RCF_after_trunc : bool (True)
-            Whether to restore_RCF after truncation.
+            rank-deficiency is detected. Requires restore_CF.
+        restore_CF_after_trunc : bool (True)
+            Whether to restore_CF after truncation.
 
         Returns
         -------
         truncated : bool (only if auto_truncate == True)
             Whether truncation was performed.
         """
-        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_RCF, 
+        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_CF, 
                                                         auto_truncate=auto_truncate,
-                                                        restore_RCF_after_trunc=restore_RCF_after_trunc)
+                                                        restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
         self.calc_K()
+        return trunc
+        
+    def update_l(self, restore_CF=True, auto_truncate=True, restore_CF_after_trunc=True):
+        """Updates secondary quantities to reflect the state parameters self.A.
+        
+        Must be used after taking a step or otherwise changing the 
+        parameters self.A before calculating
+        physical quantities or taking the next step.
+        
+        Also (optionally) restores the canonical form.
+        
+        Parameters
+        ----------
+        restore_CF : bool (True)
+            Whether to restore canonical form.
+        auto_truncate : bool (True)
+            Whether to automatically truncate the bond-dimension if
+            rank-deficiency is detected. Requires restore_CF.
+        restore_CF_after_trunc : bool (True)
+            Whether to restore_CF after truncation.
+
+        Returns
+        -------
+        truncated : bool (only if auto_truncate == True)
+            Whether truncation was performed.
+        """
+        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_CF, 
+                                                        auto_truncate=auto_truncate,
+                                                        restore_CF_after_trunc=restore_CF_after_trunc)
+        self.calc_C()
+        self.calc_K_l()
         return trunc
         
     def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
@@ -273,7 +344,40 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                              sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
                 
         return x
+    
+    def calc_x_l(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
+        if n > 1:
+            Km1 = self.K[n - 1]
+            Cm1 = self.C[n - 1]
+            Am1 = self.A[n - 1]
+            lm2 = self.l[n - 2]
+        else:
+            Km1 = None
+            Cm1 = None
+            Am1 = None
+            lm2 = None
+            
+        if n < self.N:
+            Ap1 = self.A[n + 1]
+            rp1 = self.r[n + 1]
+        else:
+            Ap1 = None
+            rp1 = None
+            
+        if n <= self.N - self.ham_sites + 1:
+            C = self.C[n]            
+        else:
+            C = None
         
+        if self.ham_sites == 2:
+            x = tm.calc_x_l(Km1, C, Cm1, rp1,
+                          lm2, Am1, self.A[n], Ap1,
+                          sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+        else:
+            assert False
+            
+        return x        
+    
     def calc_B(self, n, set_eta=True):
         """Generates the TDVP tangent vector parameters for a single site B[n].
         
@@ -306,6 +410,42 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
                 B[s] = m.mmul(l_sqrt_inv, x, m.H(Vsh[s]), r_sqrt_inv)
+            return B
+        else:
+            return None
+
+    def calc_B_l(self, n, set_eta=True):
+        """Generates the TDVP tangent vector parameters for a single site B[n].
+        
+        A TDVP time step is defined as: A[n] -= dtau * B[n]
+        where dtau is an infinitesimal imaginary time step.
+        
+        In other words, this returns B[n][x*] (equiv. eqn. (47) of 
+        arXiv:1103.0936v2 [cond-mat.str-el]) 
+        with x* the parameter matrices satisfying the Euler-Lagrange equations
+        as closely as possible.
+        
+        Returns
+        -------
+            B_n : ndarray or None
+                The TDVP tangent vector parameters for site n or None
+                if none is defined.
+        """
+        if self.q[n] * self.D[n - 1] - self.D[n] > 0:
+            l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
+                                                                   self.r[n], 
+                                                                   self.sanity_checks)
+            
+            Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
+            
+            x = self.calc_x_l(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+            
+            if set_eta:
+                self.eta[n] = sp.sqrt(m.adot(x, x))
+    
+            B = sp.empty_like(self.A[n])
+            for s in xrange(self.q[n]):
+                B[s] = m.mmul(l_sqrt_inv, m.H(Vsh[s]), x, r_sqrt_inv)
             return B
         else:
             return None
@@ -352,6 +492,33 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             for n in xrange(1, self.N + 1):
                 if not B[n] is None:
                     self.A[n] += -dtau * B[n]
+                
+        return eta_tot
+        
+    def take_step_l(self, dtau):   
+        """Performs a complete forward-Euler step of imaginary time dtau.
+        
+        The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
+        
+        If dtau is itself imaginary, real-time evolution results.
+        
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        save_memory : bool
+            Whether to save memory by avoiding storing all B[n] at once.
+        """
+        eta_tot = 0
+        
+        B = [None] #There is no site zero
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B_l(n))
+            eta_tot += self.eta[n]
+            
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] += -dtau * B[n]
                 
         return eta_tot
         

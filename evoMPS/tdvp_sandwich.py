@@ -135,7 +135,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             eta = 0
             etas = sp.zeros(1)
             
-        sim.update() #now we are measuring the stepped state
+        sim.update(restore_cf=True) #now we are measuring the stepped state
         h = sim.h
             
         if not save_as is None and ((i % save_every == 0)
@@ -229,7 +229,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
 
 class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
-    def __init__(self, N, uni_ground):
+    def __init__(self, N, uni_ground):        
+        
         super(EvoMPS_TDVP_Sandwich, self).__init__(N, uni_ground)
         
         assert uni_ground.ham_sites == 2, 'Sandwiches only supported for nearest-neighbour Hamiltonians at present!'
@@ -255,26 +256,28 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         #Make indicies correspond to the thesis
         #Deliberately add a None to the end to catch [-1] indexing!
         self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
+        self.K_l = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
         self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
 
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
 
-        self.K[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
+        self.K_l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
-        for n in xrange(1, self.N + 2):
-            self.K[n] = sp.zeros((self.D[n-1], self.D[n-1]), dtype=self.typ, order=self.odr)
-            if n < self.N + 1:
-                self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
-
+        for n in xrange(1, self.N + 1):
+            self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
+        for n in xrange(1, self.N_centre + 1):
+            self.K_l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+        for n in xrange(self.N_centre, self.N + 2):
+            self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)
     
-    def _calc_AA0_AA1(self):
-        for n in [0, 1]:
+    def _calc_AAc_AAcm1(self):
+        for n in [self.N_centre - 1, self.N_centre]:
             AA = tm.calc_AA(self.A[n], self.A[n + 1])
                     
-            if n == 0:
-                self.AA0 = AA
-            elif n == 1:
-                self.AA1 = AA        
+            if n == self.N_centre - 1:
+                self.AAcm1 = AA
+            elif n == self.N_centre:
+                self.AAc = AA        
 
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -304,10 +307,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                                               self.A[n], self.A[n + 1])
         else:
             for n in xrange(n_low, n_high):                                        
-                if n == 0:
-                    AA = self.AA0
-                elif n == 1:
-                    AA = self.AA1
+                if n == self.N_centre - 1:
+                    AA = self.AAcm1
+                elif n == self.N_centre:
+                    AA = self.AAc
                 else:
                     AA = tm.calc_AA(self.A[n], self.A[n + 1])
                 
@@ -327,8 +330,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         Return the excess energy.
         """
-        n_low = 0
-        n_high = self.N + 1
    
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
         
@@ -337,21 +338,41 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.uni_r.calc_K()
         self.K[self.N + 1][:] = self.uni_r.K
 
-        for n in reversed(xrange(n_low, n_high)):
+        self.uni_l.calc_AA()
+        self.uni_l.calc_C()
+        K_left, h_left_uni = self.uni_l.calc_K_l()
+        self.K_l[0][:] = K_left
+
+        for n in xrange(self.N, self.N_centre - 1, -1):
             self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
                                       self.r[n + 1], self.A[n], self.A[n + 1],
                                       sanity_checks=self.sanity_checks)
                 
             self.h_expect[n] = he
-            
-        self.uni_l.calc_AA()
-        self.uni_l.calc_C()
-        K_left, h_left_uni = self.uni_l.calc_K_l()
 
-        self.h = (mm.adot(K_left, self.r[0]) + mm.adot(self.l[0], self.K[0]) 
+        for n in xrange(1, self.N_centre + 1):
+            self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
+                                      self.r[n], self.A[n], self.A[n - 1],
+                                      sanity_checks=self.sanity_checks)
+                
+            self.h_expect[n - 1] = he
+
+        self.h = (mm.adot(self.K_l[self.N_centre], self.r[self.N_centre]) 
+                  + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
                   - (self.N + 1) * self.uni_r.h)
+        
+        print (mm.adot(K_left, self.r[0]) + mm.adot(self.K[self.N + 1], self.l[self.N])
+               + self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
+               
+#        hmm = self.h_expect.copy()
+#        
+#        for n in xrange(0, self.N + 1):
+#            self.h_expect[n] = self.expect_2s(self.h_nn[n], n)
+#            
+#        print hmm - self.h_expect
 
-    def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
+
+    def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv, right=True):
         """Calculate the parameter matrix x* giving the desired B.
 
         This is equivalent to eqn. (49) of arXiv:1103.0936v2 [cond-mat.str-el] except
@@ -376,10 +397,15 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             C = self.C[n]
         else:
             C = None
-            
-        x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
-                      lm2, self.A[n - 1], self.A[n], self.A[n + 1],
-                      sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+        
+        if right:
+            x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
+                          lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+                          sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+        else:
+            x = tm.calc_x_l(self.K_l[n - 1], C, self.C[n - 1], self.r[n + 1],
+                          lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+                          sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
 
         return x
         
@@ -441,6 +467,67 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
         return B1, eta
 
+    def calc_B_centre(self):
+        """Calculate the optimal B_centre given right gauge-fixing on Bcentre+1..N and
+        left gauge-fixing on 1..Bcentre-1.
+        
+        We use the non-norm-preserving K's, since the norm-preservation
+        is not needed elsewhere. It is cleaner to subtract the relevant
+        norm-changing terms from the K's here than to generate all K's
+        with norm-preservation.
+        """
+        Bc = sp.empty_like(self.A[self.N_centre])
+        
+        Nc = self.N_centre
+
+        try:
+            rc_i = self.r[Nc].inv()
+        except AttributeError:
+            rc_i = mm.invmh(self.r[Nc])
+            
+        try:
+            lcm1_i = self.l[Nc - 1].inv()
+        except AttributeError:
+            lcm1_i = mm.invmh(self.l[Nc - 1])
+        
+        Acm1 = self.A[Nc - 1]
+        Ac = self.A[Nc]
+        Acp1 = self.A[Nc + 1]
+        rc = self.r[Nc]
+        rcp1 = self.r[Nc + 1]
+        lcm1 = self.l[Nc - 1]
+        lcm2 = self.l[Nc - 2]
+        
+        K_l_cm1_h = mm.H(self.K_l[Nc - 1] - lcm1 * mm.adot(self.K_l[Nc - 1], self.r[Nc - 1]))
+        Kcp1 = self.K[Nc + 1] - rc * mm.adot(self.l[Nc], self.K[Nc + 1])
+        
+        Cc = self.C[Nc] - self.h_expect[Nc] * self.AAc
+        Ccm1 = self.C[Nc - 1] - self.h_expect[Nc - 1] * self.AAcm1
+        
+        for s in xrange(self.q[1]):
+            try: #3
+                Bc[s] = Ac[s].dot(rc_i.dot_left(Kcp1))
+            except AttributeError:
+                Bc[s] = Ac[s].dot(Kcp1.dot(rc_i))
+            
+            for t in xrange(self.q[2]): #1
+                try:
+                    Bc[s] += Cc[s, t].dot(rcp1.dot(rc_i.dot_left(mm.H(Acp1[t]))))
+                except AttributeError:
+                    Bc[s] += Cc[s, t].dot(rcp1.dot(mm.H(Acp1[t]).dot(rc_i)))                    
+                
+            Bcsbit = K_l_cm1_h.dot(Ac[s]) #4
+                            
+            for t in xrange(self.q[0]): #2
+                Bcsbit += mm.H(Acm1[t]).dot(lcm2.dot(Ccm1[t,s]))
+                
+            Bc[s] += lcm1_i.dot(Bcsbit)
+           
+        rb = tm.eps_r_noop(rc, Bc, Bc)
+        eta = sp.sqrt(mm.adot(lcm1, rb))
+                
+        return Bc, eta
+
     def calc_B(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
 
@@ -449,31 +536,44 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         with x* the parameter matrices satisfying the Euler-Lagrange equations
         as closely as possible.
         
-        In the case of B1, use the general B1 generated in calc_B1().
+        In the case of Bc, use the general Bc generated in calc_B_centre().
         """
-        if self.q[n] * self.D[n] - self.D[n - 1] > 0:
-            if n == 1:
-                B, eta1 = self.calc_B1()
+        if True or self.q[n] * self.D[n] - self.D[n - 1] > 0:
+            if n == self.N_centre:
+                B, eta_c = self.calc_B_centre()
                 if set_eta:
-                    self.eta[1] = eta1
+                    self.eta[self.N_centre] = eta_c
             else:
                 l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
-    
-                Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
-    
-                x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+                
+                if n > self.N_centre:
+                    Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
+                    x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=True)
+                    
+                    B = sp.empty_like(self.A[n])
+                    for s in xrange(self.q[n]):
+                        B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
+                        
+                    if self.sanity_checks:
+                        M = tm.eps_r_noop(self.r[n], B, self.A[n])
+                        if not sp.allclose(M, 0):
+                            print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
+                else:
+                    Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
+                    x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=False)
+                    
+                    B = sp.empty_like(self.A[n])
+                    for s in xrange(self.q[n]):
+                        B[s] = mm.mmul(l_sqrt_inv, mm.H(Vsh[s]), x, r_sqrt_inv)
+                        
+                    if self.sanity_checks:
+                        M = tm.eps_l_noop(self.l[n - 1], B, self.A[n])
+                        if not sp.allclose(M, 0):
+                            print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
                 
                 if set_eta:
                     self.eta[n] = sp.sqrt(mm.adot(x, x))
-    
-                B = sp.empty_like(self.A[n])
-                for s in xrange(self.q[n]):
-                    B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
 
-                if self.sanity_checks:
-                    M = tm.eps_r_noop(self.r[n], B, self.A[n])
-                    if not sp.allclose(M, 0):
-                        print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
 
             return B
         else:
@@ -495,15 +595,15 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 
-    def update(self, restore_rcf=True):
+    def update(self, restore_cf=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
         Return the excess energy.
         """
-        super(EvoMPS_TDVP_Sandwich, self).update(restore_rcf=restore_rcf)
+        super(EvoMPS_TDVP_Sandwich, self).update(restore_cf=restore_cf)
         
-        self._calc_AA0_AA1()
+        self._calc_AAc_AAcm1()
         self.calc_C()
         self.calc_K()
         
@@ -528,18 +628,16 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
 
         eta_tot = 0
-
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n)
-                eta_tot += self.eta[n]
-
-            #V is not always defined
-            if n > 1 and not B_prev is None:
-                self.A[n - 1] += -dtau * B_prev
-
-            B_prev = B
+        
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n))
+            eta_tot += self.eta[n]
+            
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] += -dtau * B[n]
+                B[n] = None
 
         return eta_tot
 
@@ -553,10 +651,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
         
         def upd():
-            self.calc_l()
-            self.calc_r()
-            self.calc_C()
-            self.calc_K()            
+            self.update(restore_cf=False)        
 
         eta_tot = 0
 
@@ -622,6 +717,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
         if not callable(self.h_nn):
             self.h_nn = [self.uni_l.ham] * m + list(self.h_nn)
+        self.N_centre += m
             
     def grow_right(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_right(m)
@@ -632,6 +728,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         super(EvoMPS_TDVP_Sandwich, self).shrink_left(m)
         if not callable(self.h_nn):
             self.h_nn = self.h_nn[m:]
+        self.N_centre -= m
 
     def shrink_right(self, m):
         super(EvoMPS_TDVP_Sandwich, self).shrink_right(m)
