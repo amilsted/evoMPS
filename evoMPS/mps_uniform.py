@@ -776,10 +776,12 @@ class EvoMPS_MPS_Uniform(object):
                 return abs(ev), ev
         else:
             opE = EOp(self.A, other.A, left)
-            ev, eV = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
+            res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
             if full_output:
+                ev, eV = res
                 return abs(ev[0]), ev[0], eV[:, 0]
             else:
+                ev = res
                 return abs(ev[0]), ev[0]
 
     def phase_align(self, other):
