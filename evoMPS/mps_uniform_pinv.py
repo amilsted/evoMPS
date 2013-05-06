@@ -71,6 +71,12 @@ def pinv_1mE_brute(A1, A2, l, r, p=0, pseudo=True):
     
 def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=2000,
              out=None, sanity_checks=False, sanity_tol=1E-12, brute_check=False):
+    """Iteratively calculates the result of an inverse or pseudo-inverse of an 
+    operator (eye - exp(1.j*p) * E) multiplied by a vector.
+    
+    In left mode, x is still taken to be a column vector and OP.conj().T.dot(x) 
+    is performed.
+    """
     D = A1.shape[1]
     
     if out is None:

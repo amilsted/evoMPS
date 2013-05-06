@@ -255,6 +255,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         It directly depends on A, l, and C.
         
+        This calculates the "bra-vector" K_l ~ <K_l| (and K_l.conj().T ~ |K_l>)
+        so that <K_l|r> = trace(K_l.dot(r))
+        
         Returns
         -------
         K_left : ndarray
@@ -262,17 +265,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         h : complex
             The energy-density expectation value.
         """
-        #Using C is allowed because h is Hermitian
         if self.ham_sites == 2:
             lH = tm.eps_l_op_2s_AA12_C34(self.l, self.AA, self.C)
         else:
             lH = tm.eps_l_op_3s_AAA123_C456(self.l, self.AAA, self.C)
         
-        h = m.adot(self.r, lH)
+        h = sp.inner(lH.ravel(), self.r.ravel()) #=tr(lH r)
         
         lHQ = lH - self.l * h
         
-        self.K_left = self.calc_PPinv(lHQ, left=True, out=self.K_left)
+        #Since A1=A2 and p=0, we get the right result without turning lHQ into a ket.
+        #This is the same as...
+        #self.K_left = (self.calc_PPinv(lHQ.conj().T, left=True, out=self.K_left)).conj().T
+        self.K_left = self.calc_PPinv(lHQ, left=True, out=self.K_left)        
         
         if self.sanity_checks:
             xE = tm.eps_l_noop(self.K_left, self.A, self.A)
@@ -543,7 +548,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         r__sqrt_i = donor.r_sqrt_i
         
         K__r = donor.K
-        K_l = self.K_left
+        K_l = self.K_left #this is the 'bra' vector already
         
         pseudo = donor is self
         
@@ -596,7 +601,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
         
-        res += l_sqrt_i.dot(m.H(K_l).dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
+        res += l_sqrt_i.dot(K_l.dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
@@ -823,7 +828,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5
         
-        res += l_sqrt_i.dot(m.H(K_l).dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
+        res += l_sqrt_i.dot(K_l.dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
         
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         

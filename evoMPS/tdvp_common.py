@@ -20,8 +20,10 @@ def eps_l_noop(x, A1, A2):
     For example, in the generic case: l[n] = eps_l_noop(l[n - 1], A[n], A[n])
     
     The input and output matrices are "column vectors" or "kets" and we
-    implement multiplication from the left as E.conj().T.dot(x.ravel()).
+    implement multiplication from the left as (E^A1_A2).conj().T.dot(x.ravel()).
     In other words <x|E = <eps_l_noop(x, A, A)|.
+    
+    Note: E^A1_A2 = sum_over_s_of( kron(A1[s], A2[s].conj()) )
 
     Parameters
     ----------
@@ -94,12 +96,13 @@ def eps_l_op_1s(x, A1, A2, op):
     res : ndarray
         The resulting matrix.
     """
+    op = op.conj()
     out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         for t in xrange(A1.shape[0]):
             o_st = op[t, s]
             if o_st != 0:
-                out += o_st.conj() * A1[s].conj().T.dot(x.dot(A2[t]))
+                out += o_st * A1[s].conj().T.dot(x.dot(A2[t]))
     return out
     
 def eps_r_noop(x, A1, A2):
@@ -466,6 +469,11 @@ def calc_K(Kp1, C, lm1, rp1, A, Ap1, sanity_checks=False):
     return K, op_expect
     
 def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
+    """Calculates the K_left using the recursive definition.
+    
+    This is the "bra-vector" K_left, which means (K_left.dot(r)).trace() = <K_left|r>.
+    In other words, K_left ~ <K_left| and K_left.conj().T ~ |K_left>.
+    """
     D = A.shape[2]
     q = A.shape[0]
     qm1 = Am1.shape[0]
@@ -481,7 +489,7 @@ def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
         
         K += A[s].conj().T.dot(Km1.dot(A[s]))
         
-    op_expect = mm.adot(Hl, r)
+    op_expect = sp.inner(Hl.ravel(), r.ravel())
         
     K += Hl
     

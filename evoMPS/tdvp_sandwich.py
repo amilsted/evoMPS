@@ -318,17 +318,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
     def calc_K(self):
         """Generates the right K matrices used to calculate the B's
-
-        K[n] is recursively defined. It depends on C[m] and A[m] for all m >= n.
-
-        It directly depends on A[n], A[n + 1], r[n], r[n + 1], C[n] and K[n + 1].
-
-        This is equivalent to K on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el], except
-        that it is for the non-norm-preserving case.
-
-        K[1] is, assuming a normalized state, the expectation value H of Ĥ.
         
-        Return the excess energy.
+        K[n] contains 'column-vectors' such that <l[n]|K[n]> = trace(l[n].dot(K[n])).
+        K_l[n] contains 'bra-vectors' such that <K_l[n]|r[n]> = trace(K_l[n].dot(r[n])).
         """
    
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
@@ -357,19 +349,14 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
             self.h_expect[n - 1] = he
 
-        self.h = (mm.adot(self.K_l[self.N_centre], self.r[self.N_centre]) 
+        self.h = (sp.inner(self.K_l[self.N_centre].ravel(), self.r[self.N_centre].ravel()) 
                   + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
                   - (self.N + 1) * self.uni_r.h)
         
-        print (mm.adot(K_left, self.r[0]) + mm.adot(self.K[self.N + 1], self.l[self.N])
-               + self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
-               
-#        hmm = self.h_expect.copy()
-#        
-#        for n in xrange(0, self.N + 1):
-#            self.h_expect[n] = self.expect_2s(self.h_nn[n], n)
-#            
-#        print hmm - self.h_expect
+        print self.h
+#        print (sp.inner(K_left.ravel(), self.r[0].ravel()) + mm.adot(self.l[self.N], self.K[self.N + 1])
+#               + self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
+#        print self.h_expect
 
 
     def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv, right=True):
@@ -498,7 +485,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         lcm1 = self.l[Nc - 1]
         lcm2 = self.l[Nc - 2]
         
-        K_l_cm1_h = mm.H(self.K_l[Nc - 1] - lcm1 * mm.adot(self.K_l[Nc - 1], self.r[Nc - 1]))
+        #Note: this is a 'bra-vector'
+        K_l_cm1 = self.K_l[Nc - 1] - lcm1 * sp.inner(self.K_l[Nc - 1].ravel(), self.r[Nc - 1].ravel())
+        
         Kcp1 = self.K[Nc + 1] - rc * mm.adot(self.l[Nc], self.K[Nc + 1])
         
         Cc = self.C[Nc] - self.h_expect[Nc] * self.AAc
@@ -516,7 +505,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 except AttributeError:
                     Bc[s] += Cc[s, t].dot(rcp1.dot(mm.H(Acp1[t]).dot(rc_i)))                    
                 
-            Bcsbit = K_l_cm1_h.dot(Ac[s]) #4
+            Bcsbit = K_l_cm1.dot(Ac[s]) #4
                             
             for t in xrange(self.q[0]): #2
                 Bcsbit += mm.H(Acm1[t]).dot(lcm2.dot(Ccm1[t,s]))
