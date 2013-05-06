@@ -38,23 +38,32 @@ cpdef np.ndarray eps_r_op_2s_AA12(x, np.ndarray AA12, np.ndarray A3, np.ndarray 
 @cython.locals(s = cython.int, t = cython.int, u = cython.int, v = cython.int, opval = npcmp, res = np.ndarray, subres = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_AA_func_op(x, np.ndarray AA12, np.ndarray AA34, op)
 
-@cython.locals(s = cython.int, t = cython.int, u = cython.int, v = cython.int, res = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_C12(x, np.ndarray C12, np.ndarray A3, np.ndarray A4)
 
-@cython.locals(s = cython.int, t = cython.int, u = cython.int, v = cython.int, res = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_C34(x, np.ndarray A1, np.ndarray A2, np.ndarray C34)
 
-@cython.locals(s = cython.int, t = cython.int, u = cython.int, v = cython.int, res = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_C12_AA34(x, np.ndarray C12, np.ndarray AA34)
 
-@cython.locals(s = cython.int, t = cython.int, u = cython.int, v = cython.int, res = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_AA12_C34(x, np.ndarray AA12, np.ndarray C34)
 
-@cython.locals(Dp1 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, u = cython.int, v = cython.int, res = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_l_op_2s_AA12_C34(x, np.ndarray AA12, np.ndarray C34)
 
-@cython.locals(u = cython.int, v = cython.int, AA = np.ndarray)
+@cython.locals(u = cython.int, v = cython.int, w = cython.int, res = np.ndarray)
+cpdef np.ndarray eps_r_op_3s_C123_AAA456(x, np.ndarray C123, np.ndarray AAA456)
+
+@cython.locals(u = cython.int, v = cython.int, w = cython.int, res = np.ndarray)
+cpdef np.ndarray eps_l_op_3s_AAA123_C456(x, np.ndarray AAA123, np.ndarray C456)
+    
+@cython.locals(Dp1 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, u = cython.int, v = cython.int, AA = np.ndarray)
 cpdef np.ndarray calc_AA(np.ndarray A, np.ndarray Ap1)
+
+@cython.locals(Dp2 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int, u = cython.int, v = cython.int, w = cython.int, AAA = np.ndarray)
+cpdef np.ndarray calc_AAA(np.ndarray A, np.ndarray Ap1, np.ndarray Ap2)
 
 @cython.locals(q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, u = cython.int, v = cython.int, h_nn_stuv = npcmp, AAuv = np.ndarray, C = np.ndarray)
 cpdef np.ndarray calc_C_func_op(op, np.ndarray A, np.ndarray Ap1)
@@ -63,13 +72,18 @@ cpdef np.ndarray calc_C_func_op(op, np.ndarray A, np.ndarray Ap1)
 cpdef np.ndarray calc_C_func_op_AA(op, np.ndarray AA)
 
 @cython.locals(Dm1 = cython.int, q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, Ash = np.ndarray, K = np.ndarray, Hr = np.ndarray, op_expect = npcmp)
-cpdef np.ndarray calc_K(np.ndarray Kp1, np.ndarray C, lm1, rp1, np.ndarray A, np.ndarray Ap1, bint sanity_checks=*)
+cpdef calc_K(np.ndarray Kp1, np.ndarray C, lm1, rp1, np.ndarray A, np.ndarray Ap1, bint sanity_checks=*)
+
+@cython.locals(D = cython.int, q = cython.int, qm1 = cython.int, s = cython.int, 
+               t = cython.int, Am1sh = np.ndarray, K = np.ndarray, 
+               Hl = np.ndarray, op_expect = npcmp)
+cpdef calc_K_l(np.ndarray Km1, np.ndarray Cm1, lm2, r, np.ndarray A, np.ndarray Am1, bint sanity_checks=*)
 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qm1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
 cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
-@cython.locals(s = cython.int, x = np.ndarray)
-cpdef restore_RCF_r(np.ndarray A, lm1, np.ndarray Gm1, bint sanity_checks=*)
+@cython.locals(s = cython.int)
+cpdef restore_RCF_r(np.ndarray A, lm1, Gm1, bint sanity_checks=*, double zero_tol=*)
 
 @cython.locals(s = cython.int)
-cpdef restore_RCF_l(np.ndarray A, r, np.ndarray G_n_i, bint sanity_checks=*)
+cpdef restore_RCF_l(np.ndarray A, r, G_n_i, bint sanity_checks=*)
