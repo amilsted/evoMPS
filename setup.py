@@ -2,24 +2,10 @@ from distutils.core import setup, Extension
 from evoMPS.version import __version__
 import numpy as np
 
-try:
-    from Cython.Distutils import build_ext
-except ImportError:
-    use_cython = False
-    print "Cython not found: Some optimizations will not be available."
-else:
-    use_cython = True
-
-if use_cython:
-    ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.py"]),
-                   Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.py"]),
-                   Extension("evoMPS.allclose", ["evoMPS/allclose.pyx"]),
-                   Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.pyx"])]
-                   #Extension("evoMPS.tdvp_test_pure_c", ["evoMPS/tdvp_test_pure_c.pyx"], libraries=["cblas"])]
-    cmdclass = {"build_ext": build_ext}
-else:
-    ext_modules = []
-    cmdclass = {}
+ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.c"]),
+               Extension("evoMPS.tdvp_common", ["evoMPS/tdvp_common.c"]),
+               Extension("evoMPS.allclose", ["evoMPS/allclose.c"]),
+               Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.c"])]
 
 setup(name='evoMPS',
       version=__version__,
@@ -41,7 +27,6 @@ setup(name='evoMPS',
       ],      
       packages = ['evoMPS'],
       requires = ["scipy (>=0.7)"],
-      cmdclass = cmdclass,
       include_dirs = [np.get_include()],
       ext_modules = ext_modules
       )
