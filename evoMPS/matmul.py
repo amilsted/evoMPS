@@ -294,6 +294,14 @@ def adot(a, b):
     Equivalent to trace(dot(H(a), b))
     """    
     return sp.inner(a.ravel().conj(), b.ravel())
+    
+def adot_noconj(a, b):
+    """
+    Calculates the scalar product for the ancilla, expecting
+    the arguments in matrix form.
+    Equivalent to trace(dot(a, b))
+    """    
+    return sp.inner(a.T.ravel(), b.ravel())
 
 def H(m, out=None):
     """Matrix conjugate transpose (adjoint).

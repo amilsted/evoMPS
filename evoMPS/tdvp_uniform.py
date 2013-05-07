@@ -270,7 +270,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             lH = tm.eps_l_op_3s_AAA123_C456(self.l, self.AAA, self.C)
         
-        h = sp.inner(lH.ravel(), self.r.ravel()) #=tr(lH r)
+        h = m.adot_noconj(lH, self.r) #=tr(lH r)
         
         lHQ = lH - self.l * h
         

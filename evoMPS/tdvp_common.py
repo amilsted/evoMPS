@@ -489,7 +489,7 @@ def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
         
         K += A[s].conj().T.dot(Km1.dot(A[s]))
         
-    op_expect = sp.inner(Hl.ravel(), r.ravel())
+    op_expect = mm.adot_noconj(Hl, r)
         
     K += Hl
     

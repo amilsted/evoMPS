@@ -90,7 +90,12 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     print
     if not csv_file is None:
         csvf.write(header + "\n")
-
+    
+    hs_prev = None
+    hl_prev = 0
+    hr_prev = 0
+    hlc_prev = 0
+    hrc_prev = 0
     for i in xrange(counter_start, steps):
         rewrite_opf = False
         if i > counter_start:
@@ -137,6 +142,19 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             
         sim.update(restore_cf=True) #now we are measuring the stepped state
         h = sim.h
+        hs = sim.h_expect - sim.uni_l.h
+        #print hs
+        if not hs_prev is None:
+            diff = hs - hs_prev
+            #print diff
+            print (sim.h_left - hl_prev, sim.h_right - hr_prev) 
+            print (sim.h_left_c - hlc_prev, sim.h_right_c - hrc_prev) 
+            print (diff.sum(), diff[15:-15].sum())
+        hs_prev = hs
+        hl_prev = sim.h_left
+        hr_prev = sim.h_right
+        hlc_prev = sim.h_left_c
+        hrc_prev = sim.h_right_c
             
         if not save_as is None and ((i % save_every == 0)
                                     or i == steps - 1):
@@ -239,8 +257,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.uni_l.calc_lr()
         self.uni_l.calc_B()
         self.eta_uni = self.uni_l.eta
-        self.uni_l_kmr = la.norm(self.uni_l.r / la.norm(self.uni_l.r) - 
-                                   self.uni_l.K / la.norm(self.uni_l.K))
         
         if callable(self.uni_l.ham):
             self.h_nn = lambda n, s, t, u, v: self.uni_l.ham(s, t, u, v)
@@ -349,13 +365,20 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
             self.h_expect[n - 1] = he
 
-        self.h = (sp.inner(self.K_l[self.N_centre].ravel(), self.r[self.N_centre].ravel()) 
+        self.h = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
                   + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
                   - (self.N + 1) * self.uni_r.h)
         
-        print self.h
-#        print (sp.inner(K_left.ravel(), self.r[0].ravel()) + mm.adot(self.l[self.N], self.K[self.N + 1])
+        self.h_left = mm.adot_noconj(K_left, self.r[0])
+        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
+        
+        self.h_left_c = mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre])
+        self.h_right_c = mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre])
+#        print self.h
+#        print (mm.adot_noconj(K_left, self.r[0]) + mm.adot(self.l[self.N], self.K[self.N + 1])
 #               + self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
+#        print (mm.adot_noconj(K_left), self.r[0]), mm.adot(self.l[self.N], self.K[self.N + 1]),
+#               self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
 #        print self.h_expect
 
 
@@ -486,7 +509,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         lcm2 = self.l[Nc - 2]
         
         #Note: this is a 'bra-vector'
-        K_l_cm1 = self.K_l[Nc - 1] - lcm1 * sp.inner(self.K_l[Nc - 1].ravel(), self.r[Nc - 1].ravel())
+        K_l_cm1 = self.K_l[Nc - 1] - lcm1 * mm.adot_noconj(self.K_l[Nc - 1], self.r[Nc - 1])
         
         Kcp1 = self.K[Nc + 1] - rc * mm.adot(self.l[Nc], self.K[Nc + 1])
         
