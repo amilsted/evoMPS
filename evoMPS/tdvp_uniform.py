@@ -701,7 +701,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3)))
         
         C_A_r_Ah_Vrih = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+                                  A_.shape[2], Vri_.shape[1]), dtype=self.typ)
         for u in xrange(self.q):
             for k in xrange(self.q):
                 for j in xrange(self.q):
@@ -725,7 +725,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         C_AhAhlA = sp.tensordot(ham_, C_AhAhlA, ((1, 0, 3), (0, 1, 2)))
         
         C_AA_Vrh = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], A.shape[2]), dtype=self.typ)
+                                  A_.shape[2], Vr_.shape[1]), dtype=self.typ)
         for t in xrange(self.q):
             for u in xrange(self.q):
                 for k in xrange(self.q):
