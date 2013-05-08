@@ -213,7 +213,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.H_expect = sp.asscalar(self.K[self.N])
             
 
-    def update(self, restore_CF=True, auto_truncate=True, restore_CF_after_trunc=True):
+    def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after taking a step or otherwise changing the 
@@ -534,12 +534,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
-        def upd():
-            self.calc_l()
-            self.calc_r()
-            self.calc_C()
-            self.calc_K()            
-
         eta_tot = 0
 
         #Take a copy of the current state
@@ -547,47 +541,44 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         for n in xrange(1, self.N + 1):
             A0[n] = self.A[n].copy()
 
-        B_fin = sp.empty_like(self.A)
+        B_fin = [None]
 
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n) #k1
-                eta_tot += self.eta[n]
-                B_fin[n] = B
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n)) #k1
+            eta_tot += self.eta[n]
+            B_fin.append(B[-1])
+        
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau/2 * B[n]
+                B[n] = None
 
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
+        self.update(restore_CF=False, auto_truncate=False)
+        
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n, set_eta=False)) #k2
 
-            B_prev = B
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau/2 * B[n]
+                B_fin[n] += 2 * B[n]
+                B[n] = None
 
-        upd()
+        self.update(restore_CF=False, auto_truncate=False)
 
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n, set_eta=False) #k2
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n, set_eta=False)) #k3
+            
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau * B[n]
+                B_fin[n] += 2 * B[n]
+                B[n] = None
 
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
-                B_fin[n - 1] += 2 * B_prev
-
-            B_prev = B
-
-        upd()
-
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n, set_eta=False) #k3
-
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau * B_prev
-                B_fin[n - 1] += 2 * B_prev
-
-            B_prev = B
-
-        upd()
+        self.update(restore_CF=False, auto_truncate=False)
 
         for n in xrange(1, self.N + 1):
             B = self.calc_B(n, set_eta=False) #k4
