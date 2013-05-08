@@ -66,6 +66,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         super(EvoMPS_TDVP_Generic, self).__init__(N, D, q)
         
+        self.gauge_fixing = self.canonical_form
+        
     
     def _init_arrays(self):
         super(EvoMPS_TDVP_Generic, self)._init_arrays()
@@ -175,19 +177,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
     def calc_K_l(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's.
-        
-        This is called automatically by self.update().
-        
-        K[n] is contains the action of the Hamiltonian on sites n to N.
-        
-        K[n] is recursively defined. It depends on C[m] and A[m] for all m >= n.
-        
-        It directly depends on A[n], A[n + 1], r[n], r[n + 1], C[n] and K[n + 1].
-        
-        This is equivalent to K on p. 14 of arXiv:1103.0936v2 [cond-mat.str-el], except 
-        that it is for the non-norm-preserving case.
-        
-        K[1] is, assuming a normalized state, the expectation value H of Ĥ.
+        For the left gauge-fixing case.
         """
         if n_low < 2:
             n_low = 2
@@ -203,7 +193,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                           self.r[n], self.A[n], self.A[n - 1], 
                                           sanity_checks=self.sanity_checks)
             else:
-                assert False, 'not yet supported'
+                assert False, 'left gauge fixing not yet supported for three-site Hamiltonians'
 
             self.h_expect[n - 1] = ex
             #else:
@@ -241,38 +231,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                                         auto_truncate=auto_truncate,
                                                         restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
-        self.calc_K()
-        return trunc
-        
-    def update_l(self, restore_CF=True, auto_truncate=True, restore_CF_after_trunc=True):
-        """Updates secondary quantities to reflect the state parameters self.A.
-        
-        Must be used after taking a step or otherwise changing the 
-        parameters self.A before calculating
-        physical quantities or taking the next step.
-        
-        Also (optionally) restores the canonical form.
-        
-        Parameters
-        ----------
-        restore_CF : bool (True)
-            Whether to restore canonical form.
-        auto_truncate : bool (True)
-            Whether to automatically truncate the bond-dimension if
-            rank-deficiency is detected. Requires restore_CF.
-        restore_CF_after_trunc : bool (True)
-            Whether to restore_CF after truncation.
-
-        Returns
-        -------
-        truncated : bool (only if auto_truncate == True)
-            Whether truncation was performed.
-        """
-        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_CF, 
-                                                        auto_truncate=auto_truncate,
-                                                        restore_CF_after_trunc=restore_CF_after_trunc)
-        self.calc_C()
-        self.calc_K_l()
+        if self.gauge_fixing == 'right':
+            self.calc_K()
+        else:
+            self.calc_K_l()
         return trunc
         
     def calc_x(self, n, Vsh, sqrt_l, sqrt_r, sqrt_l_inv, sqrt_r_inv):
@@ -374,7 +336,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                           lm2, Am1, self.A[n], Ap1,
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
-            assert False
+            assert False, "left gauge-fixing not yet supported for three-site Hamiltonians"
             
         return x        
     
@@ -395,6 +357,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 The TDVP tangent vector parameters for site n or None
                 if none is defined.
         """
+        if self.gauge_fixing == 'right':
+            return self._calc_B_r(n, set_eta=set_eta)
+        else:
+            return self._calc_B_l(n, set_eta=set_eta)
+    
+    def _calc_B_r(self, n, set_eta=True):
         if self.q[n] * self.D[n] - self.D[n - 1] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
@@ -414,23 +382,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             return None
 
-    def calc_B_l(self, n, set_eta=True):
-        """Generates the TDVP tangent vector parameters for a single site B[n].
-        
-        A TDVP time step is defined as: A[n] -= dtau * B[n]
-        where dtau is an infinitesimal imaginary time step.
-        
-        In other words, this returns B[n][x*] (equiv. eqn. (47) of 
-        arXiv:1103.0936v2 [cond-mat.str-el]) 
-        with x* the parameter matrices satisfying the Euler-Lagrange equations
-        as closely as possible.
-        
-        Returns
-        -------
-            B_n : ndarray or None
-                The TDVP tangent vector parameters for site n or None
-                if none is defined.
-        """
+    def _calc_B_l(self, n, set_eta=True):
         if self.q[n] * self.D[n - 1] - self.D[n] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
@@ -467,7 +419,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """
         eta_tot = 0
         
-        if save_memory:
+        if self.gauge_fixing == 'right' and save_memory:
             B = [None] * (self.N + 1)
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
@@ -492,33 +444,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             for n in xrange(1, self.N + 1):
                 if not B[n] is None:
                     self.A[n] += -dtau * B[n]
-                
-        return eta_tot
-        
-    def take_step_l(self, dtau):   
-        """Performs a complete forward-Euler step of imaginary time dtau.
-        
-        The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
-        
-        If dtau is itself imaginary, real-time evolution results.
-        
-        Parameters
-        ----------
-        dtau : complex
-            The (imaginary or real) amount of imaginary time (tau) to step.
-        save_memory : bool
-            Whether to save memory by avoiding storing all B[n] at once.
-        """
-        eta_tot = 0
-        
-        B = [None] #There is no site zero
-        for n in xrange(1, self.N + 1):
-            B.append(self.calc_B_l(n))
-            eta_tot += self.eta[n]
-            
-        for n in xrange(1, self.N + 1):
-            if not B[n] is None:
-                self.A[n] += -dtau * B[n]
                 
         return eta_tot
         
