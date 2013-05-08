@@ -209,8 +209,8 @@ class EvoMPS_MPS_Generic(object):
                         self._update_after_truncate(*data)
         else:
             self.calc_l()
+            self.simple_renorm(update_r=False)
             self.calc_r()
-            self.simple_renorm()
     
     def calc_l(self, n_low=-1, n_high=-1):
         """Updates the l matrices to reflect the current state parameters self.A.
