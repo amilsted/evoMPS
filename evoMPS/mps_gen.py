@@ -175,7 +175,7 @@ class EvoMPS_MPS_Generic(object):
                 self.D[n] = qacc
                 
     
-    def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -187,6 +187,8 @@ class EvoMPS_MPS_Generic(object):
         ----------
         restore_RCF : bool (True)
             Whether to restore right canonical form.
+        normalize : bool
+            Whether to normalize the state in case restore_CF is False.
         auto_truncate : bool (True)
             Whether to automatically truncate the bond-dimension if
             rank-deficiency is detected. Requires restore_RCF.
@@ -209,7 +211,8 @@ class EvoMPS_MPS_Generic(object):
                         self._update_after_truncate(*data)
         else:
             self.calc_l()
-            self.simple_renorm(update_r=False)
+            if normalize:
+                self.simple_renorm(update_r=False)
             self.calc_r()
     
     def calc_l(self, n_low=-1, n_high=-1):
