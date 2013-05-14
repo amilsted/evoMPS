@@ -101,7 +101,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not implemented in sandwich case")
 
-    def update(self, restore_cf=True):
+    def update(self, restore_cf=True, normalize=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
@@ -110,9 +110,13 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if restore_cf:
             self.restore_CF()
         else:
-            self.calc_l()
-            self.calc_r()
-            self.simple_renorm()
+            if normalize:
+                self.calc_l(n_high=self.N_centre - 1)
+                self.calc_r(n_low=self.N_centre - 1)
+                self.simple_renorm(update_lr=True)
+            else:
+                self.calc_l()
+                self.calc_r()
     
 
     def calc_l(self, n_low=-1, n_high=-1):        
@@ -148,9 +152,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if abs(1 - norm) > 1E-15:
             self.A[self.N_centre] *= 1 / sp.sqrt(norm)
             
-            if update_lr:
-                self.calc_l(n_low=self.N_centre)
-                self.calc_r(n_high=self.N_centre)
+        if update_lr:
+            self.calc_l(n_low=self.N_centre)
+            self.calc_r(n_high=self.N_centre)
 
     def restore_CF_dbg(self):
         for n in xrange(self.N + 2):

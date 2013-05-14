@@ -91,11 +91,11 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     if not csv_file is None:
         csvf.write(header + "\n")
     
-    hs_prev = None
-    hl_prev = 0
-    hr_prev = 0
-    hlc_prev = 0
-    hrc_prev = 0
+#    hs_prev = None
+#    hl_prev = 0
+#    hr_prev = 0
+#    hlc_prev = 0
+#    hrc_prev = 0
     for i in xrange(counter_start, steps):
         rewrite_opf = False
         if i > counter_start:
@@ -139,22 +139,21 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         else:            
             eta = 0
             etas = sp.zeros(1)
-            
-        sim.update(restore_cf=True) #now we are measuring the stepped state
+        
+        sim.update() #now we are measuring the stepped state
         h = sim.h
-        hs = sim.h_expect - sim.uni_l.h
-        #print hs
-        if not hs_prev is None:
-            diff = hs - hs_prev
-            #print diff
-            print (sim.h_left - hl_prev, sim.h_right - hr_prev) 
-            print (sim.h_left_c - hlc_prev, sim.h_right_c - hrc_prev) 
-            print (diff.sum(), diff[15:-15].sum())
-        hs_prev = hs
-        hl_prev = sim.h_left
-        hr_prev = sim.h_right
-        hlc_prev = sim.h_left_c
-        hrc_prev = sim.h_right_c
+        #hs = sim.h_expect - sim.uni_l.h
+#        if not hs_prev is None:
+#            diff = hs - hs_prev
+#            #print diff
+#            print (sim.h_left - hl_prev, sim.h_right - hr_prev) 
+#            print (sim.h_left_c - hlc_prev, sim.h_right_c - hrc_prev) 
+#            print (diff.sum(), diff[15:-15].sum())
+#        hs_prev = hs
+#        hl_prev = sim.h_left
+#        hr_prev = sim.h_right
+#        hlc_prev = sim.h_left_c
+#        hrc_prev = sim.h_right_c
             
         if not save_as is None and ((i % save_every == 0)
                                     or i == steps - 1):
@@ -253,8 +252,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         assert uni_ground.ham_sites == 2, 'Sandwiches only supported for nearest-neighbour Hamiltonians at present!'
         
-        self.uni_l.update()
-        self.uni_l.calc_lr()
         self.uni_l.calc_B()
         self.eta_uni = self.uni_l.eta
         
@@ -369,11 +366,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                   + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
                   - (self.N + 1) * self.uni_r.h)
         
-        self.h_left = mm.adot_noconj(K_left, self.r[0])
-        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
-        
-        self.h_left_c = mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre])
-        self.h_right_c = mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre])
+#        self.h_left = mm.adot_noconj(K_left, self.r[0])
+#        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
+#        
+#        self.h_left_c = mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre])
+#        self.h_right_c = mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre])
 #        print self.h
 #        print (mm.adot_noconj(K_left, self.r[0]) + mm.adot(self.l[self.N], self.K[self.N + 1])
 #               + self.h_expect.sum() - (self.N + 1) * self.uni_r.h)
@@ -419,67 +416,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return x
         
-    def calc_B1(self):
-        """Calculate the optimal B1 given right gauge-fixing on B2..N and
-        no gauge-fixing on B1.
-        
-        We use the non-norm-preserving K's, since the norm-preservation
-        is not needed elsewhere. It is cleaner to subtract the relevant
-        norm-changing terms from the K's here than to generate all K's
-        with norm-preservation.
-        """
-        B1 = sp.empty_like(self.A[1])
-        
-        try:
-            r1_i = self.r[1].inv()
-        except AttributeError:
-            r1_i = mm.invmh(self.r[1])
-            
-        try:
-            l0_i = self.l[0].inv()
-        except AttributeError:
-            l0_i = mm.invmh(self.l[0])
-        
-        A0 = self.A[0]
-        A1 = self.A[1]
-        A2 = self.A[2]
-        r1 = self.r[1]
-        r2 = self.r[2]
-        l0 = self.l[0]
-        
-        KLh = mm.H(self.uni_l.K_left - l0 * mm.adot(self.uni_l.K_left, self.r[0]))
-        K2 = self.K[2] - r1 * mm.adot(self.l[1], self.K[2])
-        
-        C1 = self.C[1] - self.h_expect[1] * self.AA1
-        C0 = self.C[0] - self.h_expect[0] * self.AA0
-        
-        for s in xrange(self.q[1]):
-            try:
-                B1[s] = A1[s].dot(r1_i.dot_left(K2))
-            except AttributeError:
-                B1[s] = A1[s].dot(K2.dot(r1_i))
-            
-            for t in xrange(self.q[2]):
-                try:
-                    B1[s] += C1[s, t].dot(r2.dot(r1_i.dot_left(mm.H(A2[t]))))
-                except AttributeError:
-                    B1[s] += C1[s, t].dot(r2.dot(mm.H(A2[t]).dot(r1_i)))                    
-                
-            B1sbit = KLh.dot(A1[s])
-                            
-            for t in xrange(self.q[0]):
-                B1sbit += mm.H(A0[t]).dot(l0.dot(C0[t,s]))
-                
-            B1[s] += l0_i.dot(B1sbit)
-           
-        rb = tm.eps_r_noop(r1, B1, B1)
-        eta = sp.sqrt(mm.adot(l0, rb))
-                
-        return B1, eta
 
     def calc_B_centre(self):
-        """Calculate the optimal B_centre given right gauge-fixing on Bcentre+1..N and
-        left gauge-fixing on 1..Bcentre-1.
+        """Calculate the optimal B_centre given right gauge-fixing on n_centre+1..N and
+        left gauge-fixing on 1..n_centre-1.
         
         We use the non-norm-preserving K's, since the norm-preservation
         is not needed elsewhere. It is cleaner to subtract the relevant
@@ -550,46 +490,43 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         In the case of Bc, use the general Bc generated in calc_B_centre().
         """
-        if True or self.q[n] * self.D[n] - self.D[n - 1] > 0:
-            if n == self.N_centre:
-                B, eta_c = self.calc_B_centre()
-                if set_eta:
-                    self.eta[self.N_centre] = eta_c
-            else:
-                l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
-                
-                if n > self.N_centre:
-                    Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
-                    x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=True)
-                    
-                    B = sp.empty_like(self.A[n])
-                    for s in xrange(self.q[n]):
-                        B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
-                        
-                    if self.sanity_checks:
-                        M = tm.eps_r_noop(self.r[n], B, self.A[n])
-                        if not sp.allclose(M, 0):
-                            print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
-                else:
-                    Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
-                    x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=False)
-                    
-                    B = sp.empty_like(self.A[n])
-                    for s in xrange(self.q[n]):
-                        B[s] = mm.mmul(l_sqrt_inv, mm.H(Vsh[s]), x, r_sqrt_inv)
-                        
-                    if self.sanity_checks:
-                        M = tm.eps_l_noop(self.l[n - 1], B, self.A[n])
-                        if not sp.allclose(M, 0):
-                            print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
-                
-                if set_eta:
-                    self.eta[n] = sp.sqrt(mm.adot(x, x))
-
-
-            return B
+        if n == self.N_centre:
+            B, eta_c = self.calc_B_centre()
+            if set_eta:
+                self.eta[self.N_centre] = eta_c
         else:
-            return None, 0
+            l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
+            
+            if n > self.N_centre:
+                Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
+                x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=True)
+                
+                B = sp.empty_like(self.A[n])
+                for s in xrange(self.q[n]):
+                    B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
+                    
+                if self.sanity_checks:
+                    M = tm.eps_r_noop(self.r[n], B, self.A[n])
+                    if not sp.allclose(M, 0):
+                        print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
+            else:
+                Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
+                x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=False)
+                
+                B = sp.empty_like(self.A[n])
+                for s in xrange(self.q[n]):
+                    B[s] = mm.mmul(l_sqrt_inv, mm.H(Vsh[s]), x, r_sqrt_inv)
+                    
+                if self.sanity_checks:
+                    M = tm.eps_l_noop(self.l[n - 1], B, self.A[n])
+                    if not sp.allclose(M, 0):
+                        print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
+            
+            if set_eta:
+                self.eta[n] = sp.sqrt(mm.adot(x, x))
+
+
+        return B
 
     def calc_l_r_roots(self, n):
         """Returns the matrix square roots (and inverses) needed to calculate B.
@@ -607,13 +544,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 
-    def update(self, restore_cf=True):
+    def update(self, restore_cf=True, normalize=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
         Return the excess energy.
         """
-        super(EvoMPS_TDVP_Sandwich, self).update(restore_cf=restore_cf)
+        super(EvoMPS_TDVP_Sandwich, self).update(restore_cf=restore_cf, normalize=normalize)
         
         self._calc_AAc_AAcm1()
         self.calc_C()
@@ -660,11 +597,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         This requires more memory than a simple forward Euler step, and also
         more than a backward Euler step. It is, however, far more accurate
         and stable than forward Euler.
-        """
-        
-        def upd():
-            self.update(restore_cf=False)        
-
+        """        
         eta_tot = 0
 
         #Take a copy of the current state
@@ -672,47 +605,44 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         for n in xrange(1, self.N + 1):
             A0[n] = self.A[n].copy()
 
-        B_fin = sp.empty_like(self.A)
+        B_fin = [None]
 
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n) #k1
-                eta_tot += self.eta[n]
-                B_fin[n] = B
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n)) #k1
+            eta_tot += self.eta[n]
+            B_fin.append(B[-1])
+        
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau/2 * B[n]
+                B[n] = None
 
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
+        self.update(restore_cf=False, normalize=False)
+        
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n, set_eta=False)) #k2
 
-            B_prev = B
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau/2 * B[n]
+                B_fin[n] += 2 * B[n]
+                B[n] = None
 
-        upd()
+        self.update(restore_cf=False, normalize=False)
 
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n, set_eta=False) #k2
+        B = [None]
+        for n in xrange(1, self.N + 1):
+            B.append(self.calc_B(n, set_eta=False)) #k3
+            
+        for n in xrange(1, self.N + 1):
+            if not B[n] is None:
+                self.A[n] = A0[n] - dtau * B[n]
+                B_fin[n] += 2 * B[n]
+                B[n] = None
 
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau/2 * B_prev
-                B_fin[n - 1] += 2 * B_prev
-
-            B_prev = B
-
-        upd()
-
-        B_prev = None
-        for n in xrange(1, self.N + 2):
-            if n <= self.N:
-                B = self.calc_B(n, set_eta=False) #k3
-
-            if not B_prev is None:
-                self.A[n - 1] = A0[n - 1] - dtau * B_prev
-                B_fin[n - 1] += 2 * B_prev
-
-            B_prev = B
-
-        upd()
+        self.update(restore_cf=False, normalize=False)
 
         for n in xrange(1, self.N + 1):
             B = self.calc_B(n, set_eta=False) #k4
