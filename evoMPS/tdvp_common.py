@@ -814,9 +814,9 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_e
         
         #Replace almost-zero values with zero and perform a pseudo-inverse
         ev_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
-                                                 1. / ev_sq))
+                                                 1. / ev_sq), dtype=A.dtype)
         ev_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
-                                               ev_sq))
+                                               ev_sq), dtype=A.dtype)
                    
         if lower:
             x = ev_sq.dot_left(EV)
@@ -888,7 +888,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
             eye = sp.eye(A.shape[1])
         else:
             eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                                   np.ones(new_D)))
+                                                   np.ones(new_D)), dtype=A.dtype)
         if not sp.allclose(G_nm1.dot(G_nm1_i), eye, atol=1E-13, rtol=1E-13):
             print "Sanity Fail in restore_RCF_r!: Bad GT!"
 
@@ -899,7 +899,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         r_nm1 = mm.eyemat(A.shape[1], A.dtype)
     else:
         r_nm1 = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                                np.ones(new_D)))
+                                                np.ones(new_D)), dtype=A.dtype)
 
     if sanity_checks:
         r_n_ = mm.eyemat(A.shape[2], A.dtype)
@@ -1002,7 +1002,7 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
             eye = sp.eye(A.shape[2])
         else:
             eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
-                                                   np.ones(new_D)))
+                                                   np.ones(new_D)), dtype=A.dtype)
         if not sp.allclose(G.dot(Gi), eye, atol=1E-13, rtol=1E-13):
             print "Sanity Fail in restore_LCF_l!: Bad GT!"
 
@@ -1013,7 +1013,7 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
         l = mm.eyemat(A.shape[2], A.dtype)
     else:
         l = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
-                                                np.ones(new_D)))
+                                                np.ones(new_D)), dtype=A.dtype)
 
     if sanity_checks:
         lm1_ = mm.eyemat(A.shape[1], A.dtype)

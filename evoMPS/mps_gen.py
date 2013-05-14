@@ -526,24 +526,24 @@ class EvoMPS_MPS_Generic(object):
             self.r[0][0, 0] = 1
             
             for n in xrange(1, self.N):
-                self.l[n] = m.simple_diag_matrix(old_l[n].diag[-self.D[n]:])
+                self.l[n] = m.simple_diag_matrix(old_l[n].diag[-self.D[n]:], dtype=self.typ)
                 
             self.l[self.N][0, 0] = 1
             
             for n in xrange(self.N - 1, n_last_trunc - 1, - 1):
-                self.r[n] = m.eyemat(self.D[n])
+                self.r[n] = m.eyemat(self.D[n], dtype=self.typ)
                 
             self.calc_r(n_high=n_last_trunc - 1)
         else:
             self.l[0][0, 0] = 1
             
             for n in xrange(1, self.N):
-                self.r[n] = m.simple_diag_matrix(old_r[n].diag[-self.D[n]:])
+                self.r[n] = m.simple_diag_matrix(old_r[n].diag[-self.D[n]:], dtype=self.typ)
                 
             self.r[0][0, 0] = 1
             
             for n in xrange(1, n_first_trunc):
-                self.l[n] = m.eyemat(self.D[n])
+                self.l[n] = m.eyemat(self.D[n], dtype=self.typ)
                 
             self.calc_l(n_low=n_first_trunc)
             
