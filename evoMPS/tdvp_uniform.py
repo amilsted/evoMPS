@@ -405,7 +405,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         This requires more memory than a simple forward Euler step. 
         It is, however, far more accurate with a per-step error of
-        order dtau**4.
+        order dtau**5.
         
         Parameters
         ----------
@@ -416,7 +416,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         def update():
             self.calc_lr()
-            #self.restore_CF() #this really messes things up...
             self.calc_AA()
             self.calc_C()
             self.calc_K()            

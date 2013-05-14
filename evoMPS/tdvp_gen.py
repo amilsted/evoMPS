@@ -203,7 +203,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.H_expect = sp.asscalar(self.K[self.N])
             
 
-    def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after taking a step or otherwise changing the 
@@ -214,12 +214,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         Parameters
         ----------
-        restore_CF : bool (True)
+        restore_CF : bool
             Whether to restore canonical form.
-        auto_truncate : bool (True)
+        normalize : bool
+            Whether to normalize the state in case restore_CF is False.
+        auto_truncate : bool
             Whether to automatically truncate the bond-dimension if
             rank-deficiency is detected. Requires restore_CF.
-        restore_CF_after_trunc : bool (True)
+        restore_CF_after_trunc : bool
             Whether to restore_CF after truncation.
 
         Returns
@@ -227,7 +229,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         truncated : bool (only if auto_truncate == True)
             Whether truncation was performed.
         """
-        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_CF, 
+        trunc = super(EvoMPS_TDVP_Generic, self).update(restore_CF=restore_CF, 
+                                                        normalize=normalize,
                                                         auto_truncate=auto_truncate,
                                                         restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
@@ -452,7 +455,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         This requires more memory than a simple forward Euler step. 
         It is, however, far more accurate with a per-step error of
-        order dtau**4.
+        order dtau**5.
         
         Parameters
         ----------
