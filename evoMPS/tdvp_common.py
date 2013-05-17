@@ -884,7 +884,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
         G_n_i = G_nm1_i
 
     if sanity_checks:
-        if new_D is None:
+        if new_D == A.shape[1]:
             eye = sp.eye(A.shape[1])
         else:
             eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
@@ -895,7 +895,7 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
     for s in xrange(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
 
-    if new_D is None:
+    if new_D == A.shape[1]:
         r_nm1 = mm.eyemat(A.shape[1], A.dtype)
     else:
         r_nm1 = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
@@ -998,7 +998,7 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
         Gm1 = G
 
     if sanity_checks:
-        if new_D is None:
+        if new_D == A.shape[2]:
             eye = sp.eye(A.shape[2])
         else:
             eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
