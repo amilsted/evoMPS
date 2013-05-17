@@ -549,9 +549,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         If l[n] or r[n] are diagonal or the identity, further optimizations are
         used.
         """
+        assert 0 < n <= self.N, 'calc_l_r_roots: Bad n!'
+        
         l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i = tm.calc_l_r_roots(self.l[n - 1], 
                                                                self.r[n], 
-                                                            self.sanity_checks)
+                                                               sanity_checks=self.sanity_checks)
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 

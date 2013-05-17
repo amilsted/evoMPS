@@ -519,31 +519,61 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
     K += Hr
     
     return K, op_expect
-    
-def calc_l_r_roots(lm1, r, sanity_checks=False):
+                   
+   
+def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False):
+    err = sp.seterr(divide='ignore', invalid='ignore')
     try:
-        l_sqrt = lm1.sqrt()
-        l_sqrt_i = l_sqrt.inv()
+        x_sqrt = x.sqrt()
+        x_sqrt_i = x_sqrt.inv()
+        try: #this works for simple_diag_matrix
+            zeros = abs(x_sqrt.diag) <= zero_tol
+            x_sqrt.diag[zeros] = 0
+            x_sqrt_i.diag[zeros] = 0
+        except AttributeError:
+            zeros = []
+            pass
+        EV = None
     except AttributeError:
-        l_sqrt, evd = mm.sqrtmh(lm1, ret_evd=True)
-        l_sqrt_i = mm.invmh(l_sqrt, evd=evd)
+        ev, EV = la.eigh(x)
+        zeros = abs(ev) <= zero_tol
         
-    try:
-        r_sqrt = r.sqrt()
-        r_sqrt_i = r_sqrt.inv()
-    except AttributeError:
-        r_sqrt, evd = mm.sqrtmh(r, ret_evd=True)
-        r_sqrt_i = mm.invmh(r_sqrt, evd=evd)
-    
+        ev_sqrt = sp.sqrt(ev)
+        ev_sqinv = 1 / ev_sqrt
+        ev_sqrt[zeros] = 0
+        ev_sqinv[zeros] = 0
+        
+        B = mm.mmul_diag(ev_sqrt, EV.conj().T)
+        x_sqrt = EV.dot(B)
+        
+        B = mm.mmul_diag(ev_sqinv, EV.conj().T)
+        x_sqrt_i = EV.dot(B)
+        
     if sanity_checks:
-        if not np.allclose(l_sqrt.dot(l_sqrt), lm1):
-            print "Sanity check failed: l_sqrt is bad!"
-        if not np.allclose(l_sqrt.dot(l_sqrt_i), np.eye(lm1.shape[0])):
-            print "Sanity check failed: l_sqrt_i is bad!"
-        if not np.allclose(r_sqrt.dot(r_sqrt), r):
-            print "Sanity check failed: r_sqrt is bad!"
-        if (not np.allclose(r_sqrt.dot(r_sqrt_i), np.eye(r.shape[0]))):
-            print "Sanity check failed: r_sqrt_i is bad!"
+        if not np.allclose(x_sqrt.dot(x_sqrt), x):
+            print "Sanity check failed: x_sqrt is bad!"
+        
+        try: #if we did an EVD then we use the eigenvectors
+            nulls = EV.copy()
+            nulls[:, sp.invert(zeros)] = 0
+            nulls = nulls.dot(nulls.conj().T)
+        except AttributeError:
+            nulls = sp.zeros(x.shape[0])
+            nulls[zeros] = 1
+            nulls = sp.diag(nulls)
+            
+        eye = np.eye(x.shape[0])
+        if not np.allclose(x_sqrt.dot(x_sqrt_i), eye - nulls):
+            print "Sanity check failed: x_sqrt_i is bad!"
+        
+    sp.seterr(divide=err['divide'], invalid=err['invalid'])
+    
+    return x_sqrt, x_sqrt_i
+   
+def calc_l_r_roots(lm1, r, zero_tol=1E-15, sanity_checks=False):        
+    l_sqrt, l_sqrt_i = herm_sqrt_inv(lm1, zero_tol=zero_tol, sanity_checks=sanity_checks)
+    
+    r_sqrt, r_sqrt_i = herm_sqrt_inv(r, zero_tol=zero_tol, sanity_checks=sanity_checks)
     
     return l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
     

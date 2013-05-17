@@ -101,6 +101,9 @@ class eyemat(object):
         else:
             return 0
             
+    def diagonal(self):
+        return sp.ones((self.shape[0]), dtype=self.dtype)
+            
     def sqrt(self):
         return self
         
