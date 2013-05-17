@@ -10,6 +10,7 @@ import scipy.linalg as la
 import matmul as mm
 import tdvp_common as tm
 from mps_sandwich import EvoMPS_MPS_Sandwich
+import time
 
 def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
@@ -19,7 +20,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        overlap_with=None,
        overlap_save_as=None,
        append_saved=True,
-       save_every=10, save_as=None, counter_start=0,
+       save_every=10, save_as=None, counter_start=0, t_start=None,
        csv_file=None,
        tol=0,
        print_eta_n=False):
@@ -84,7 +85,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         else:
             csvf = open(csv_file, "w")
         
-    header = "\t".join(["Step", "eta", "E_nonuniform", "E - E_prev", "grown_left", 
+    header = "\t".join(["Step", "CPU", "t", "eta", "etas_mean", "E_nonuniform", "E - E_prev", "grown_left", 
                         "grown_right"])
     print header
     print
@@ -96,7 +97,10 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
 #    hr_prev = 0
 #    hlc_prev = 0
 #    hrc_prev = 0
-    for i in xrange(counter_start, steps):
+    if t_start is None:
+        t_start = counter_start * tau
+    t_cpu0 = time.clock()
+    for i in xrange(counter_start, steps + 1):
         rewrite_opf = False
         if i > counter_start:
             if RK4:
@@ -140,7 +144,11 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             eta = 0
             etas = sp.zeros(1)
         
-        sim.update() #now we are measuring the stepped state
+        #if not RK4:
+        #    rcf = (i % 4 == 0)
+        #else:
+        rcf = True
+        sim.update(restore_cf=rcf) #now we are measuring the stepped state
         h = sim.h
         #hs = sim.h_expect - sim.uni_l.h
 #        if not hs_prev is None:
@@ -162,7 +170,9 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         if i % 20 == 19:
             print header
             
-        line = "\t".join(map(str, (i, eta.real, h.real, (h - h_prev).real, 
+        t = abs((i - counter_start) * tau) + abs(t_start)
+        t_cpu = time.clock() - t_cpu0
+        line = "\t".join(map(str, (i, t_cpu, t, eta.real, etas.real.mean(), h.real, (h - h_prev).real, 
                                    sim.grown_left, sim.grown_right)))
         print line
         if print_eta_n:
@@ -223,7 +233,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 olf.write("\t".join(map(str, row)) + "\n")
                 olf.flush()
             
-        if i > counter_start and eta.real < tol:
+        if i > counter_start and etas.mean().real < tol:# eta.real < tol:
             print "Tolerance reached!"
             break
             
@@ -254,6 +264,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.uni_l.calc_B()
         self.eta_uni = self.uni_l.eta
+        print self.eta_uni
         
         if callable(self.uni_l.ham):
             self.h_nn = lambda n, s, t, u, v: self.uni_l.ham(s, t, u, v)
