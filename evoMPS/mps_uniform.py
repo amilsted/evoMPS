@@ -229,7 +229,7 @@ class EvoMPS_MPS_Uniform(object):
         
         #remove any additional phase factor
         eVmean = eV.mean()
-        eV *= np.sqrt(np.conj(eVmean) / eVmean)
+        eV *= sp.sqrt(sp.conj(eVmean) / eVmean)
         
         if eV.mean() < 0:
             eV *= -1
