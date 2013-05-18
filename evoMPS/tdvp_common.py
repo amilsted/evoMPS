@@ -360,6 +360,13 @@ def eps_l_op_2s_AA12_C34(x, AA12, C34):
         for v in xrange(C34.shape[1]):
             res += AA12[u, v].conj().T.dot(x.dot(C34[u, v]))
     return res
+    
+def eps_l_op_2s_A1_A2_C34(x, A1, A2, C34):
+    res = np.zeros((A2.shape[2], C34.shape[3]), dtype=C34.dtype)
+    for u in xrange(C34.shape[0]):
+        for v in xrange(C34.shape[1]):
+            res += (A1[u].dot(A2[v])).conj().T.dot(x.dot(C34[u, v]))
+    return res
 
 def eps_r_op_3s_C123_AAA456(x, C123, AAA456):
     res = np.zeros((C123.shape[3], AAA456.shape[3]), dtype=AAA456.dtype)
@@ -617,42 +624,27 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     Dm1 = A.shape[1]
     q = A.shape[0]
     
-    x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
-    x_part = sp.empty_like(x)
-    x_subpart = sp.empty_like(A[0])
-    x_subsubpart = sp.empty_like(A[0])
+    x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
+    x_part = np.empty_like(x)
+    x_subpart = np.empty_like(A[0])
     
-    H = mm.H
+    if not (C is None and Kp1 is None):
+        assert (not C is None) and (not Kp1 is None)
+        x_part.fill(0)
+        for s in xrange(q):            
+            x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
+            
+            x_subpart += A[s].dot(Kp1) #~3rd line
     
-    x_part.fill(0)
-    for s in xrange(q):
-        x_subpart.fill(0)
+            x_part += x_subpart.dot(r_si.dot(Vsh[s]))
 
-        if not C is None:
-            qp1 = Ap1.shape[0]
-            x_subsubpart.fill(0)
-            for t in xrange(qp1):
-                x_subsubpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
-
-            x_subsubpart += A[s].dot(Kp1) #~3rd line
-
-            try:
-                x_subpart += r_si.dot_left(x_subsubpart)
-            except AttributeError:
-                x_subpart += x_subsubpart.dot(r_si)
-
-        x_part += x_subpart.dot(Vsh[s])
-
-    x += lm1_s.dot(x_part)
+        x += lm1_s.dot(x_part)
 
     if not lm2 is None:
-        qm1 = Am1.shape[0]
         x_part.fill(0)
         for s in xrange(q):     #~2nd line
-            x_subsubpart.fill(0)
-            for t in xrange(qm1):
-                x_subsubpart += H(Am1[t]).dot(lm2.dot(Cm1[t, s]))
-            x_part += x_subsubpart.dot(r_s.dot(Vsh[s]))
+            x_subpart = eps_l_noop_inplace(lm2, Am1, Cm1[:, s], x_subpart)
+            x_part += x_subpart.dot(r_s.dot(Vsh[s]))
         x += lm1_si.dot(x_part)
 
     return x
@@ -663,58 +655,41 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
     Dm1 = A.shape[1]
     q = A.shape[0]
     
-    x = sp.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
-    x_part = sp.empty_like(x)
-    x_subpart = sp.empty_like(A[0])
-    x_subsubpart = sp.empty_like(A[0])
+    x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
+    x_part = np.empty_like(x)
+    x_subpart = np.empty_like(A[0])
     
     H = mm.H
     
-    x_part.fill(0)
-    for s in xrange(q):
-        x_subpart.fill(0)
-
-        if not C is None:
-            qp1 = Ap1.shape[0]
-            qp2 = Ap2.shape[0]
-            x_subsubpart.fill(0)
-            for t in xrange(qp1):
-                for u in xrange(qp2):
-                    x_subsubpart += C[s,t,u].dot(rp2.dot(H(Ap2[u]))).dot(H(Ap1[t])) #~1st line
-
-            x_subsubpart += A[s].dot(Kp1) #~3rd line
-
-            try:
-                x_subpart += r_si.dot_left(x_subsubpart)
-            except AttributeError:
-                x_subpart += x_subsubpart.dot(r_si)
-
-        x_part += x_subpart.dot(Vsh[s])
-
-    x += lm1_s.dot(x_part)
+    assert not (C is None and not Kp1 is None)
+    if not C is None:
+        x_part.fill(0)
+        for s in xrange(q):            
+            x_subpart = eps_r_op_2s_C12(rp2, C[s], Ap1, Ap2) #~1st line
+            
+            x_subpart += A[s].dot(Kp1) #~3rd line
+    
+            x_part += x_subpart.dot(r_si.dot(Vsh[s]))
+    
+        x += lm1_s.dot(x_part)
 
     if not lm2 is None and not Cm1 is None:
         qm1 = Am1.shape[0]
         qp1 = Ap1.shape[0]
         x_part.fill(0)
         for t in xrange(q):     #~2nd line
-            x_subsubpart.fill(0)
+            x_subpart.fill(0)
             for s in xrange(qm1):
                 for u in xrange(qp1):
-                    x_subsubpart += H(Am1[s]).dot(lm2.dot(Cm1[s, t, u])).dot(rp1.dot(H(Ap1[u])))
-            x_part += x_subsubpart.dot(r_si.dot(Vsh[t]))
+                    x_subpart += H(Am1[s]).dot(lm2.dot(Cm1[s, t, u])).dot(rp1.dot(H(Ap1[u])))
+            x_part += x_subpart.dot(r_si.dot(Vsh[t]))
         x += lm1_si.dot(x_part)
 
     if not lm3 is None:
-        qm1 = Am1.shape[0]
-        qm2 = Am2.shape[0]
         x_part.fill(0)
         for u in xrange(q):     #~2nd line
-            x_subsubpart.fill(0)
-            for s in xrange(qm2):
-                for t in xrange(qm1):
-                    x_subsubpart += H(Am1[t]).dot(H(Am2[s])).dot(lm3.dot(Cm2[s, t, u]))
-            x_part += x_subsubpart.dot(r_s.dot(Vsh[u]))
+            x_subpart = eps_l_op_2s_A1_A2_C34(lm3, Am2, Am1, Cm2[:, :, u])
+            x_part += x_subpart.dot(r_s.dot(Vsh[u]))
         x += lm1_si.dot(x_part)
 
     return x
@@ -728,15 +703,10 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     x_part = sp.empty_like(x)
     x_subpart = sp.empty_like(A[0])
     
-    H = mm.H
-    
     if not C is None:
         x_part.fill(0)
         for s in xrange(q):
-            x_subpart.fill(0)
-            qp1 = Ap1.shape[0]
-            for t in xrange(qp1):
-                x_subpart += C[s,t].dot(rp1.dot(H(Ap1[t]))) #~1st line
+            x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
             x_part += Vsh[s].dot(lm1_s.dot(x_subpart))
             
         try:
@@ -750,9 +720,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x_subpart.fill(0)
 
         if not lm2 is None:
-            qm1 = Am1.shape[0]
-            for t in xrange(qm1):
-                x_subpart += H(Am1[t]).dot(lm2.dot(Cm1[t, s]))
+            x_subpart = eps_l_noop_inplace(lm2, Am1, Cm1[:, s], x_subpart)
         
         if not Km1 is None:
             x_subpart += Km1.dot(A[s]) #~3rd line
