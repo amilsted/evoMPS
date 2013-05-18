@@ -13,7 +13,8 @@ import tdvp_common as tm
 import matmul as m
 import math as ma
 import logging
-import helpers_cuda as ch
+import tdvp_common_cuda as ch
+
 
 log = logging.getLogger(__name__)
 
@@ -98,6 +99,9 @@ class EvoMPS_MPS_Uniform(object):
         """Maximum number of iterations to use in the power-iteration algorithm 
            for finding l and r."""
            
+        self.ev_use_cuda = False
+        """Whether to use CUDA when finding l and r. Works with ARPACK too!"""        
+        
         self.ev_use_arpack = True
         """Whether to use ARPACK (implicitly restarted Arnoldi iteration) to 
            find l and r."""
