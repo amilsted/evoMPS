@@ -12,6 +12,7 @@ import scipy as sp
 import scipy.linalg as la
 import matmul as m
 import tdvp_common as tm
+import tdvp_common_cuda as tmc
 from mps_gen import EvoMPS_MPS_Generic
 import logging
 
@@ -324,9 +325,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Ap1 = None
         
         if self.ham_sites == 2:
-            x = tm.calc_x(Kp1, C, Cm1, rp1,
+            x = tmc.calc_x(Kp1, C, Cm1, rp1,
                           lm2, Am1, self.A[n], Ap1,
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+            #x_ = tm.calc_x(Kp1, C, Cm1, rp1,
+            #              lm2, Am1, self.A[n], Ap1,
+            #              sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+            #assert sp.allclose(x_, x)
         else:
             x = tm.calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, 
                              lm3, Am2, Am1, self.A[n], Ap1, Ap2,
@@ -396,6 +401,43 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
                 
         return BB12, BB21, dD
+    
+    def calc_B_all(self, set_eta=True):
+        l_s = []
+        l_si = []
+        r_s = [None]
+        r_si = [None]
+        Vsh = [None]
+        for n in xrange(1, self.N + 1):
+            if self.q[n] * self.D[n] - self.D[n - 1] > 0:
+                l_s_nm1, l_si_nm1, r_s_n, r_si_n = tm.calc_l_r_roots(self.l[n - 1], 
+                                                                     self.r[n], 
+                                                                     self.sanity_checks)
+                l_s.append(l_s_nm1)
+                l_si.append(l_si_nm1)
+                r_s.append(r_s_n)
+                r_si.append(r_si_n)
+                            
+                Vsh_n = tm.calc_Vsh(self.A[n], r_s_n, sanity_checks=self.sanity_checks)
+                
+                Vsh.append(Vsh_n)
+            else:
+                l_s.append(None)
+                l_si.append(None)
+                r_s.append(None)
+                r_si.append(None)
+                
+                Vsh.append(None)
+               
+        l_s.append(None)
+        l_si.append(None)
+               
+        Bs = tmc.calc_Bs(self.N, self.A, self.l, l_s, l_si, self.r, r_s, r_si,
+                         self.C, self.K, Vsh)
+                         
+        self.eta.fill(1)
+                
+        return Bs
     
     def calc_B(self, n, set_eta=True, l_s_m1=None, l_si_m1=None, r_s=None, r_si=None, Vlh=None, Vrh=None):
         """Generates the TDVP tangent vector parameters for a single site B[n].
@@ -536,6 +578,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             for n in xrange(1, self.N + 1):
                 Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
                 
+            #B = self.calc_B_all() #FIXME: Use cublas again here?
+
             for n in xrange(1, self.N + 1):
                 Bn = self.calc_B(n, set_eta=True, l_s_m1=l_s[n-1], 
                                  l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 

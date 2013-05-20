@@ -9,6 +9,7 @@ import scipy as sp
 import scipy.linalg as la
 import matmul as mm
 import tdvp_common as tm
+import tdvp_common_cuda as tmc
 from mps_sandwich import EvoMPS_MPS_Sandwich
 import time
 
@@ -473,7 +474,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             C = None
         
         if right:
-            x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
+            x = tmc.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
                           lm2, self.A[n - 1], self.A[n], self.A[n + 1],
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
