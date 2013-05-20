@@ -583,7 +583,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
             B.append(Bn)
         
     return B
-    
+
 def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
     Dm1 = D
@@ -770,7 +770,7 @@ class PinvOp_CUDA:
         
     def __del__(self):
         self.close_cuda()
-    
+
 if __name__ == '__main__':
     test_calc_lr(512, 16)
     #test_nrm()
