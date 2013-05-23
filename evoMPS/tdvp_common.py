@@ -778,17 +778,14 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_e
 
         nonzeros = np.count_nonzero(abs(ev) > zero_tol)
         
-        if nonzeros == 0:
-            ev_sq = np.array([])
-        else:
-            ev_sq = sp.sqrt(ev[-nonzeros:])
+        ev_sq = sp.sqrt(ev[-nonzeros:])
         
         #Replace almost-zero values with zero and perform a pseudo-inverse
         ev_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
                                                  1. / ev_sq), dtype=A.dtype)
         ev_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
                                                ev_sq), dtype=A.dtype)
-         
+                   
         if lower:
             x = ev_sq.dot_left(EV)
             xi = ev_sq_i.dot(EV.conj().T)
