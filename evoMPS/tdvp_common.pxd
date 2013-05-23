@@ -86,7 +86,7 @@ cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, 
 cpdef np.ndarray calc_x_l(np.ndarray Km1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
 @cython.locals(s = cython.int)
-cpdef restore_RCF_r(np.ndarray A, lm1, Gm1, bint sanity_checks=*, double zero_tol=*)
+cpdef restore_RCF_r(np.ndarray A, lm1, Gm1, double zero_tol=*, bint sanity_checks=*, sc_data=*)
 
 @cython.locals(s = cython.int)
 cpdef restore_RCF_l(np.ndarray A, r, G_n_i, bint sanity_checks=*)
