@@ -321,7 +321,7 @@ class EvoMPS_MPS_Generic(object):
         G_n_i = sp.eye(self.D[start], dtype=self.typ) #This is actually just the number 1
         for n in xrange(start, 1, -1):
             self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
-                                                         G_n_i,
+                                                         G_n_i, sc_data=('site', n),
                                                          sanity_checks=self.sanity_checks)
         
         #Now do A[1]...
@@ -368,7 +368,6 @@ class EvoMPS_MPS_Generic(object):
                     #r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-11, rtol=1E-11):
                         print "Sanity Fail in restore_RCF!: r_%u is bad (off by %g)" % (n, la.norm(r_nm1 - self.r[n - 1]))
-                        print (r_nm1 - self.r[n - 1]).diagonal().real
         elif update_l:
             self.calc_l()
             
