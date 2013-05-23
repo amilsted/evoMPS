@@ -526,31 +526,66 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
     K += Hr
     
     return K, op_expect
+                   
+   
+def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False, return_rank=False, sc_data=''):    
+    try:
+        ev = x.diag #simple_diag_matrix
+        EV = None
+    except AttributeError:
+        ev, EV = la.eigh(x)
     
-def calc_l_r_roots(lm1, r, sanity_checks=False):
+    zeros = ev <= zero_tol #throw away negative results too!
+    
+    ev_sqrt = sp.sqrt(ev)
+    
+    err = sp.seterr(divide='ignore', invalid='ignore')
     try:
-        l_sqrt = lm1.sqrt()
-        l_sqrt_i = l_sqrt.inv()
-    except AttributeError:
-        l_sqrt, evd = mm.sqrtmh(lm1, ret_evd=True)
-        l_sqrt_i = mm.invmh(l_sqrt, evd=evd)
+        ev_sqrt_i = 1 / ev_sqrt
+        ev_sqrt[zeros] = 0
+        ev_sqrt_i[zeros] = 0
+    finally:
+        sp.seterr(divide=err['divide'], invalid=err['invalid'])
+    
+    if EV is None:
+        x_sqrt = mm.simple_diag_matrix(ev_sqrt, dtype=x.dtype)
+        x_sqrt_i = mm.simple_diag_matrix(ev_sqrt_i, dtype=x.dtype)
+    else:
+        B = mm.mmul_diag(ev_sqrt, EV.conj().T)
+        x_sqrt = EV.dot(B)
         
-    try:
-        r_sqrt = r.sqrt()
-        r_sqrt_i = r_sqrt.inv()
-    except AttributeError:
-        r_sqrt, evd = mm.sqrtmh(r, ret_evd=True)
-        r_sqrt_i = mm.invmh(r_sqrt, evd=evd)
+        B = mm.mmul_diag(ev_sqrt_i, EV.conj().T)
+        x_sqrt_i = EV.dot(B)
     
     if sanity_checks:
-        if not np.allclose(l_sqrt.dot(l_sqrt), lm1):
-            print "Sanity check failed: l_sqrt is bad!"
-        if not np.allclose(l_sqrt.dot(l_sqrt_i), np.eye(lm1.shape[0])):
-            print "Sanity check failed: l_sqrt_i is bad!"
-        if not np.allclose(r_sqrt.dot(r_sqrt), r):
-            print "Sanity check failed: r_sqrt is bad!"
-        if (not np.allclose(r_sqrt.dot(r_sqrt_i), np.eye(r.shape[0]))):
-            print "Sanity check failed: r_sqrt_i is bad!"
+        if ev.min() < -zero_tol:
+            print "Sanity Fail in herm_sqrt_inv(): Throwing away negative eigenvalues!", ev.min(), sc_data
+        
+        if not np.allclose(x_sqrt.dot(x_sqrt), x):
+            print "Sanity Fail in herm_sqrt_inv(): x_sqrt is bad!", la.norm(x_sqrt.dot(x_sqrt) - x), sc_data
+        
+        if EV is None: 
+            nulls = sp.zeros(x.shape[0])
+            nulls[zeros] = 1
+            nulls = sp.diag(nulls)
+        else: #if we did an EVD then we use the eigenvectors
+            nulls = EV.copy()
+            nulls[:, sp.invert(zeros)] = 0
+            nulls = nulls.dot(nulls.conj().T)
+            
+        eye = np.eye(x.shape[0])
+        if not np.allclose(x_sqrt.dot(x_sqrt_i), eye - nulls):
+            print "Sanity Fail in herm_sqrt_inv(): x_sqrt_i is bad!", la.norm(x_sqrt.dot(x_sqrt_i) - eye + nulls), sc_data
+    
+    if return_rank:
+        return x_sqrt, x_sqrt_i, x.shape[0] - np.count_nonzero(zeros)
+    else:
+        return x_sqrt, x_sqrt_i
+   
+def calc_l_r_roots(lm1, r, zero_tol=1E-15, sanity_checks=False, sc_data=''):
+    l_sqrt, l_sqrt_i = herm_sqrt_inv(lm1, zero_tol=zero_tol, sanity_checks=sanity_checks, sc_data=(sc_data, 'l'))
+    
+    r_sqrt, r_sqrt_i = herm_sqrt_inv(r, zero_tol=zero_tol, sanity_checks=sanity_checks, sc_data=(sc_data, 'r'))
     
     return l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i
     
@@ -733,7 +768,8 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
 
     return x
 
-def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_evd=False, sanity_checks=False):
+def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, 
+                      force_evd=False, sanity_checks=False, sc_data=''):
     """Factorizes a Hermitian matrix using either Cholesky or eigenvalue decomposition.
     
     Decomposes a Hermitian A as A = X*X or, if lower == True, A = XX*.
@@ -758,47 +794,78 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, force_e
     sanity_checks : bool
         Whether to perform soem basic sanity checks.
     """    
-    if sanity_checks:
-        if not sp.allclose(A, A.conj().T):
-            print "Sanity fail in herm_fac_with_inv(): A is not Hermitian!"
     
     if not force_evd:
         try:
             x = la.cholesky(A, lower=lower)
             xi = mm.invtr(x, lower=lower)
+            
             nonzeros = A.shape[0]
         except sp.linalg.LinAlgError: #this usually means a is not pos. def.
             force_evd = True
             
     if force_evd:
-        ev, EV = la.eigh(A) #wraps lapack routines, which return eigenvalues in ascending order
+        ev, EV = la.eigh(A, turbo=True) #wraps lapack routines, which return eigenvalues in ascending order
         
         if sanity_checks:
-            assert np.all(ev == np.sort(ev)), "unexpected eigenvalue ordering"
-
-        nonzeros = np.count_nonzero(abs(ev) > zero_tol)
+            assert np.all(ev == np.sort(ev)), "Sanity fail in herm_fac_with_inv(): Unexpected eigenvalue ordering"
+            
+            if ev.min() < -zero_tol:
+                print "Sanity fail in herm_fac_with_inv(): Discarding negative eigenvalues!", ev.min(), sc_data
         
-        ev_sq = sp.sqrt(ev[-nonzeros:])
+        nonzeros = np.count_nonzero(ev > zero_tol) 
+
+        ev_sq = sp.zeros_like(ev, dtype=A.dtype)
+        ev_sq[-nonzeros:] = sp.sqrt(ev[-nonzeros:])
+        print ev_sq
         
         #Replace almost-zero values with zero and perform a pseudo-inverse
-        ev_sq_i = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
-                                                 1. / ev_sq), dtype=A.dtype)
-        ev_sq = mm.simple_diag_matrix(np.append(np.zeros(A.shape[0] - nonzeros),
-                                               ev_sq), dtype=A.dtype)
+        ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
+        ev_sq_i[-nonzeros:] = 1. / ev_sq[-nonzeros:]
+        
+        ev_sq_i = mm.simple_diag_matrix(ev_sq_i, dtype=A.dtype)
+        ev_sq = mm.simple_diag_matrix(ev_sq, dtype=A.dtype)
                    
         if lower:
             x = ev_sq.dot_left(EV)
             xi = ev_sq_i.dot(EV.conj().T)
         else:
             x = ev_sq.dot(EV.conj().T)
-            xi = ev_sq_i.dot_left(EV)   
+            xi = ev_sq_i.dot_left(EV)
+            
+    if sanity_checks:
+        if not sp.allclose(A, A.conj().T, atol=1E-13, rtol=1E-13):
+            print "Sanity fail in herm_fac_with_inv(): A is not Hermitian!", la.norm(A - A.conj().T), sc_data
+        
+        eye = sp.zeros((A.shape[0]), dtype=A.dtype)
+        eye[-nonzeros:] = 1
+        eye = mm.simple_diag_matrix(eye)
+        
+        if lower:
+            if not sp.allclose(xi.dot(x), eye, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad left inverse!", la.norm(xi.dot(x) - eye), sc_data
     
+            if not sp.allclose(x.dot(x.conj().T), A, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad decomp!", la.norm(x.dot(x.conj().T) - A), sc_data
+                
+            if not sp.allclose(xi.dot(A).dot(xi.conj().T), eye, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad A inverse!", la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data
+        else:
+            if not sp.allclose(x.dot(xi), eye, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad right inverse!", la.norm(x.dot(xi) - eye), sc_data
+    
+            if not sp.allclose(x.conj().T.dot(x), A, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad decomp!", la.norm(x.conj().T.dot(x) - A), sc_data
+                
+            if not sp.allclose(xi.conj().T.dot(A).dot(xi), eye, atol=1E-13, rtol=1E-13):
+                print "Sanity fail in herm_fac_with_inv(): Bad A inverse!", la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data
+                        
     if return_rank:
         return x, xi, nonzeros
     else:
         return x, xi
 
-def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
+def restore_RCF_r(A, r, G_n_i, zero_tol=1E-15, sanity_checks=False, sc_data=''):
     """Transforms a single A[n] to obtain r[n - 1] = eye(D).
 
     Implements the condition for right-orthonormalization from sub-section
@@ -845,20 +912,21 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
     
     X, Xi, new_D = herm_fac_with_inv(M, zero_tol=zero_tol, return_rank=True, 
                                      sanity_checks=sanity_checks)
-    G_nm1= Xi.conj().T
+                                     
+    G_nm1 = Xi.conj().T
     G_nm1_i = X.conj().T
 
     if G_n_i is None:
         G_n_i = G_nm1_i
 
-    if sanity_checks:
-        if new_D == A.shape[1]:
-            eye = sp.eye(A.shape[1])
-        else:
-            eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                                   np.ones(new_D)), dtype=A.dtype)
-        if not sp.allclose(G_nm1.dot(G_nm1_i), eye, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_RCF_r!: Bad GT!"
+    if sanity_checks:     
+        #GiG may not be equal to eye in the case of rank-deficiency,
+        #but the rest should lie in the null space of A.
+        GiG = G_nm1_i.dot(G_nm1)
+        As = np.sum(A, axis=0)
+        if not sp.allclose(GiG.dot(As).dot(G_n_i), 
+                           As.dot(G_n_i), atol=1E-13, rtol=1E-13):
+            print "Sanity Fail in restore_RCF_r!: Bad GT!", la.norm(GiG.dot(As).dot(G_n_i) - As.dot(G_n_i)), sc_data
 
     for s in xrange(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
@@ -866,16 +934,18 @@ def restore_RCF_r(A, r, G_n_i, sanity_checks=False, zero_tol=1E-15):
     if new_D == A.shape[1]:
         r_nm1 = mm.eyemat(A.shape[1], A.dtype)
     else:
-        r_nm1 = mm.simple_diag_matrix(np.append(np.zeros(A.shape[1] - new_D),
-                                                np.ones(new_D)), dtype=A.dtype)
+        r_nm1 = sp.zeros((A.shape[1]), dtype=A.dtype)
+        r_nm1[-new_D:] = 1
+        r_nm1 = mm.simple_diag_matrix(r_nm1, dtype=A.dtype)
 
     if sanity_checks:
-        r_n_ = mm.eyemat(A.shape[2], A.dtype)
-
-        r_nm1_ = eps_r_noop(r_n_, A, A)
+        r_nm1_ = G_nm1.dot(M).dot(G_nm1.conj().T)
         if not sp.allclose(r_nm1_, r_nm1.A, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_RCF_r!: r is bad"
-            print la.norm(r_nm1_ - r_nm1)
+            print "Sanity Fail in restore_RCF_r!: r != g old_r gH!", la.norm(r_nm1_ - r_nm1), sc_data
+        
+        r_nm1_ = eps_r_noop(r, A, A)
+        if not sp.allclose(r_nm1_, r_nm1.A, atol=1E-13, rtol=1E-13):
+            print "Sanity Fail in restore_RCF_r!: r is bad!", la.norm(r_nm1_ - r_nm1), sc_data
 
     return r_nm1, G_nm1, G_nm1_i
 
@@ -917,7 +987,7 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
     if Gm1 is None:
         x = lm1
     else:
-        x = mm.mmul(mm.H(Gm1), lm1, Gm1)
+        x = Gm1.conj().T.dot(lm1.dot(Gm1))
 
     M = eps_l_noop(x, A, A)
     ev, EV = la.eigh(M) #wraps lapack routines, which return eigenvalues in ascending order
@@ -929,7 +999,7 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
     G_i = EV
 
     if Gm1 is None:
-        Gm1 = mm.H(EV) #for left uniform case
+        Gm1 = EV.conj().T #for left uniform case
         lm1 = l #for sanity check
 
     for s in xrange(A.shape[0]):
@@ -941,7 +1011,7 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
             print "Sanity Fail in restore_RCF_l!: l is bad!"
             print la.norm(l_ - l)
 
-    G = mm.H(EV)
+    G = EV.conj().T
 
     if sanity_checks:
         eye = sp.eye(A.shape[2])

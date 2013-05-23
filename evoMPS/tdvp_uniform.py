@@ -316,7 +316,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def calc_l_r_roots(self):
         """Calculates the (inverse) square roots of self.l and self.r.
         """
-        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, self.sanity_checks)
+        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, sanity_checks=self.sanity_checks)
         
     def calc_B(self, set_eta=True):
         """Calculates a gauge-fixing tangent-vector parameter tensor capturing the projected infinitesimal time evolution of the state.

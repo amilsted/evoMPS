@@ -369,7 +369,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.q[n] * self.D[n] - self.D[n - 1] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
-                                                                   self.sanity_checks)
+                                                                   sanity_checks=self.sanity_checks,
+                                                                   sc_data=('site', n))
             
             Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
             
@@ -389,7 +390,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.q[n] * self.D[n - 1] - self.D[n] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
-                                                                   self.sanity_checks)
+                                                                   sanity_checks=self.sanity_checks,
+                                                                   sc_data=('site', n))
             
             Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
             
