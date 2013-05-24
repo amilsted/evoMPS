@@ -528,57 +528,64 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
     return K, op_expect
                    
    
-def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False, return_rank=False, sc_data=''):    
-    try:
-        ev = x.diag #simple_diag_matrix
-        EV = None
-    except AttributeError:
-        ev, EV = la.eigh(x)
-    
-    zeros = ev <= zero_tol #throw away negative results too!
-    
-    ev_sqrt = sp.sqrt(ev)
-    
-    err = sp.seterr(divide='ignore', invalid='ignore')
-    try:
-        ev_sqrt_i = 1 / ev_sqrt
-        ev_sqrt[zeros] = 0
-        ev_sqrt_i[zeros] = 0
-    finally:
-        sp.seterr(divide=err['divide'], invalid=err['invalid'])
-    
-    if EV is None:
-        x_sqrt = mm.simple_diag_matrix(ev_sqrt, dtype=x.dtype)
-        x_sqrt_i = mm.simple_diag_matrix(ev_sqrt_i, dtype=x.dtype)
+def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False, return_rank=False, sc_data=''):
+    if isinstance(x,  mm.eyemat):
+        x_sqrt = x
+        x_sqrt_i = x
+        rank = x.shape[0]
     else:
-        B = mm.mmul_diag(ev_sqrt, EV.conj().T)
-        x_sqrt = EV.dot(B)
+        try:
+            ev = x.diag #simple_diag_matrix
+            EV = None
+        except AttributeError:
+            ev, EV = la.eigh(x)
         
-        B = mm.mmul_diag(ev_sqrt_i, EV.conj().T)
-        x_sqrt_i = EV.dot(B)
-    
-    if sanity_checks:
-        if ev.min() < -zero_tol:
-            print "Sanity Fail in herm_sqrt_inv(): Throwing away negative eigenvalues!", ev.min(), sc_data
+        zeros = ev <= zero_tol #throw away negative results too!
         
-        if not np.allclose(x_sqrt.dot(x_sqrt), x):
-            print "Sanity Fail in herm_sqrt_inv(): x_sqrt is bad!", la.norm(x_sqrt.dot(x_sqrt) - x), sc_data
+        ev_sqrt = sp.sqrt(ev)
         
-        if EV is None: 
-            nulls = sp.zeros(x.shape[0])
-            nulls[zeros] = 1
-            nulls = sp.diag(nulls)
-        else: #if we did an EVD then we use the eigenvectors
-            nulls = EV.copy()
-            nulls[:, sp.invert(zeros)] = 0
-            nulls = nulls.dot(nulls.conj().T)
+        err = sp.seterr(divide='ignore', invalid='ignore')
+        try:
+            ev_sqrt_i = 1 / ev_sqrt
+            ev_sqrt[zeros] = 0
+            ev_sqrt_i[zeros] = 0
+        finally:
+            sp.seterr(divide=err['divide'], invalid=err['invalid'])
+        
+        if EV is None:
+            x_sqrt = mm.simple_diag_matrix(ev_sqrt, dtype=x.dtype)
+            x_sqrt_i = mm.simple_diag_matrix(ev_sqrt_i, dtype=x.dtype)
+        else:
+            B = mm.mmul_diag(ev_sqrt, EV.conj().T)
+            x_sqrt = EV.dot(B)
             
-        eye = np.eye(x.shape[0])
-        if not np.allclose(x_sqrt.dot(x_sqrt_i), eye - nulls):
-            print "Sanity Fail in herm_sqrt_inv(): x_sqrt_i is bad!", la.norm(x_sqrt.dot(x_sqrt_i) - eye + nulls), sc_data
+            B = mm.mmul_diag(ev_sqrt_i, EV.conj().T)
+            x_sqrt_i = EV.dot(B)
+            
+        rank = x.shape[0] - np.count_nonzero(zeros)
+        
+        if sanity_checks:
+            if ev.min() < -zero_tol:
+                print "Sanity Fail in herm_sqrt_inv(): Throwing away negative eigenvalues!", ev.min(), sc_data
+            
+            if not np.allclose(x_sqrt.dot(x_sqrt), x):
+                print "Sanity Fail in herm_sqrt_inv(): x_sqrt is bad!", la.norm(x_sqrt.dot(x_sqrt) - x), sc_data
+            
+            if EV is None: 
+                nulls = sp.zeros(x.shape[0])
+                nulls[zeros] = 1
+                nulls = sp.diag(nulls)
+            else: #if we did an EVD then we use the eigenvectors
+                nulls = EV.copy()
+                nulls[:, sp.invert(zeros)] = 0
+                nulls = nulls.dot(nulls.conj().T)
+                
+            eye = np.eye(x.shape[0])
+            if not np.allclose(x_sqrt.dot(x_sqrt_i), eye - nulls):
+                print "Sanity Fail in herm_sqrt_inv(): x_sqrt_i is bad!", la.norm(x_sqrt.dot(x_sqrt_i) - eye + nulls), sc_data
     
     if return_rank:
-        return x_sqrt, x_sqrt_i, x.shape[0] - np.count_nonzero(zeros)
+        return x_sqrt, x_sqrt_i, rank
     else:
         return x_sqrt, x_sqrt_i
    
