@@ -481,13 +481,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             V_[s] = m.H(donor.Vsh[s])
         
         Vri_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vri_[s] = r__sqrt_i.dot_left(V_[s])
-            
-        Vr_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vr_[s] = r__sqrt.dot_left(V_[s])
-            
+        try:
+            for s in xrange(donor.q):
+                Vri_[s] = r__sqrt_i.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(donor.q):
+                Vri_[s] = V_[s].dot(r__sqrt_i)
+
+        Vr_ = sp.zeros_like(V_)            
+        try:
+            for s in xrange(donor.q):
+                Vr_[s] = r__sqrt.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(donor.q):
+                Vr_[s] = V_[s].dot(r__sqrt)
+                
         C_AhlA = np.empty_like(self.C)
         for u in xrange(self.q):
             for s in xrange(self.q):
@@ -652,12 +660,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             V_[s] = m.H(donor.Vsh[s])
         
         Vri_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vri_[s] = r__sqrt_i.dot_left(V_[s])
-            
-        Vr_ = sp.zeros_like(V_)
-        for s in xrange(donor.q):
-            Vr_[s] = r__sqrt.dot_left(V_[s])
+        try:
+            for s in xrange(donor.q):
+                Vri_[s] = r__sqrt_i.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(donor.q):
+                Vri_[s] = V_[s].dot(r__sqrt_i)
+
+        Vr_ = sp.zeros_like(V_)            
+        try:
+            for s in xrange(donor.q):
+                Vr_[s] = r__sqrt.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(donor.q):
+                Vr_[s] = V_[s].dot(r__sqrt)
             
         C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
         for s in xrange(self.q):
