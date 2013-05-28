@@ -12,6 +12,9 @@ import scipy.sparse.linalg as las
 import tdvp_common as tm
 import matmul as m
 import math as ma
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EOp:
     def __init__(self, A1, A2, left):
@@ -177,11 +180,11 @@ class EvoMPS_MPS_Uniform(object):
         self.l *= 1 / sp.sqrt(norm)
         self.r *= 1 / sp.sqrt(norm)        
         
-        print "Sledgehammer:"
-        print "Left ok?: " + str(np.allclose(
-                                tm.eps_l_noop(self.l, self.A, self.A), self.l))
-        print "Right ok?: " + str(np.allclose(
-                                tm.eps_r_noop(self.r, self.A, self.A), self.r))
+        logger.warning("Sledgehammer:")
+        logger.warning("Left ok?: " + str(np.allclose(
+            tm.eps_l_noop(self.l, self.A, self.A), self.l)))
+        logger.warning("Right ok?: " + str(np.allclose(
+            tm.eps_r_noop(self.r, self.A, self.A), self.r)))
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                         tol=1E-14, ncv=None, k=1):
@@ -216,7 +219,7 @@ class EvoMPS_MPS_Uniform(object):
             ev, eV = las.eigs(opE, which='LM', k=k, v0=x.ravel(), tol=tol, ncv=ncv)
             conv = True
         except las.ArpackNoConvergence:
-            print "Reset! (l? %s)" % str(calc_l)
+            logger.warning("Reset! (l? %s)", str(calc_l))
             ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
             conv = True
             
@@ -250,14 +253,14 @@ class EvoMPS_MPS_Uniform(object):
             A1 *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
                 if not A1 is A2:
-                    print "Sanity check failed: Re-scaling with A1 <> A2!"
+                    logger.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 if calc_l:
                     tm.eps_l_noop_inplace(x, A1, A2, tmp)
                 else:
                     tm.eps_r_noop_inplace(x, A1, A2, tmp)
                 ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < tol:
-                    print "Sanity check failed: Largest ev after re-scale = " + str(ev)
+                    logger.warning("Sanity check failed: Largest ev after re-scale = " + str(ev))
         
         return x, conv, opE.calls
         
@@ -312,18 +315,18 @@ class EvoMPS_MPS_Uniform(object):
         """
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         
-        print ev
+        logger.debug(ev)
                           
         ind = sp.argmin(abs(1 - abs(ev)) > one_tol)
         
         if ind > 0:
             mag = abs(ev[ind - 1])
         else:
-            print "Warning: No eigenvalues with magnitude significantly different to 1 detected."
+            logger.warning("Warning: No eigenvalues with magnitude significantly different to 1 detected.")
             return sp.NaN
         
         if mag > 1:
-            print "Warning: Largest eigenvalue != 1"
+            logger.warning("Warning: Largest eigenvalue != 1")
         
         return -1 / sp.log(mag)
                 
@@ -375,14 +378,14 @@ class EvoMPS_MPS_Uniform(object):
             A1 *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
                 if not A1 is A2:
-                    print "Sanity check failed: Re-scaling with A1 <> A2!"
+                    logger.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 if calc_l:
                     tm.eps_l_noop_inplace(x, A1, A2, tmp)
                 else:
                     tm.eps_r_noop_inplace(x, A1, A2, tmp)
                 ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < atol:
-                    print "Sanity check failed: Largest ev after re-scale = " + str(ev)
+                    logger.warning("Sanity check failed: Largest ev after re-scale = " + str(ev))
         
         return x, i < max_itr - 1, i
     
@@ -451,7 +454,7 @@ class EvoMPS_MPS_Uniform(object):
                 itr += 1
                 
             if itr == 10:
-                print "Warning: Max. iterations reached during normalization!"
+                logger.warning("Warning: Max. iterations reached during normalization!")
         else:
             fac = self.D / np.trace(self.r).real
             self.l *= 1 / fac
@@ -465,40 +468,40 @@ class EvoMPS_MPS_Uniform(object):
                 itr += 1
                 
             if itr == 10:
-                print "Warning: Max. iterations reached during normalization!"
+                logger.warning("Warning: Max. iterations reached during normalization!")
 
         if self.sanity_checks:
             if not np.allclose(tm.eps_l_noop(self.l, self.A, self.A), self.l,
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Left eigenvector bad! Off by: " \
-                       + str(la.norm(tm.eps_l_noop(self.l, self.A, self.A) - self.l))
+                logger.warning("Sanity check failed: Left eigenvector bad! Off by: " \
+                       + str(la.norm(tm.eps_l_noop(self.l, self.A, self.A) - self.l)))
                        
             if not np.allclose(tm.eps_r_noop(self.r, self.A, self.A), self.r,
             rtol=self.itr_rtol*self.check_fac,
             atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Right eigenvector bad! Off by: " \
-                       + str(la.norm(tm.eps_r_noop(self.r, self.A, self.A) - self.r))
+                logger.warning("Sanity check failed: Right eigenvector bad! Off by: " \
+                       + str(la.norm(tm.eps_r_noop(self.r, self.A, self.A) - self.r)))
             
             if not np.allclose(self.l, m.H(self.l),
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: l is not hermitian!"
+                logger.warning("Sanity check failed: l is not hermitian!")
 
             if not np.allclose(self.r, m.H(self.r),
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: r is not hermitian!"
+                logger.warning("Sanity check failed: r is not hermitian!")
             
             if not np.all(la.eigvalsh(self.l) > 0):
-                print "Sanity check failed: l is not pos. def.!"
+                logger.warning("Sanity check failed: l is not pos. def.!")
                 
             if not np.all(la.eigvalsh(self.r) > 0):
-                print "Sanity check failed: r is not pos. def.!"
+                logger.warning("Sanity check failed: r is not pos. def.!")
             
             norm = m.adot(self.l, self.r)
             if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
-                print "Sanity check failed: Bad norm = " + str(norm)
+                logger.warning("Sanity check failed: Bad norm = " + str(norm))
     
     def restore_SCF(self, ret_g=False, zero_tol=1E-15):
         """Restores symmetric canonical form.
@@ -541,27 +544,27 @@ class EvoMPS_MPS_Uniform(object):
             Sfull = np.asarray(S)
             
             if not np.allclose(g.dot(g_i), np.eye(self.D)):
-                print "Sanity check failed! Restore_SCF, bad GT!"
+                logger.warning("Sanity check failed! Restore_SCF, bad GT!")
             
             l = m.mmul(m.H(g_i), self.l, g_i)
             r = m.mmul(g, self.r, m.H(g))
             
             if not np.allclose(Sfull, l):
-                print "Sanity check failed: Restorce_SCF, left failed!"
+                logger.warning("Sanity check failed: Restorce_SCF, left failed!")
                 
             if not np.allclose(Sfull, r):
-                print "Sanity check failed: Restorce_SCF, right failed!"
+                logger.warning("Sanity check failed: Restorce_SCF, right failed!")
                 
             l = tm.eps_l_noop(Sfull, self.A, self.A)
             r = tm.eps_r_noop(Sfull, self.A, self.A)
             
             if not np.allclose(Sfull, l, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Restorce_SCF, left bad!"
+                logger.warning("Sanity check failed: Restorce_SCF, left bad!")
                 
             if not np.allclose(Sfull, r, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Restorce_SCF, right bad!"
+                logger.warning("Sanity check failed: Restorce_SCF, right bad!")
 
         self.l = S
         self.r = S
@@ -618,14 +621,14 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(M, self.r, 
                                rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: RestoreRCF, bad M."
-                print "Off by: " + str(la.norm(M - self.r))
+                logger.warning("Sanity check failed: RestoreRCF, bad M.")
+                logger.warning("Off by: " + str(la.norm(M - self.r)))
                 
             if not np.allclose(self.r, np.eye(self.D),
                                rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: r not identity."
-                print "Off by: " + str(la.norm(np.eye(self.D) - self.r))
+                logger.warning("Sanity check failed: r not identity.")
+                logger.warning("Off by: " + str(la.norm(np.eye(self.D) - self.r)))
             
             l = tm.eps_l_noop(self.l, self.A, self.A)
             r = tm.eps_r_noop(self.r, self.A, self.A)
@@ -633,14 +636,14 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(r, self.r,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Restore_RCF, bad r!"
-                print "Off by: " + str(la.norm(r - self.r))
+                logger.warning("Sanity check failed: Restore_RCF, bad r!")
+                logger.warning("Off by: " + str(la.norm(r - self.r)))
 
             if not np.allclose(l, self.l,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity check failed: Restore_RCF, bad l!"
-                print "Off by: " + str(la.norm(l - self.l))
+                logger.warning("Sanity check failed: Restore_RCF, bad l!")
+                logger.warning("Off by: " + str(la.norm(l - self.l)))
     
         self.r = m.eyemat(self.D, dtype=self.typ)
         
@@ -727,7 +730,7 @@ class EvoMPS_MPS_Uniform(object):
         if restore_CF:
             self.restore_CF()
             if auto_truncate and self.auto_truncate(update=False):
-                print "Auto-truncated! New D: ", self.D
+                logger.info("Auto-truncated! New D: %d", self.D)
                 self.calc_lr()
                 if restore_CF_after_trunc:
                     self.restore_CF()

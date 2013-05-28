@@ -18,6 +18,9 @@ import tdvp_common as tm
 import matmul as m
 from mps_uniform import EvoMPS_MPS_Uniform
 from mps_uniform_pinv import pinv_1mE
+import logging
+
+logger = logging.getLogger(__name__)
         
 class Excite_H_Op:
     def __init__(self, tdvp, donor, p):
@@ -63,7 +66,7 @@ class Excite_H_Op:
         x = v.reshape((self.D, (self.q - 1)*self.D))
         
         self.calls += 1
-        print "Calls: %u" % self.calls
+        logger.info("Calls: %u", self.calls)
         
         res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.donor, 
                                                          *self.prereq,
@@ -242,8 +245,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             QEQ = Ex - self.r * m.adot(self.l, self.K)
             res = self.K - QEQ
             if not np.allclose(res, QHr):
-                print "Sanity check failed: Bad K!"
-                print "Off by: " + str(la.norm(res - QHr))
+                logger.warning("Sanity check failed: Bad K!")
+                logger.warning("Off by: " + str(la.norm(res - QHr)))
         
     def calc_K_l(self):
         """Generates the left K matrix.
@@ -284,8 +287,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             QEQ = xE - self.l * m.adot(self.r, self.K_left)
             res = self.K_left - QEQ
             if not np.allclose(res, lHQ):
-                print "Sanity check failed: Bad K_left!"
-                print "Off by: " + str(la.norm(res - lHQ))
+                logger.warning("Sanity check failed: Bad K_left!")
+                logger.warning("Off by: " + str(la.norm(res - lHQ)))
         
         return self.K_left, h
         
@@ -352,7 +355,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             #Test gauge-fixing:
             tst = tm.eps_r_noop(self.r, B, self.A)
             if not np.allclose(tst, 0):
-                print "Sanity check failed: Gauge-fixing violation!"
+                logger.warning("Sanity check failed: Gauge-fixing violation!")
 
         return B
         
@@ -564,7 +567,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
             if not np.allclose(tst, 0):
-                print "Sanity check failed: Gauge-fixing violation!"
+                logger.warning("Sanity check failed: Gauge-fixing violation!")
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
@@ -572,7 +575,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
             if not sp.allclose(B, B2, rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity Fail in calc_BHB! Bad Vri!"
+                logger.warning("Sanity Fail in calc_BHB! Bad Vri!")
             
         BA_ = tm.calc_AA(B, A_)
         AB = tm.calc_AA(self.A, B)
@@ -586,7 +589,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
             if not sp.allclose(y, y2):
-                print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+                logger.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
         Mh = m.H(M)
 
         res = l_sqrt.dot(
@@ -624,7 +627,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
             if not sp.allclose(y, y2):
-                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+                logger.warning("Sanity Fail in calc_BHB! Bad x_pi. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
         
         res += l_sqrt.dot(tm.eps_r_noop(y_pi, self.A, Vri_))
         
@@ -632,9 +635,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             expval = m.adot(x, res) / m.adot(x, x)
             #print "expval = " + str(expval)
             if expval < 0:
-                print "Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")"
+                logger.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")")
             if not abs(expval.imag) < 1E-9:
-                print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
+                logger.warning("Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")")
         
         return res, M, y_pi
     
@@ -788,7 +791,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
             if not np.allclose(tst, 0):
-                print "Sanity check failed: Gauge-fixing violation!"
+                logger.warning("Sanity check failed: Gauge-fixing violation!")
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
@@ -796,7 +799,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
             if not sp.allclose(B, B2, rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                print "Sanity Fail in calc_BHB! Bad Vri!"
+                logger.warning("Sanity Fail in calc_BHB! Bad Vri!")
         
         BAA_ = tm.calc_AAA(B, A_, A_)
         ABA_ = tm.calc_AAA(A, B, A_)
@@ -811,7 +814,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
             if not sp.allclose(y, y2):
-                print "Sanity Fail in calc_BHB! Bad M. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+                logger.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
         Mh = m.H(M)
         
         res = l_sqrt.dot(
@@ -860,7 +863,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
             if not sp.allclose(y, y2):
-                print "Sanity Fail in calc_BHB! Bad x_pi. Off by: %g" % (la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+                logger.warning("Sanity Fail in calc_BHB! Bad x_pi. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
         
         res += l_sqrt.dot(tm.eps_r_noop(y_pi, self.A, Vri_))
         
@@ -868,9 +871,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             expval = m.adot(x, res) / m.adot(x, x)
             #print "expval = " + str(expval)
             if expval < 0:
-                print "Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")"
+                logger.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (" + str(expval) + ")")
             if not abs(expval.imag) < 1E-9:
-                print "Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")"
+                logger.warning("Sanity Fail in calc_BHB! H is not Hermitian (" + str(expval) + ")")
         
         return res, M, y_pi        
     
@@ -949,7 +952,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             H[:, i] = op.matvec(x)
 
         if not np.allclose(H, m.H(H)):
-            print "Warning! H is not Hermitian!"
+            logger.warning("Warning! H is not Hermitian!")
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
@@ -1002,7 +1005,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             H[:, i] = op.matvec(x)
 
         if not np.allclose(H, m.H(H)):
-            print "Warning! H is not Hermitian!"
+            logger.warning("Warning! H is not Hermitian!")
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
@@ -1021,11 +1024,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         def f(tau, *args):
             if tau == 0:
-                print (0, "tau=0")
+                logger.debug((0, "tau=0"))
                 return self.h.real                
             try:
                 i = taus.index(tau)
-                print (tau, hs[i], hs[i] - self.h.real, "from stored")
+                logger.debug((tau, hs[i], hs[i] - self.h.real, "from stored"))
                 return hs[i]
             except ValueError:
                 for s in xrange(self.q):
@@ -1045,7 +1048,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 else:
                     h = self.expect_3s(self.ham)
                 
-                print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
+                logger.debug((tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r))
                 
                 res = h.real
                 
@@ -1091,7 +1094,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                     maxiter=20,
                                                     full_output=True)
         except ValueError:
-            print "Bracketing attempt failed..."
+            logger.warning("Bracketing attempt failed...")
             tau_opt, h_min, itr, calls = opti.brent(f, 
                                                     brack=fb_brack, 
                                                     tol=tol,
@@ -1170,13 +1173,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if reset:
             beta = 0.
-            print "RESET CG"
+            logger.warning("RESET CG")
             
             B_CG = B
         else:
             beta = (eta**2) / eta_0**2
         
-            print "BetaFR = " + str(beta)
+            logger.warning("BetaFR = " + str(beta))
         
             beta = max(0, beta.real)
         
@@ -1190,14 +1193,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                            trybracket=False)
             
         if self.h.real < h_min:
-            print "RESET due to energy rise!"
+            logger.warning("RESET due to energy rise!")
             B_CG = B
             self.l_before_CF = lb0
             self.r_before_CF = rb0
             tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
             if self.h.real < h_min:
-                print "RESET FAILED: Setting tau=0!"
+                logger.warning("RESET FAILED: Setting tau=0!")
                 self.l_before_CF = lb0
                 self.r_before_CF = rb0
                 tau = 0
@@ -1255,7 +1258,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.expand_D(newD, refac, imfac)
             self.l_before_CF = self.l
             self.r_before_CF = self.r
-            print "EXPANDED!"
+            logger.warning("EXPANDED!")
         elif expand_q and (len(newA.shape) == 3) and (newA.shape[0] <= 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
         == self.A.shape[1]):
@@ -1269,7 +1272,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.expand_q(newQ)
             self.l_before_CF = self.l
             self.r_before_CF = self.r
-            print "EXPANDED in q!"
+            logger.warning("EXPANDED in q!")
         elif shrink_q and (len(newA.shape) == 3) and (newA.shape[0] >= 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
         == self.A.shape[1]):
@@ -1283,7 +1286,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.shrink_q(newQ)
             self.l_before_CF = self.l
             self.r_before_CF = self.r
-            print "SHRUNK in q!"
+            logger.warning("SHRUNK in q!")
         else:
             return False
             
