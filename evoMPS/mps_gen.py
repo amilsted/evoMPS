@@ -12,7 +12,7 @@ import tdvp_common as tm
 import copy
 import logging
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class EvoMPS_MPS_Generic(object):
     
@@ -207,7 +207,7 @@ class EvoMPS_MPS_Generic(object):
                 data = self.auto_truncate(update=False, 
                                           return_update_data=not restore_CF_after_trunc)
                 if data:
-                    logger.warning("Auto-truncated! New D: %d", self.D)
+                    log.warning("Auto-truncated! New D: %d", self.D)
                     if restore_CF_after_trunc:
                         self.restore_CF()
                     else:
@@ -343,7 +343,7 @@ class EvoMPS_MPS_Generic(object):
             if self.sanity_checks:
                 r0 = tm.eps_r_noop(self.r[1], self.A[1], self.A[1])
                 if not sp.allclose(r0, 1, atol=1E-12, rtol=1E-12):
-                    logger.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
+                    log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
 
         if diag_l:
             G_nm1 = sp.eye(self.D[0], dtype=self.typ)
@@ -363,14 +363,14 @@ class EvoMPS_MPS_Generic(object):
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
-                    logger.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
-                    logger.warning("l_N = " + str(self.l[self.N].squeeze().real))
+                    log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
+                    log.warning("l_N = %s", self.l[self.N].squeeze().real)
                 
                 for n in xrange(1, self.N + 1):
                     r_nm1 = tm.eps_r_noop(self.r[n], self.A[n], self.A[n])
                     #r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-11, rtol=1E-11):
-                        logger.warning("Sanity Fail in restore_RCF!: r_%u is bad (off by %g)", n, la.norm(r_nm1 - self.r[n - 1]))
+                        log.warning("Sanity Fail in restore_RCF!: r_%u is bad (off by %g)", n, la.norm(r_nm1 - self.r[n - 1]))
         elif update_l:
             self.calc_l()
             
@@ -397,7 +397,7 @@ class EvoMPS_MPS_Generic(object):
         if self.sanity_checks:
             lN = tm.eps_l_noop(self.l[self.N - 1], self.A[self.N], self.A[self.N])
             if not sp.allclose(lN, 1, atol=1E-12, rtol=1E-12):
-                logger.warning("Sanity Fail in restore_LCF!: l_N is bad / norm failure")
+                log.warning("Sanity Fail in restore_LCF!: l_N is bad / norm failure")
 
         #diag r
         Gi = sp.eye(self.D[self.N], dtype=self.typ)
@@ -415,14 +415,14 @@ class EvoMPS_MPS_Generic(object):
 
         if self.sanity_checks:
             if not sp.allclose(self.r[0], 1, atol=1E-12, rtol=1E-12):
-                logger.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
-                logger.warning("r_0 = " + str(self.r[0].squeeze().real))
+                log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
+                log.warning("r_0 = %s", self.r[0].squeeze().real)
             
             for n in xrange(1, self.N + 1):
                 l = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
                 if not sp.allclose(l, self.l[n], atol=1E-11, rtol=1E-11):
-                    logger.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
-                    logger.warning((l - self.l[n]).diagonal().real)
+                    log.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
+                    log.warning((l - self.l[n]).diagonal().real)
                     
     
     def auto_truncate(self, update=True, zero_tol=1E-15, return_update_data=False):

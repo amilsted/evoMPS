@@ -13,7 +13,7 @@ import tdvp_common as tm
 import matmul as m
 import logging
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 class PinvOp:    
     def __init__(self, p, A1, A2, l, r, left=False, pseudo=True):
@@ -93,15 +93,14 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=20
     res, info = las.bicgstab(op, x, x0=res, maxiter=maxiter, tol=tol) #tol: norm( b - A*x ) / norm( b )
     
     if info > 0:
-        logger.warning("Warning: Did not converge on solution for ppinv!")
+        log.warning("Warning: Did not converge on solution for ppinv!")
     
     #Test
     if sanity_checks and x.shape[0] > 1:
         RHS_test = op.matvec(res)
         d = la.norm(RHS_test - x) / la.norm(x)
         if not d < sanity_tol:
-            logger.warning("Sanity check failed: Bad ppinv solution! Off by: " + str(
-                    d))
+            log.warning("Sanity check failed: Bad ppinv solution! Off by: %s", d)
     
     res = res.reshape((D, D))
         
@@ -115,7 +114,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=20
             res_brute = pinvE.dot(x).reshape((D, D))
         
         if not np.allclose(res, res_brute):
-            logger.warning("Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g", str(left), la.norm(res - res_brute))
+            log.warning("Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g", str(left), la.norm(res - res_brute))
     
     out[:] = res
     
