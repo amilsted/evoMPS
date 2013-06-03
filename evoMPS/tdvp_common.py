@@ -604,15 +604,15 @@ def calc_Vsh(A, r_s, sanity_checks=False):
     R = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
 
     for s in xrange(q):
-        R[:,s,:] = r_s.dot(mm.H(A[s]))
+        R[:,s,:] = r_s.dot(A[s].conj().T)
 
     R = R.reshape((q * D, Dm1))
-    Vconj = ns.nullspace_qr(mm.H(R)).T
+    Vconj = ns.nullspace_qr(R.conj().T).T
 
     if sanity_checks:
         if not sp.allclose(mm.mmul(Vconj.conj(), R), 0):
             print "Sanity Fail in calc_Vsh!: VR != 0"
-        if not sp.allclose(mm.mmul(Vconj, mm.H(Vconj)), sp.eye(Vconj.shape[0])):
+        if not sp.allclose(mm.mmul(Vconj, Vconj.conj().T), sp.eye(Vconj.shape[0])):
             print "Sanity Fail in calc_Vsh!: V H(V) != eye"
         
     Vconj = Vconj.reshape((q * D - Dm1, D, q))
@@ -621,9 +621,8 @@ def calc_Vsh(A, r_s, sanity_checks=False):
     Vsh = sp.asarray(Vsh, order='C')
 
     if sanity_checks:
-        M = sp.zeros((q * D - Dm1, Dm1), dtype=A.dtype)
-        for s in xrange(q):
-            M += mm.mmul(mm.H(Vsh[s]), r_s, mm.H(A[s]))
+        Vs = sp.transpose(Vsh, axes=(0, 2, 1)).conj()
+        M = eps_r_noop(r_s, Vs, A)
         if not sp.allclose(M, 0):
             print "Sanity Fail in calc_Vsh!: Bad Vsh"
 
@@ -824,7 +823,6 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
 
         ev_sq = sp.zeros_like(ev, dtype=A.dtype)
         ev_sq[-nonzeros:] = sp.sqrt(ev[-nonzeros:])
-        print ev_sq
         
         #Replace almost-zero values with zero and perform a pseudo-inverse
         ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
