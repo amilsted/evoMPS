@@ -48,6 +48,8 @@ class EvoMPS_MPS_Generic(object):
         
         self.eps = sp.finfo(self.typ).eps
         
+        self.zero_tol = sp.finfo(self.typ).resolution
+        
         self.N = N
         self.D = sp.array(D)
         self.q = sp.array(q)        
@@ -322,6 +324,7 @@ class EvoMPS_MPS_Generic(object):
         for n in xrange(start, 1, -1):
             self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
                                                          G_n_i, sc_data=('site', n),
+                                                         zero_tol=self.zero_tol,
                                                          sanity_checks=self.sanity_checks)
         
         #Now do A[1]...
@@ -375,6 +378,7 @@ class EvoMPS_MPS_Generic(object):
         Gm1 = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
         for n in xrange(1, self.N):
             self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
+                                                zero_tol=self.zero_tol,
                                                 sanity_checks=self.sanity_checks)
             Gm1 = G
         
@@ -422,7 +426,7 @@ class EvoMPS_MPS_Generic(object):
                     print (l - self.l[n]).diagonal().real
                     
     
-    def auto_truncate(self, update=True, zero_tol=1E-15, return_update_data=False):
+    def auto_truncate(self, update=True, zero_tol=None, return_update_data=False):
         """Automatically reduces the bond-dimension in case of rank-deficiency.
         
         Canonical form is required. Always perform self.restore_CF() first!
@@ -442,6 +446,9 @@ class EvoMPS_MPS_Generic(object):
             data : stuff
                 Additional data needed by self._update_after_truncate() (if return_update_data == True).
         """
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+        
         new_D = self.D.copy()
         
         if self.canonical_form == 'right':

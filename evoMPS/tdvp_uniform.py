@@ -309,14 +309,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             out = np.zeros_like(self.A)
             
         for s in xrange(self.q):
-            out[s] = m.mmul(l_sqrt_i, x, m.H(Vsh[s]), r_sqrt_i)
+            out[s] = l_sqrt_i.dot(x).dot(r_sqrt_i.dot(Vsh[s]).conj().T)
             
         return out
         
     def calc_l_r_roots(self):
         """Calculates the (inverse) square roots of self.l and self.r.
         """
-        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, sanity_checks=self.sanity_checks)
+        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, zero_tol=self.zero_tol, sanity_checks=self.sanity_checks)
         
     def calc_B(self, set_eta=True):
         """Calculates a gauge-fixing tangent-vector parameter tensor capturing the projected infinitesimal time evolution of the state.
@@ -352,7 +352,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             #Test gauge-fixing:
             tst = tm.eps_r_noop(self.r, B, self.A)
             if not np.allclose(tst, 0):
-                print "Sanity check failed: Gauge-fixing violation!"
+                print "Sanity check failed: Gauge-fixing violation!", la.norm(tst)
 
         return B
         
@@ -520,7 +520,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
         
-        #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
+        #NOTE: These C's are good as C12 or C34, but only if h is Hermitian!
         
         return ham_, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
             
@@ -564,7 +564,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
             if not np.allclose(tst, 0):
-                print "Sanity check failed: Gauge-fixing violation!"
+                print "Sanity check failed: Gauge-fixing violation!", la.norm(tst)
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)

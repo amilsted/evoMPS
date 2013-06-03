@@ -369,6 +369,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.q[n] * self.D[n] - self.D[n - 1] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
+                                                                   zero_tol=self.zero_tol,
                                                                    sanity_checks=self.sanity_checks,
                                                                    sc_data=('site', n))
             
@@ -390,6 +391,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.q[n] * self.D[n - 1] - self.D[n] > 0:
             l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
                                                                    self.r[n], 
+                                                                   zero_tol=self.zero_tol,
                                                                    sanity_checks=self.sanity_checks,
                                                                    sc_data=('site', n))
             
@@ -484,7 +486,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B[n] = None
 
-        self.update(restore_CF=False, auto_truncate=False)
+        self.update(restore_CF=False, normalize=False)
         
         B = [None]
         for n in xrange(1, self.N + 1):
@@ -496,7 +498,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 B_fin[n] += 2 * B[n]
                 B[n] = None
 
-        self.update(restore_CF=False, auto_truncate=False)
+        self.update(restore_CF=False, normalize=False)
 
         B = [None]
         for n in xrange(1, self.N + 1):
@@ -508,7 +510,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 B_fin[n] += 2 * B[n]
                 B[n] = None
 
-        self.update(restore_CF=False, auto_truncate=False)
+        self.update(restore_CF=False, normalize=False)
 
         for n in xrange(1, self.N + 1):
             B = self.calc_B(n, set_eta=False) #k4

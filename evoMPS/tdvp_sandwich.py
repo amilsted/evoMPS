@@ -553,6 +553,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         l_sqrt, l_sqrt_i, r_sqrt, r_sqrt_i = tm.calc_l_r_roots(self.l[n - 1], 
                                                                self.r[n], 
+                                                               zero_tol=self.zero_tol,
                                                                sanity_checks=self.sanity_checks)
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i

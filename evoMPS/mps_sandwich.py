@@ -37,10 +37,8 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.odr = 'C'
         self.typ = sp.complex128
         
-        self._sanity_checks = True        
-        
-        self.eps = sp.finfo(self.typ).eps
-        
+        self._sanity_checks = False        
+                
         self.N = N
         self.N_centre = N / 2
         self.D = sp.repeat(uni_ground.D, self.N + 2)
@@ -60,8 +58,6 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.grown_right = 0
         self.shrunk_left = 0
         self.shrunk_right = 0
-
-        self.eps = sp.finfo(self.typ).eps
 
         self._init_arrays()
 
@@ -195,7 +191,8 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         Gi = None
         for n in xrange(self.N + 1, nc, -1):
             self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n], 
-                                             Gi, sanity_checks=self.sanity_checks)
+                                             Gi, zero_tol=self.zero_tol,
+                                             sanity_checks=self.sanity_checks)
                                              
             if n == self.N + 1:
                 self.uni_r.l = Gm1_i.conj().T.dot(self.uni_r.l.dot(Gm1_i))
@@ -213,6 +210,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         lm1 = self.l[0]
         for n in xrange(nc):
             self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], lm1, Gm1, 
+                                                zero_tol=self.zero_tol,
                                                 sanity_checks=self.sanity_checks)
             
             if n == 0:
