@@ -78,6 +78,11 @@ def eps_l_op_1s(x, A1, A2, op):
     For example the expectation value of a single-site operator <op> is equal 
     to adot(eps_l_op_1s(l[n - 1], A[n], A[n], op), r[n]).
     
+    This is (E_op(A1,A2)).conj().T.dot(x.ravel()) where x and the output are kets.
+    
+    Alternatively, this is the same as x.conj().T.ravel().dot(E_(op.conj().T)(A2, A1))
+    where x is a bra.
+    
     See eps_l_noop().
 
     Parameters
