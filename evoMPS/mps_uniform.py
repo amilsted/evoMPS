@@ -88,6 +88,8 @@ class EvoMPS_MPS_Uniform(object):
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
         
+        self.zero_tol = sp.finfo(self.typ).resolution
+        
         self.itr_l = 0
         self.itr_r = 0
         
@@ -503,7 +505,7 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                 log.warning("Sanity check failed: Bad norm = %s", norm)
     
-    def restore_SCF(self, ret_g=False, zero_tol=1E-15):
+    def restore_SCF(self, ret_g=False, zero_tol=None):
         """Restores symmetric canonical form.
         
         In this canonical form, self.l == self.r and are diagonal matrices
@@ -520,6 +522,9 @@ class EvoMPS_MPS_Uniform(object):
         g, g_i : ndarray
             Gauge transformation matrix g and its inverse g_i.
         """
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+        
         X, Xi = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol)
         
         Y, Yi = tm.herm_fac_with_inv(self.l, lower=False, zero_tol=zero_tol)          
@@ -574,7 +579,7 @@ class EvoMPS_MPS_Uniform(object):
         else:
             return
     
-    def restore_RCF(self, ret_g=False, zero_tol=1E-15):
+    def restore_RCF(self, ret_g=False, zero_tol=None):
         """Restores right canonical form.
         
         In this form, self.r = sp.eye(self.D) and self.l is diagonal, with
@@ -591,9 +596,12 @@ class EvoMPS_MPS_Uniform(object):
         g, g_i : ndarray
             Gauge transformation matrix g and its inverse g_i.
         """
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+        
         #First get G such that r = eye
-        G, G_i = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol)
-        #TODO: Is the new r really the identity?
+        G, G_i, rank = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol,
+                                            return_rank=True)
 
         self.l = m.mmul(m.H(G), self.l, G)
         
@@ -610,25 +618,23 @@ class EvoMPS_MPS_Uniform(object):
         self.S_hc = - np.sum(ev * sp.log2(ev))
         
         self.l = m.simple_diag_matrix(ev, dtype=self.typ)
+        
+        r_old = self.r
+        
+        if rank == self.D:
+            self.r = m.eyemat(self.D, self.typ)
+        else:
+            self.r = sp.zeros((self.D), dtype=self.typ)
+            self.r[-rank:] = 1
+            self.r = m.simple_diag_matrix(self.r, dtype=self.typ)
 
-        if self.sanity_checks:
-            M = np.zeros_like(self.r)
-            for s in xrange(self.q):
-                M += m.mmul(self.A[s], m.H(self.A[s]))            
+        if self.sanity_checks:            
+            r_ = m.mmul(G_i, r_old, m.H(G_i)) 
             
-            self.r = m.mmul(G_i, self.r, m.H(G_i))
-            
-            if not np.allclose(M, self.r, 
+            if not np.allclose(self.r, r_, 
                                rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: RestoreRCF, bad M.")
-                log.warning("Off by: %s", la.norm(M - self.r))
-                
-            if not np.allclose(self.r, np.eye(self.D),
-                               rtol=self.itr_rtol*self.check_fac,
-                               atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: r not identity.")
-                log.warning("Off by: %s", la.norm(np.eye(self.D) - self.r))
+                log.warning("Sanity check failed: RestoreRCF, bad r (bad GT).")
             
             l = tm.eps_l_noop(self.l, self.A, self.A)
             r = tm.eps_r_noop(self.r, self.A, self.A)
@@ -636,16 +642,12 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(r, self.r,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, bad r!")
-                log.warning("Off by: %s", la.norm(r - self.r))
+                log.warning("Sanity check failed: Restore_RCF, r not eigenvector! %s", la.norm(r - self.r))
 
             if not np.allclose(l, self.l,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, bad l!")
-                log.warning("Off by: %s", la.norm(l - self.l))
-    
-        self.r = m.eyemat(self.D, dtype=self.typ)
+                log.warning("Sanity check failed: Restore_RCF, l not eigenvector! %s", la.norm(l - self.l))
         
         if ret_g:
             return G, G_i
@@ -663,7 +665,10 @@ class EvoMPS_MPS_Uniform(object):
         else:
             return self.restore_RCF(ret_g=ret_g)
     
-    def auto_truncate(self, update=True, zero_tol=1E-15):
+    def auto_truncate(self, update=True, zero_tol=None):
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+            
         new_D_l = np.count_nonzero(self.l.diag > zero_tol)
         
         if 0 < new_D_l < self.A.shape[1]:

@@ -16,7 +16,9 @@ import logging
 log = logging.getLogger(__name__)
 
 class PinvOp:    
-    def __init__(self, p, A1, A2, l, r, left=False, pseudo=True):
+    def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
+        assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
+        
         self.A1 = A1
         self.A2 = A2
         self.l = l
@@ -31,7 +33,7 @@ class PinvOp:
         
         self.dtype = A1.dtype
         
-        self.out = np.empty_like(self.l)
+        self.out = np.empty((self.D, self.D), dtype=self.dtype)
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
@@ -72,8 +74,22 @@ def pinv_1mE_brute(A1, A2, l, r, p=0, pseudo=True):
     
     return la.inv(EyemE)
     
-def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=2000,
-             out=None, sanity_checks=False, sanity_tol=1E-12, brute_check=False):
+def pinv_1mE_brute_LOP(A1, A2, l, r, p=0, pseudo=True, left=False):
+    op = PinvOp(p, A1, A2, l, r, left=left, pseudo=pseudo)
+    
+    bop = sp.zeros(op.shape, dtype=op.dtype)
+    for i in xrange(op.shape[1]):
+        x = sp.zeros((op.shape[1]), dtype=op.dtype)
+        x[i] = 1
+        bop[:, i] = op.matvec(x)
+    
+    if left:
+        bop = bop.conj().T
+    
+    return la.inv(bop)
+    
+def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
+             out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
     
@@ -90,17 +106,26 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=20
     res = out.ravel()
     x = x.ravel()
     
-    res, info = las.bicgstab(op, x, x0=res, maxiter=maxiter, tol=tol) #tol: norm( b - A*x ) / norm( b )
+    if solver is None:
+        solver = las.bicgstab
+        #bicgstab fails sometimes, e.g. with nearly rank-deficient stuff.
     
-    if info > 0:
-        log.warning("Warning: Did not converge on solution for ppinv!")
+    res, info = solver(op, x, x0=res, maxiter=maxiter, tol=tol) #tol: norm( b - A*x ) / norm( b )
+    
+    if info != 0:
+        log.warning("Warning: Did not converge on solution for ppinv! %s", sc_data)
     
     #Test
     if sanity_checks and x.shape[0] > 1:
         RHS_test = op.matvec(res)
-        d = la.norm(RHS_test - x) / la.norm(x)
-        if not d < sanity_tol:
-            log.warning("Sanity check failed: Bad ppinv solution! Off by: %s", d)
+        norm = la.norm(x)
+        if norm == 0:
+            d = 0
+        else:
+            d = la.norm(RHS_test - x) / norm
+        #d = abs(RHS_test - x).sum() / abs(x).sum()
+        if not d < tol:
+            log.warning("Sanity check failed: Bad ppinv solution! Off by: %s %s", d, sc_data)
     
     res = res.reshape((D, D))
         
@@ -108,13 +133,24 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=20
         pinvE = pinv_1mE_brute(A1, A2, l, r, p=p, pseudo=pseudo)
         
         if left:
-            res_brute = (x.reshape((1, D**2)).conj().dot(pinvE)).ravel().conj().reshape((D, D))
-            #res_brute = (pinvE.T.dot(x)).reshape((self.D, self.D))
+            #res_brute = (x.reshape((1, D**2)).conj().dot(pinvE)).ravel().conj().reshape((D, D))
+            res_brute = (pinvE.conj().T.dot(x)).reshape((D, D))
         else:
             res_brute = pinvE.dot(x).reshape((D, D))
         
-        if not np.allclose(res, res_brute):
-            log.warning("Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g", str(left), la.norm(res - res_brute))
+        if not la.norm(res - res_brute) < la.norm(res) * tol * 10:
+            log.warning("Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g %s", left, la.norm(res - res_brute) / la.norm(res), sc_data)
+        
+        if sanity_checks and x.shape[0] > 1:
+            RHS_test = op.matvec(res_brute.ravel())
+            norm = la.norm(x)
+            if norm == 0:
+                d2 = 0
+            else:
+                d2 = la.norm(RHS_test - x) / norm
+            #d = abs(RHS_test - x).sum() / abs(x).sum()
+            if not d2 < tol:
+                log.warning("Sanity check failed: Bad ppinv brute solution! Off by: %s %s", d2, sc_data)
     
     out[:] = res
     

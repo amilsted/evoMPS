@@ -105,10 +105,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if not (self.ham_sites == 2 or self.ham_sites == 3):
             raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
+
+        self.K_solver = las.bicgstab
         
         super(EvoMPS_TDVP_Uniform, self).__init__(D, q, dtype=dtype)
                         
         self.eta = 0
+
     
     def _init_arrays(self, D, q):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q)
@@ -171,7 +174,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.C[:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA)
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, r=None, 
-                   pseudo=True, brute_check=False):
+                   pseudo=True, brute_check=False, sc_data='', solver=None):
         """Uses an iterative method to calculate the result of applying 
         the (pseudo) inverse of (1 - exp(1.j * p) * E) to a vector |x>.
         
@@ -211,9 +214,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             r = self.r
         
         out = pinv_1mE(x, A1, A2, self.l, r, p=p, left=left, pseudo=pseudo, 
-                       out=out, tol=self.itr_rtol, 
-                       sanity_checks=self.sanity_checks,
-                       sanity_tol=self.itr_atol * self.check_fac)
+                       out=out, tol=self.itr_rtol, solver=solver,
+                       sanity_checks=self.sanity_checks, sc_data=sc_data)
 
         return out
         
@@ -238,7 +240,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         QHr = Hr - self.r * self.h
         
-        self.calc_PPinv(QHr, out=self.K)
+        self.calc_PPinv(QHr, out=self.K, solver=self.K_solver)
         
         if self.sanity_checks:
             Ex = tm.eps_r_noop(self.K, self.A, self.A)
@@ -280,7 +282,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         #Since A1=A2 and p=0, we get the right result without turning lHQ into a ket.
         #This is the same as...
         #self.K_left = (self.calc_PPinv(lHQ.conj().T, left=True, out=self.K_left)).conj().T
-        self.K_left = self.calc_PPinv(lHQ, left=True, out=self.K_left)        
+        self.K_left = self.calc_PPinv(lHQ, left=True, out=self.K_left, solver=self.K_solver)        
         
         if self.sanity_checks:
             xE = tm.eps_l_noop(self.K_left, self.A, self.A)
@@ -312,14 +314,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             out = np.zeros_like(self.A)
             
         for s in xrange(self.q):
-            out[s] = m.mmul(l_sqrt_i, x, m.H(Vsh[s]), r_sqrt_i)
+            out[s] = l_sqrt_i.dot(x).dot(r_sqrt_i.dot(Vsh[s]).conj().T)
             
         return out
         
     def calc_l_r_roots(self):
         """Calculates the (inverse) square roots of self.l and self.r.
         """
-        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, sanity_checks=self.sanity_checks)
+        self.l_sqrt, self.l_sqrt_i, self.r_sqrt, self.r_sqrt_i = tm.calc_l_r_roots(self.l, self.r, zero_tol=self.zero_tol, sanity_checks=self.sanity_checks)
         
     def calc_B(self, set_eta=True):
         """Calculates a gauge-fixing tangent-vector parameter tensor capturing the projected infinitesimal time evolution of the state.
@@ -355,7 +357,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             #Test gauge-fixing:
             tst = tm.eps_r_noop(self.r, B, self.A)
             if not np.allclose(tst, 0):
-                log.warning("Sanity check failed: Gauge-fixing violation!")
+                log.warning("Sanity check failed: Gauge-fixing violation! %s" ,la.norm(tst))
 
         return B
         
@@ -479,9 +481,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
         ham_ = self.ham - self.h.real * eyed
             
-        V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
-        for s in xrange(donor.q):
-            V_[s] = m.H(donor.Vsh[s])
+        V_ = sp.transpose(donor.Vsh, axes=(0, 2, 1)).conj()
         
         Vri_ = sp.zeros_like(V_)
         try:
@@ -499,36 +499,26 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for s in xrange(donor.q):
                 Vr_[s] = V_[s].dot(r__sqrt)
                 
-        C_AhlA = np.empty_like(self.C)
+        _C_AhlA = np.empty_like(self.C)
         for u in xrange(self.q):
             for s in xrange(self.q):
-                C_AhlA[u, s] = m.H(A[u]).dot(l.dot(A[s]))
-        C_AhlA = sp.tensordot(ham_, C_AhlA, ((2, 0), (0, 1)))
+                _C_AhlA[u, s] = A[u].conj().T.dot(l.dot(A[s]))
+        C_AhlA = sp.tensordot(ham_, _C_AhlA, ((0, 2), (0, 1)))
         
-        C_A_Vrh_ = np.empty((self.q, self.q, A_.shape[1], Vr_.shape[1]), dtype=self.typ)
-        for t in xrange(self.q):
-            for v in xrange(self.q):
-                C_A_Vrh_[t, v] = A_[t].dot(m.H(Vr_[v]))
-        C_A_Vrh_ = sp.tensordot(ham_, C_A_Vrh_, ((1, 3), (0, 1)))
+        _C_A_Vrh_ = tm.calc_AA(A_, sp.transpose(Vr_, axes=(0, 2, 1)).conj())
+        C_A_Vrh_ = sp.tensordot(ham_, _C_A_Vrh_, ((3, 1), (0, 1)))
                 
-        C_Vri_A_ = np.empty((self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=self.typ)
-        for s in xrange(self.q):
-            for t in xrange(self.q):
-                C_Vri_A_[s, t] = Vri_[s].dot(A_[t])
-        C_Vri_A_ = sp.tensordot(ham_, C_Vri_A_, ((2, 3), (0, 1)))
-        
-        C = sp.tensordot(ham_, self.AA, ((2, 3), (0, 1)))
+        C_Vri_A_conj = tm.calc_C_conj_mat_op_AA(ham_, tm.calc_AA(Vri_, A_))
 
-        C_ = sp.tensordot(ham_, AA_, ((2, 3), (0, 1)))
+        C_ = tm.calc_C_mat_op_AA(ham_, AA_)
+        C_conj = tm.calc_C_conj_mat_op_AA(ham_, AA_)
         
-        rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_)
+        rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_conj)
         
-        #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
-        
-        return ham_, C, C_, V_, Vr_, Vri_, C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10
+        return ham_, C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
             
-    def calc_BHB(self, x, p, donor, ham_, C, C_, V_, Vr_, Vri_, 
-                 C_Vri_A_, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None): 
+    def calc_BHB(self, x, p, donor, ham_, C_, C_conj, V_, Vr_, Vri_, 
+                 C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10, M_prev=None, y_pi_prev=None, pinv_solver=None): 
         """Calculates the result of applying the effective Hamiltonian in terms
         of tangent vectors to a particular tangent vector specified by x.
         
@@ -544,7 +534,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Second state (may be the same, or another ground state).
         ...others...
             Prerequisites returned by self.calc_BHB_prereq().
-        """        
+        """
+        if pinv_solver is None:
+            pinv_solver = las.gmres
+        
         A = self.A
         A_ = donor.A
         
@@ -564,10 +557,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         B = donor.get_B_from_x(x, donor.Vsh, l_sqrt_i, r__sqrt_i)
         
+        #Skip zeros due to rank-deficiency
+        if la.norm(B) == 0:
+            return sp.zeros_like(x), M_prev, y_pi_prev
+        
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
             if not np.allclose(tst, 0):
-                log.warning("Sanity check failed: Gauge-fixing violation!")
+                log.warning("Sanity check failed: Gauge-fixing violation! %s", la.norm(tst))
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
@@ -582,19 +579,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         y = tm.eps_l_noop(l, B, self.A)
         
-        if pseudo:
-            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo, out=M_prev)
-        #print m.adot(r, M)
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, pseudo=pseudo, sc_data='M', 
+                            out=M_prev, solver=pinv_solver)
         if self.sanity_checks:
-            y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
-            if not sp.allclose(y, y2):
-                log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
+            y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A) #(1 - exp(pj) EA_A |M>)
+            if not sp.allclose(y, y2, rtol=1E-10, atol=1E-12):
+                norm = la.norm(y.ravel())
+                if norm == 0:
+                    norm = 1
+                log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", (la.norm((y - y2).ravel()) / norm))
+        if pseudo:
+            M = M - l * m.adot(r_, M)
         Mh = m.H(M)
 
         res = l_sqrt.dot(
-               tm.eps_r_op_2s_AA12_C34(r_, BA_, C_Vri_A_) #1 OK
-               + sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_Vri_A_) #3 OK with 4
+               tm.eps_r_op_2s_AA12_C34(r_, BA_, C_Vri_A_conj) #1 OK
+               + sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_Vri_A_conj) #3 OK with 4
               )
         #res.fill(0)
         
@@ -602,11 +602,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         exp = sp.exp
         subres = sp.zeros_like(res)
+        eye = m.eyemat(C_.shape[2], dtype=self.typ)
         for s in xrange(self.q):
-            for t in xrange(self.q):
-                subres += (C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
-                         + exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[s, t]) #4 OK with 3
-                         + exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_[s, t])).dot(Vr_[t].conj().T)) #12
+            #subres += C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
+            subres += tm.eps_r_noop(B[s], C_AhlA[:, s], Vr_)
+            #+ exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[s, t]) #4 OK with 3
+            subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_A_Vrh_[:, s])
+            #+ exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_[s, t])).dot(Vr_[t].conj().T)) #12
+            subres += exp(-2.j * p) * A[s].conj().T.dot(Mh).dot(tm.eps_r_noop(eye, C_[s], Vr_))
+                
         res += l_sqrt_i.dot(subres)
         
         res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5 OK
@@ -616,18 +620,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
         y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
-        y2 = sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, BA_, C_) #9
-        y3 = sp.exp(+2.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_) #11
+        y2 = sp.exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_, BA_, C_conj) #9
+        y3 = sp.exp(+2.j * p) * tm.eps_r_op_2s_AA12_C34(r_, AB, C_conj) #11
         
         y = y1 + y2 + y3
         if pseudo:
             y = y - m.adot(l, y) * r_
-        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo, out=y_pi_prev)
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, pseudo=pseudo, sc_data='y_pi', 
+                               out=y_pi_prev, solver=pinv_solver)
         #print m.adot(l, y_pi)
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
-            if not sp.allclose(y, y2):
-                log.warning("Sanity Fail in calc_BHB! Bad x_pi. Off by: %g", (la.norm((y - y2).ravel()) / la.norm(y.ravel())))
+            if not sp.allclose(y, y2, rtol=1E-10, atol=1E-12):
+                log.warning("Sanity Fail in calc_BHB! Bad y_pi. Off by: %g", la.norm((y - y2).ravel()) / la.norm(y.ravel()))
+        if pseudo:
+            y_pi = y_pi - m.adot(l, y_pi) * r_
         
         res += l_sqrt.dot(tm.eps_r_noop(y_pi, self.A, Vri_))
         
@@ -760,15 +767,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
         
         #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
+        #TODO: Make this consistent with the updated 2-site case above.
         
         return V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
     
     def calc_BHB_3s(self, x, p, donor, V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih,
                     C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, 
                     C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
-                    M_prev=None, y_pi_prev=None):
+                    M_prev=None, y_pi_prev=None, pinv_solver=None):
         """As for self.calc_BHB(), but for Hamiltonian terms acting on three sites.
         """
+        if pinv_solver is None:
+            pinv_solver = las.gmres        
+        
         A = self.A
         A_ = donor.A
         
@@ -809,7 +820,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if pseudo:
             y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo, out=M_prev)
+        M = self.calc_PPinv(y, p=-p, left=True, A1=A_, r=r_, pseudo=pseudo, out=M_prev, solver=pinv_solver)
         #print m.adot(r, M)
         if self.sanity_checks:
             y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, self.A)
@@ -858,7 +869,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         y = y1 + y2 + y3 + y4
         if pseudo:
             y = y - m.adot(l, y) * r_
-        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo, out=y_pi_prev)
+        y_pi = self.calc_PPinv(y, p=p, A2=A_, r=r_, pseudo=pseudo, out=y_pi_prev, solver=pinv_solver)
         #print m.adot(l, y_pi)
         if self.sanity_checks:
             y2 = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, self.A, A_)
@@ -880,6 +891,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def _prepare_excite_op_top_triv(self, p):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
+
         self.calc_K_l()
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
@@ -951,8 +963,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             x[i] = 1
             H[:, i] = op.matvec(x)
 
-        if not np.allclose(H, m.H(H)):
-            log.warning("Warning! H is not Hermitian!")
+        if not np.allclose(H, H.conj().T):
+            log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
@@ -962,15 +974,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if callable(donor.ham):
             donor.set_ham_array_from_function(donor.ham)
             
-        self.calc_lr()
-        self.restore_CF()
-        donor.calc_lr()
-        donor.restore_CF()
+#        self.calc_lr()
+#        self.restore_CF()
+#        donor.calc_lr()
+#        donor.restore_CF()
         
         self.phase_align(donor)
         
         self.update()
-        donor.update()
+        #donor.update()
 
         self.calc_K_l()
         self.calc_l_r_roots()
@@ -1004,8 +1016,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             x[i] = 1
             H[:, i] = op.matvec(x)
 
-        if not np.allclose(H, m.H(H)):
-            log.warning("Warning! H is not Hermitian!")
+        if not np.allclose(H, H.conj().T):
+            log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
