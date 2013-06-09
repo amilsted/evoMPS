@@ -707,7 +707,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
     
     H = mm.H
     
-    assert not (C is None and not Kp1 is None)
+    assert not (not C is None and Kp1 is None)
     if not C is None:
         x_part.fill(0)
         for s in xrange(q):            
