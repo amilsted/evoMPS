@@ -283,6 +283,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             C = None
             
+        if n + 1 <= self.N - self.ham_sites + 1:
+            Kp1 = self.K[n + 1]            
+        else:
+            Kp1 = None
+            
         if n < self.N - 1:
             Ap2 = self.A[n + 2]
             rp2 = self.r[n + 2]
@@ -291,14 +296,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             rp2 = None
             
         if n < self.N:
-            Kp1 = self.K[n + 1]
             rp1 = self.r[n + 1]
             Ap1 = self.A[n + 1]
         else:
-            Kp1 = None
             rp1 = None
             Ap1 = None
-
+        
         if self.ham_sites == 2:
             x = tm.calc_x(Kp1, C, Cm1, rp1,
                           lm2, Am1, self.A[n], Ap1,

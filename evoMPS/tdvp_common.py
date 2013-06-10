@@ -680,13 +680,14 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     x_part = np.empty_like(x)
     x_subpart = np.empty_like(A[0])
     
-    if not (C is None and Kp1 is None):
-        assert (not C is None) and (not Kp1 is None)
+    assert not (C is None and not Kp1 is None) #existence of Kp1 implies existence of C
+    if not C is None:
         x_part.fill(0)
         for s in xrange(q):            
             x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
             
-            x_subpart += A[s].dot(Kp1) #~3rd line
+            if not Kp1 is None:
+                x_subpart += A[s].dot(Kp1) #~3rd line
     
             x_part += x_subpart.dot(r_si.dot(Vsh[s]))
 
@@ -719,7 +720,8 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
         for s in xrange(q):            
             x_subpart = eps_r_op_2s_C12(rp2, C[s], Ap1, Ap2) #~1st line
             
-            x_subpart += A[s].dot(Kp1) #~3rd line
+            if not Kp1 is None:
+                x_subpart += A[s].dot(Kp1) #~3rd line
     
             x_part += x_subpart.dot(r_si.dot(Vsh[s]))
     
@@ -811,7 +813,6 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
     sanity_checks : bool
         Whether to perform soem basic sanity checks.
     """    
-    
     if not force_evd:
         try:
             x = la.cholesky(A, lower=lower)
