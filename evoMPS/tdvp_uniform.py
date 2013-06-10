@@ -1020,7 +1020,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         
     def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
-                         trybracket=True):
+                         trybracket=True, verbose=False):
         taus=[]
         hs=[]
         
@@ -1033,11 +1033,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         def f(tau, *args):
             if tau == 0:
-                print (0, "tau=0")
+                if verbose:
+                    print (0, "tau=0")
                 return self.h.real                
             try:
                 i = taus.index(tau)
-                print (tau, hs[i], hs[i] - self.h.real, "from stored")
+                if verbose:
+                    print (tau, hs[i], hs[i] - self.h.real, "from stored")
                 return hs[i]
             except ValueError:
                 for s in xrange(self.q):
@@ -1057,7 +1059,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 else:
                     h = self.expect_3s(self.ham)
                 
-                print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
+                if verbose:
+                    print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
                 
                 res = h.real
                 
@@ -1103,7 +1106,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                     maxiter=20,
                                                     full_output=True)
         except ValueError:
-            print "Bracketing attempt failed..."
+            if verbose:
+                print "Bracketing attempt failed..."
             tau_opt, h_min, itr, calls = opti.brent(f, 
                                                     brack=fb_brack, 
                                                     tol=tol,
@@ -1164,7 +1168,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return h.real < self.h.real, h
 
-    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False):
+    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False, verbose=False):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
@@ -1182,13 +1186,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if reset:
             beta = 0.
-            print "RESET CG"
+            if verbose:
+                print "RESET CG"
             
             B_CG = B
         else:
             beta = (eta**2) / eta_0**2
-        
-            print "BetaFR = " + str(beta)
+            
+            if verbose:
+                print "BetaFR = " + str(beta)
         
             beta = max(0, beta.real)
         
@@ -1199,17 +1205,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         rb0 = self.r_before_CF.copy()
         
         tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
-                                           trybracket=False)
+                                           trybracket=False, verbose=verbose)
             
         if self.h.real < h_min:
-            print "RESET due to energy rise!"
+            if verbose:
+                print "RESET due to energy rise!"
             B_CG = B
             self.l_before_CF = lb0
             self.r_before_CF = rb0
             tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
             if self.h.real < h_min:
-                print "RESET FAILED: Setting tau=0!"
+                if verbose:
+                    print "RESET FAILED: Setting tau=0!"
                 self.l_before_CF = lb0
                 self.r_before_CF = rb0
                 tau = 0
