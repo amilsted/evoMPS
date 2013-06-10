@@ -95,7 +95,7 @@ class EvoMPS_MPS_Uniform(object):
         self.ev_arpack_nev = 1
         self.ev_arpack_ncv = None
                 
-        self.symm_gauge = False
+        self.symm_gauge = True
         
         self.sanity_checks = False
         self.check_fac = 50
@@ -104,7 +104,7 @@ class EvoMPS_MPS_Uniform(object):
         
         self.eps = np.finfo(self.typ).eps
                 
-        self._init_arrays(D, q)        
+        self._init_arrays(D, q)
                     
         self.randomize()
 
