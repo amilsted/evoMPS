@@ -8,7 +8,10 @@ for the transverse Ising model.
 @author: Ashley Milsted
 """
 
+import copy
 import scipy as sp
+import scipy.linalg as la
+import scipy.special as spe
 import evoMPS.tdvp_uniform as tdvp
 
 """
@@ -31,6 +34,7 @@ zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squar
 
 num_excitations = 24          #The number of excitations to obtain
 num_momenta = 20              #Number of points on momentum axis
+top_non_triv = True           #Also look for topologically non-trivial excitations (only useful for h < J)
 
 plot_results = True
 
@@ -58,6 +62,9 @@ the parameters J and h.
 def get_ham(J, h):
     ham = -J * (sp.kron(x_ss, x_ss) + h * sp.kron(z_ss, sp.eye(2))).reshape(2, 2, 2, 2)
     return ham
+
+lam = J / h
+print "Exact energy = ", -h * 2 / sp.pi * (1 + lam) * spe.ellipe((4 * lam / (1 + lam)**2))
 
 """
 Now we are ready to create an instance of the evoMPS class.
@@ -142,20 +149,6 @@ if __name__ == '__main__':
         M.append(Sz.real)
 
         """
-        Switch to real time evolution if we have the ground state.
-        """
-        if eta < tol_im or loaded:
-            s.save_state(grnd_fname)
-            print 'Finding excitations!'
-            ex_ev = []
-            ex_p = []
-            for p in sp.linspace(0, sp.pi, num=num_momenta):
-                print "p = ", p
-                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
-                ex_p.append([p] * num_excitations)
-            break
-
-        """
         Carry out next step!
         """
         s.take_step(step)
@@ -167,6 +160,30 @@ if __name__ == '__main__':
         print "\t".join(row)
 
         i += 1
+
+        """
+        Switch to real time evolution if we have the ground state.
+        """
+        if eta < tol_im or loaded:
+            s.save_state(grnd_fname)
+            print 'Finding excitations!'
+            if top_non_triv:
+                s2 = copy.deepcopy(s)
+                flip_x = la.expm(1.j * sp.pi / 2. * z_ss)
+                s2.apply_op_1s(flip_x)
+                s2.update()
+            ex_ev = []
+            ex_ev_nt = []
+            ex_p = []
+            for p in sp.linspace(0, sp.pi, num=num_momenta):
+                print "p = ", p
+                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
+                if top_non_triv:
+                    ex_ev_nt.append(s.excite_top_nontriv(s2, p, k=num_excitations, ncv=num_excitations * 4))
+                else:
+                    ex_ev_nt.append([0])
+                ex_p.append([p] * num_excitations)
+            break
     """
     Simple plots of the results.
     """
@@ -191,11 +208,16 @@ if __name__ == '__main__':
             M_tau.plot(tau, M)
 
         plt.figure()
-        for res in zip(ex_p, ex_ev):
-            plt.plot(res[0], res[1], 'bo')
-        plt.title('Excitation spectrum (topol. trivial)')
+        ex_p = sp.array(ex_p).ravel()
+        ex_ev = sp.array(ex_ev).ravel()
+        ex_ev_nt = sp.array(ex_ev_nt).ravel()
+        plt.plot(ex_p, ex_ev, 'bo', label='top. trivial')
+        if top_non_triv:
+            plt.plot(ex_p, ex_ev_nt, 'ro', label='top. non-trivial')
+        plt.title('Excitation spectrum')
         plt.xlabel('p')
         plt.ylabel('dE')
-        plt.ylim(0, sp.array(ex_ev).max() * 1.1)
+        plt.ylim(0, max(ex_ev.max(), ex_ev_nt.max()) * 1.1)
+        plt.legend()
 
         plt.show()
