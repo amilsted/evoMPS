@@ -230,7 +230,7 @@ if __name__ == '__main__':
             H_tau.set_title('Imaginary time evolution: Energy')
             M_tau = fig2.add_subplot(111)
             M_tau.set_xlabel('tau')
-            M_tau.set_ylabel('M_x')
+            M_tau.set_ylabel('M')
             M_tau.set_title('Imaginary time evolution: Magnetization')
 
             H_tau.plot(tau, Him)
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         H_t.set_title('Real time evolution: Energy')
         M_t = fig4.add_subplot(111)
         M_t.set_xlabel('t')
-        M_t.set_ylabel('M_x')
+        M_t.set_ylabel('M')
         M_t.set_title('Real time evolution: Magnetization')
 
         H_t.plot(t, Hre)
