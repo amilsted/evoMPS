@@ -35,6 +35,8 @@ zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squar
 
 plot_results = True
 
+sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
 """
 Next, we define our Hamiltonian and some observables.
 """
@@ -85,6 +87,7 @@ Now we are ready to create an instance of the evoMPS class.
 """
 s = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, J, h))
 s.zero_tol = zero_tol
+s.sanity_checks = sanity_checks
 
 """
 The following loads a ground state from a file.

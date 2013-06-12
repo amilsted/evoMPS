@@ -38,6 +38,8 @@ top_non_triv = True           #Also look for topologically non-trivial excitatio
 
 plot_results = True
 
+sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
 """
 Next, we define our Hamiltonian and some observables.
 """
@@ -71,6 +73,7 @@ Now we are ready to create an instance of the evoMPS class.
 """
 s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, 2, get_ham(J, h))
 s.zero_tol = zero_tol
+s.sanity_checks = sanity_checks
 
 """
 The following loads a ground state from a file.
@@ -111,7 +114,7 @@ if __name__ == '__main__':
     print "Bond dimensions: " + str(s.D)
     print
     col_heads = ["Step", "t", "<h>", "d<h>",
-                 "sig_x_3", "sig_y_3", "sig_z_3",
+                 "sig_x", "sig_y", "sig_z",
                  "eta"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print

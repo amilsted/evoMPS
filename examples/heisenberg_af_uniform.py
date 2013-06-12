@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-A demonstration of evoMPS by simulation of quench dynamics
+A demonstration of evoMPS: Calculation of approximate excitation spectrum
 for the transverse Ising model.
 
 @author: Ashley Milsted
@@ -10,289 +10,217 @@ for the transverse Ising model.
 
 import math as ma
 import scipy as sp
-import matplotlib.pyplot as plt
-
 import evoMPS.tdvp_uniform as tdvp
 
 """
-First, we define our Hamiltonian and some observables.
+First, we set up some global variables to be used as parameters.
 """
 
-x_ss_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0], 
-                                   [1, 0, 1], 
-                                   [0, 1, 0]])
-y_ss_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0], 
-                                         [-1, 0, 1], 
-                                         [0, -1, 0]])
-z_ss_s1 = sp.array([[1, 0, 0], 
-                    [0, 0, 0], 
-                    [0, 0, -1]])
-                    
-x_ss_pauli = sp.array([[0, 1], 
-                       [1, 0]])
-y_ss_pauli = 1.j * sp.array([[0, -1], 
-                             [1, 0]])
-z_ss_pauli = sp.array([[1, 0], 
-                       [0, -1]])
+S = 1                         #Spin: Can be 0.5 or 1.
+bond_dim = 16                 #The maximum bond dimension
 
-def get_ham(S, Jx, Jy, Jz):
-    if S == 1:
-        return (Jx * sp.kron(x_ss_s1, x_ss_s1) 
-                + Jy * sp.kron(y_ss_s1, y_ss_s1)
-                + Jz * sp.kron(z_ss_s1, z_ss_s1)).reshape(3, 3, 3, 3)
-    elif S == 0.5:
-        return (Jx * sp.kron(x_ss_pauli, x_ss_pauli) 
-                + Jy * sp.kron(y_ss_pauli, y_ss_pauli)
-                + Jz * sp.kron(z_ss_pauli, z_ss_pauli)).reshape(2, 2, 2, 2)
-    else:
-        return None
+Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
+Jy = 1.00
+Jz = 1.00
+
+tol_im = 1E-10                #Ground state tolerance (norm of projected evolution vector)
+
+step = 0.1                    #Imaginary time step size
+
+load_saved_ground = True      #Whether to load a saved ground state (if it exists)
+
+auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
+zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+
+num_excitations = 24          #The number of excitations to obtain
+num_momenta = 20              #Number of points on momentum axis
+
+plot_results = True
+
+sanity_checks = False         #Whether to perform additional (verbose) sanity checks
 
 """
-Choose spin-1 or spin-1/2.
+Next, we define our Hamiltonian and some observables.
 """
-q = 0
-S = 1
+Sx_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0],
+                                 [1, 0, 1],
+                                 [0, 1, 0]])
+Sy_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0],
+                                       [-1, 0, 1],
+                                       [0, -1, 0]])
+Sz_s1 = sp.array([[1, 0, 0],
+                  [0, 0, 0],
+                  [0, 0, -1]])
+
+Sx_pauli = sp.array([[0, 1],
+                     [1, 0]])
+Sy_pauli = 1.j * sp.array([[0, -1],
+                           [1, 0]])
+Sz_pauli = sp.array([[1, 0],
+                     [0, -1]])
 
 if S == 0.5:
-    q = 2
-    z_ss = z_ss_pauli
-    y_ss = y_ss_pauli
-    x_ss = x_ss_pauli
+    qn = 2
+    Sz = Sz_pauli
+    Sy = Sy_pauli
+    Sx = Sx_pauli
 elif S == 1:
-    q = 3
-    z_ss = z_ss_s1
-    y_ss = y_ss_s1
-    x_ss = x_ss_s1
+    qn = 3
+    Sz = Sz_s1
+    Sy = Sy_s1
+    Sx = Sx_s1
 else:
     print "Only S = 1 or S = 1/2 are supported!"
     exit()
 
-#Splus = x_ss + 1.j * y_ss
-#Sminus = x_ss - 1.j * y_ss
+"""
+A translation invariant (uniform) nearest-neighbour Hamiltonian is a
+4-dimensional array defining the nearest-neighbour interaction.
+The indices 0 and 1 are the 'bra' indices for the first and
+second sites and the indices 2 and 3 are the 'ket' indices:
 
+  ham[s,t,u,v] = <st|h|uv>
 
+The following function will return a Hamiltonian for the chain, given the
+the parameters J and h.
 """
-The bond dimension:
-"""
-D = 32
-
-"""
-Set the Hamiltonian parameters.
-"""
-Jx = Jy = Jz = 1
-
-"""
-Initialize the simulation object:
-"""
-s = tdvp.EvoMPS_TDVP_Uniform(D, q, get_ham(S, Jx, Jy, Jz))
-s.ev_use_cuda = True
-#s = tdvp.EvoMPS_TDVP_Uniform(D, q, h_nn)
+def get_ham(Jx, Jy, Jz):
+    h = (Jx * sp.kron(Sx, Sx) + Jy * sp.kron(Sy, Sy)
+         + Jz * sp.kron(Sz, Sz)).reshape(qn, qn, qn, qn)
+    return h
 
 """
-Set the parameters for the quench.
+Now we are ready to create an instance of the evoMPS class.
 """
-Jx_2 = Jy_2 = 1
-Jz_2 = -1
+s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, qn, get_ham(Jx, Jy, Jz))
+s.zero_tol = zero_tol
+s.sanity_checks = sanity_checks
 
 """
-Now set the step sizes for the imaginary and the real time evolution.
-These are currently fixed.
-"""
-step = 0.1
-realstep = 0.01
-
-"""
-Now set the tolerance for the imaginary time evolution.
-When the state tolerance falls below this level, the
-real time simulation of the quench will begin.
-"""
-tol_im = 1E-7
-total_steps = 1000
-
-"""
-The following handles loading the ground state from a file.
+The following loads a ground state from a file.
 The ground state will be saved automatically when it is declared found.
-If this script is run again with the same settings, an existing
-ground state will be loaded, if present.
 """
-grnd_fname_fmt = "heis_af_uni_D%d_q%d_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy"
+grnd_fname = "heis_af_uni_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
 
-grnd_fname = grnd_fname_fmt % (D, q, Jx, Jy, Jz, tol_im, step)
-
-load_state = True
-expand = False
-real_time = False
-
-if load_state:
+if load_saved_ground:
     try:
-       a_file = open(grnd_fname, 'rb')
-       s.load_state(a_file)
-       a_file.close
-       real_time = not expand
-       loaded = True
-       print 'Using saved ground state: ' + grnd_fname
+        a_file = open(grnd_fname, 'rb')
+        s.load_state(a_file)
+        a_file.close
+        real_time = True
+        loaded = True
+        print 'Using saved ground state: ' + grnd_fname
     except IOError as e:
-       print 'No existing ground state could be opened.'
-       real_time = False
-       loaded = False
+        real_time = False
+        loaded = False
+        print 'No existing ground state could be opened.'
 else:
+    real_time = False
     loaded = False
-    
-#tol_im = 1E-7
-        
-if __name__ == "__main__":    
-    step = 0.1
-    
+
+
+if __name__ == '__main__':
     """
     Prepare some loop variables and some vectors to hold data from each step.
     """
-    t = 0. + 0.j
-    imsteps = 0
-    
-    reCF = []
-    reNorm = []
-    
-    T = sp.zeros((total_steps), dtype=sp.complex128)
-    E = sp.zeros((total_steps), dtype=sp.complex128)
-    lN = sp.zeros((total_steps), dtype=sp.complex128)
-    
-    Sx = sp.zeros((total_steps), dtype=sp.complex128)
-    Sy = sp.zeros((total_steps), dtype=sp.complex128)
-    Sz = sp.zeros((total_steps), dtype=sp.complex128)
-    
+    t = 0
+
+    T = []
+    H = []
+
     """
     Print a table header.
     """
     print "Bond dimensions: " + str(s.D)
     print
-    col_heads = ["Step", "t", "eta", "energy: h/J", 
-                 "difference", 
-                 "Sx", "Sy", "Sz", "entr.","conv_l", "conv_r", 
-                 "Next step"]
+    col_heads = ["Step", "t", "<h>", "d<h>",
+                 "Sx", "Sy", "Sz",
+                 "eta"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
-    
-    s.symm_gauge = True
-    
-    s.itr_atol = 1E-2
-    s.itr_rtol = 1E-10
-    
-    for i in xrange(total_steps):
-        T[i] = t
-        
+
+    eta = 1
+    i = 0
+    while True:
+        T.append(t)
+
+        s.update(auto_truncate=auto_truncate)
+
+        H.append(s.h_expect.real)
+
         row = [str(i)]
         row.append(str(t))
-        
-        eta = s.eta.real
-        row.append("%.4g" % eta)
-        
-        s.update()  
-            
-        E[i] = s.h / Jx #Note: J_x sets the scale!
-        row.append("%.15g" % E[i].real)
-        
-        if i > 0:        
-            dE = E[i].real - E[i - 1].real
+        row.append("%.15g" % H[-1])
+
+        if len(H) > 1:
+            dH = H[-1] - H[-2]
         else:
-            dE = E[i]
-        
-        row.append("%.2e" % (dE.real))
-            
+            dH = 0
+
+        row.append("%.2e" % (dH.real))
+
         """
-        Compute obserables!
+        Compute expectation values!
         """
-        
-        Sx[i] = s.expect_1s(x_ss) #Spin observables for site 3.
-        Sy[i] = s.expect_1s(y_ss)
-        Sz[i] = s.expect_1s(z_ss)
-        row.append("%.3g" % Sx[i].real)
-        row.append("%.3g" % Sy[i].real)
-        row.append("%.3g" % Sz[i].real)
-        
-        entr = s.S_hc
-        row.append("%.3g" % entr.real)
-        
-        row.append(str(s.conv_l))
-        row.append(str(s.conv_r))
-        
-        """
-        Switch to real time evolution if we have the ground state.
-        """
-        if expand and (loaded or (not real_time and i > 1 and eta < tol_im)):
-            grnd_fname = grnd_fname_fmt % (D, q, Jx, Jy, Jz, tol_im, step)        
-            
-            if not loaded:
-                s.save_state(grnd_fname)
-            
-            if loaded or i > 0:
-                D = D * 2
-                print "***MOVING TO D = " + str(D) + "***"
-                s.expand_D(D)
-                s.update()
-            
-            loaded = False
-        elif loaded or (not real_time and i > 1 and eta < tol_im):
-            real_time = True
-            
-            s.save_state(grnd_fname)
-            
-            s.ham = get_ham(S, Jx_2, Jy_2, Jz_2)
-            
-            step = realstep * 1.j
-            loaded = False
-            print 'Quenched parameters, starting real time evolution!'
-        
-        row.append(str(1.j * sp.conj(step)))
-        
-        if i > 2 and max(1E-13, abs(dE * Jx)) < s.itr_rtol * 10:
-            s.itr_atol = abs(dE * Jx) / 50
-            s.itr_rtol = abs(dE * Jx) / 50    
-        
+        exSx = s.expect_1s(Sx)
+        exSy = s.expect_1s(Sy)
+        exSz = s.expect_1s(Sz)
+        row.append("%.3g" % exSx.real)
+        row.append("%.3g" % exSy.real)
+        row.append("%.3g" % exSz.real)
+
         """
         Carry out next step!
         """
-        if not real_time:
-            print "\t".join(row)
-            s.take_step(step)
-            imsteps += 1
-        else:
-            print "\t".join(row)
-            s.take_step_RK4(step)
-        
-        t += 1.j * sp.conj(step)
-    
+        s.take_step(step)
+        t += 1.j * step
+
+        eta = s.eta.real
+        row.append("%.6g" % eta)
+
+        print "\t".join(row)
+
+        i += 1
+
+        """
+        Switch to real time evolution if we have the ground state.
+        """
+        if eta < tol_im or loaded:
+            s.save_state(grnd_fname)
+            print 'Finding excitations!'
+
+            ex_ev = []
+            ex_p = []
+            for p in sp.linspace(0, sp.pi, num=num_momenta):
+                print "p = ", p
+                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
+                ex_p.append([p] * num_excitations)
+            break
     """
     Simple plots of the results.
     """
-    
-    if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-        tau = T.imag[0:imsteps]
-        
-        fig1 = plt.figure(1)
-        fig2 = plt.figure(2) 
-        K1_tau = fig1.add_subplot(111)
-        K1_tau.set_xlabel('tau')
-        K1_tau.set_ylabel('H')
-        S_tau = fig2.add_subplot(111)
-        S_tau.set_xlabel('tau')
-        S_tau.set_ylabel('S_x')    
-        
-        K1_tau.plot(tau, E.real[0:imsteps])
-        S_tau.plot(tau, Sx.real[0:imsteps])
-    
-    #Now plot the real time evolution of K1 and Mx
-    t = T.real[imsteps + 1:]
-    fig3 = plt.figure(3)
-    fig4 = plt.figure(4)
-    
-    K1_t = fig3.add_subplot(111)
-    K1_t.set_xlabel('t')
-    K1_t.set_ylabel('H')
-    S_t = fig4.add_subplot(111)
-    S_t.set_xlabel('t')
-    S_t.set_ylabel('S_x')
-    
-    K1_t.plot(t, E.real[imsteps + 1:])
-    S_t.plot(t, Sx.real[imsteps + 1:])
-    
-    plt.show()
+    if plot_results:
+        import matplotlib.pyplot as plt
+
+        if not loaded: #Plot imaginary time evolution of K1 and Mx
+            tau = sp.array(T).imag
+
+            fig1 = plt.figure(1)
+            H_tau = fig1.add_subplot(111)
+            H_tau.set_xlabel('tau')
+            H_tau.set_ylabel('H')
+            H_tau.set_title('Imaginary time evolution: Energy')
+
+            H_tau.plot(tau, H)
+
+        plt.figure()
+        ex_p = sp.array(ex_p).ravel()
+        ex_ev = sp.array(ex_ev).ravel()
+        plt.plot(ex_p, ex_ev, 'bo', label='top. trivial')
+        plt.title('Excitation spectrum')
+        plt.xlabel('p')
+        plt.ylabel('dE')
+        plt.ylim(0, ex_ev.max() * 1.1)
+        plt.legend()
+
+        plt.show()

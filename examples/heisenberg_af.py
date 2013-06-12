@@ -39,18 +39,20 @@ zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squar
 
 plot_results = True
 
+sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
 """
 Next, we define our Hamiltonian and some observables.
 """
 Sx_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0],
-                                  [1, 0, 1],
-                                  [0, 1, 0]])
+                                 [1, 0, 1],
+                                 [0, 1, 0]])
 Sy_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0],
-                                        [-1, 0, 1],
-                                        [0, -1, 0]])
+                                       [-1, 0, 1],
+                                       [0, -1, 0]])
 Sz_s1 = sp.array([[1, 0, 0],
-                   [0, 0, 0],
-                   [0, 0, -1]])
+                  [0, 0, 0],
+                  [0, 0, -1]])
 
 Sx_pauli = sp.array([[0, 1],
                      [1, 0]])
@@ -106,12 +108,13 @@ Now we are ready to create an instance of the evoMPS class.
 """
 s = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, Jx, Jy, Jz))
 s.zero_tol = zero_tol
+s.sanity_checks = sanity_checks
 
 """
 The following loads a ground state from a file.
 The ground state will be saved automatically when it is declared found.
 """
-grnd_fname = "heis_af_N%d_D%d_q%d_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (N, qn, bond_dim, Jx, Jy, Jz, tol_im, step)
+grnd_fname = "heis_af_N%d_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (N, bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
 
 if load_saved_ground:
     try:
@@ -151,7 +154,7 @@ if __name__ == '__main__':
     print "Bond dimensions: " + str(s.D)
     print
     col_heads = ["Step", "t", "<H>", "d<H>",
-                 "sig_x_3", "sig_y_3", "sig_z_3",
+                 "Sx_3", "Sy_3", "Sz_3",
                  "eta"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
