@@ -9,15 +9,15 @@ To subclass, or not to subclass?
  Option 1:
      Sandwich contains gen and uni objects that store the actual state.
      Wrappers like getA() bridge the gaps.
-     
+
  Option 2:
      Sandwich is a subclass of generic MPS.
      Need to override stuff.
-     
+
  Option 3:
      Sandwich neither uses nor inherits from gen MPS.
      Duplication of code...
-     
+
  Problem: What to do for TDVP?
      If we inherit from gen MPS, can we still inherit from gen TDVP?
      ...Possibly
@@ -36,14 +36,16 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def __init__(self, N, uni_ground):
         self.odr = 'C'
         self.typ = sp.complex128
-        
-        self._sanity_checks = False        
-                
+
+        self.zero_tol = sp.finfo(self.typ).resolution
+
+        self._sanity_checks = False
+
         self.N = N
         self.N_centre = N / 2
         self.D = sp.repeat(uni_ground.D, self.N + 2)
         self.q = sp.repeat(uni_ground.q, self.N + 2)
-        
+
         self.uni_l = copy.deepcopy(uni_ground)
         self.uni_l.symm_gauge = False
         self.uni_l.sanity_checks = self.sanity_checks
@@ -53,7 +55,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.uni_r.sanity_checks = self.sanity_checks
         self.uni_r.symm_gauge = False
         self.uni_r.update()
-        
+
         self.grown_left = 0
         self.grown_right = 0
         self.shrunk_left = 0
@@ -67,7 +69,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.r[self.N] = self.uni_r.r
         self.r[self.N + 1] = self.r[self.N]
         self.l[0] = self.uni_l.l
-        
+
 
     def _init_arrays(self):
         #Deliberately add a None to the end to catch [-1] indexing!
@@ -83,24 +85,24 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.A[n] = sp.empty((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
-    
+
     @property
     def sanity_checks(self):
         return self._sanity_checks
-        
+
     @sanity_checks.setter
     def sanity_checks(self, value):
         self._sanity_checks = value
         self.uni_l.sanity_checks = value
         self.uni_r.sanity_checks = value
-    
+
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not implemented in sandwich case")
 
     def update(self, restore_cf=True, normalize=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
-        
+
         Return the excess energy.
         """
         if restore_cf:
@@ -113,9 +115,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             else:
                 self.calc_l()
                 self.calc_r()
-    
 
-    def calc_l(self, n_low=-1, n_high=-1):        
+
+    def calc_l(self, n_low=-1, n_high=-1):
         """Updates the l matrices using the current state.
         Implements step 5 of the TDVP algorithm or, equivalently, eqn. (41).
         (arXiv:1103.0936v2 [cond-mat.str-el])
@@ -124,7 +126,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             n_low = 1
         if n_high < 0:
             n_high = self.N + 1
-            
+
         super(EvoMPS_MPS_Sandwich, self).calc_l(n_low=n_low, n_high=n_high)
 
     def calc_r(self, n_low=-1, n_high=-1):
@@ -136,18 +138,18 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             n_low = 0
         if n_high < 0:
             n_high = self.N - 1
-        
+
         super(EvoMPS_MPS_Sandwich, self).calc_r(n_low=n_low, n_high=n_high)
-        
+
     def simple_renorm(self, update_lr=True):
         """Renormalizes the state in by multiplying one of the parameter
         tensors by a factor.
         """
         norm = mm.adot(self.l[self.N_centre - 1], self.r[self.N_centre - 1])
-        
+
         if abs(1 - norm) > 1E-15:
             self.A[self.N_centre] *= 1 / sp.sqrt(norm)
-            
+
         if update_lr:
             self.calc_l(n_low=self.N_centre)
             self.calc_r(n_high=self.N_centre)
@@ -186,39 +188,39 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
     def _restore_CF_ONR(self):
         nc = self.N_centre
-        
+
         #Want: r[n >= nc] = eye
         Gi = None
         for n in xrange(self.N + 1, nc, -1):
-            self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n], 
+            self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
                                              Gi, zero_tol=self.zero_tol,
                                              sanity_checks=self.sanity_checks)
-                                             
+
             if n == self.N + 1:
                 self.uni_r.l = Gm1_i.conj().T.dot(self.uni_r.l.dot(Gm1_i))
-                
+
             Gi = Gm1_i
-        
+
         self.r[self.N + 1] = self.r[self.N]
-        
+
         #G is now G_nc
         for s in xrange(self.q[nc]):
             self.A[nc][s] = self.A[nc][s].dot(Gi)
-        
+
         #Now want: l[n < nc] = eye
         Gm1 = None
         lm1 = self.l[0]
         for n in xrange(nc):
-            self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], lm1, Gm1, 
+            self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], lm1, Gm1,
                                                 zero_tol=self.zero_tol,
                                                 sanity_checks=self.sanity_checks)
-            
+
             if n == 0:
                 self.uni_l.r = G.dot(self.uni_l.r.dot(G.conj().T))
 
             lm1 = self.l[n]
             Gm1 = G
-        
+
         #Gm1 is now G_nc-1
         for s in xrange(self.q[nc]):
             self.A[nc][s] = Gm1.dot(self.A[nc][s])
@@ -228,33 +230,33 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         nc = self.N_centre
 
         self.S_hc = sp.zeros((self.N + 1), dtype=sp.complex128)
-        
+
         #Want: r[0 <= n < nc] diagonal
         Ui = sp.eye(self.D[nc], dtype=self.typ)
         for n in xrange(nc, 0, -1):
-            self.r[n - 1], Um1, Um1_i = tm.restore_LCF_r(self.A[n], self.r[n], 
+            self.r[n - 1], Um1, Um1_i = tm.restore_LCF_r(self.A[n], self.r[n],
                                                          Ui, sanity_checks=self.sanity_checks)
-            
+
             self.S_hc[n - 1] = -sp.sum(self.r[n - 1].diag * sp.log2(self.r[n - 1].diag))
-                                             
+
             Ui = Um1_i
-            
+
         #Now U is U_0
         U = Um1
         for s in xrange(self.q[0]):
             self.A[0][s] = U.dot(self.A[0][s]).dot(Ui)
         self.uni_l.r = U.dot(self.uni_l.r.dot(U.conj().T))
-        
+
         #And now: l[nc <= n <= N] diagonal
         Um1 = mm.eyemat(self.D[nc - 1], dtype=self.typ)
         for n in xrange(nc, self.N + 1):
-            self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1, 
+            self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1,
                                                 sanity_checks=self.sanity_checks)
-                                                
+
             self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
-                                             
+
             Um1 = U
-            
+
         #Now, Um1 = U_N
         Um1_i = Ui
         for s in xrange(self.q[0]):
@@ -272,11 +274,11 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             print (h_left_before, h_before, h_right_before)
 
         self._restore_CF_ONR()
-        
+
         nc = self.N_centre
         self.r[nc - 1] = tm.eps_r_noop(self.r[nc], self.A[nc], self.A[nc])
         self.simple_renorm(update_lr=False)
-        
+
         if dbg:
             self.calc_l()
             self.calc_r()
@@ -292,7 +294,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.uni_l.l = self.l[0]
         self.uni_l.l_before_CF = self.uni_l.l
         self.uni_l.r_before_CF = self.uni_l.r
-        
+
         if self.sanity_checks:
             self.uni_l.A = self.uni_l.A.copy()
             #self.uni_l.l = self.uni_l.l.copy()
@@ -300,7 +302,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.uni_l.calc_lr() #Ensures largest ev of E=1
             if dbg:
                 print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
-            #uniform calc_lr() scales for RCF, but we have LCF, 
+            #uniform calc_lr() scales for RCF, but we have LCF,
             #so we have to correct the scaling here
             fac = self.uni_l.D / self.uni_l.l.trace().real
             if dbg:
@@ -316,7 +318,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
             if not sp.allclose(self.uni_l.A, self.A[0], atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in restore_CF!: A[0] was scaled!", la.norm(self.A[0] - self.uni_l.A)
-                
+
             self.uni_l.l = self.l[0]
             self.uni_l.r = r_old
             self.uni_l.A = self.A[0]
@@ -334,25 +336,25 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.uni_r.calc_lr() #Ensures largest ev of E=1
             if dbg:
                 print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
-            
+
             if not sp.allclose(self.uni_r.A, self.A[self.N + 1], atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in restore_CF!: A[R] was scaled! ", la.norm(self.A[self.N + 1] - self.uni_r.A)
-            
+
             if not sp.allclose(l_old, self.uni_r.l, atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in restore_CF!: Bad l[R]! ", la.norm(l_old - self.uni_r.l)
 
             if not sp.allclose(self.r[self.N], self.uni_r.r, atol=1E-12, rtol=1E-12):
                 print "Sanity Fail in restore_CF!: r[N] and r[R] mismatch!", la.norm(self.r[self.N] - self.uni_r.r)
-            
+
             self.uni_r.l = l_old
             self.uni_r.r = self.r[self.N]
             self.uni_r.A = self.A[self.N + 1]
-        
+
         #Set l[N + 1] as well...
-        self.l[self.N + 1][:] = tm.eps_l_noop(self.l[self.N], 
-                                              self.A[self.N + 1], 
+        self.l[self.N + 1][:] = tm.eps_l_noop(self.l[self.N],
+                                              self.A[self.N + 1],
                                               self.A[self.N + 1])
-                
+
         if self.sanity_checks:
             l_n = self.l[0]
             for n in xrange(0, self.N + 1):
@@ -375,27 +377,27 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
             print (h_after.sum() - h_before.sum() + h_left_after - h_left_before
                    + h_right_after - h_right_before)
-                   
-        
+
+
     def check_RCF(self):
         raise NotImplementedError("check_RCF not implemented in sandwich case")
-    
+
     def grow_left(self, m):
         """Grow the generic region to the left by m sites.
         """
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
-        
+
         oldD = self.D
         oldq = self.q
 
         self.D = sp.zeros((self.N + m + 2), dtype=int)
         self.q = sp.zeros((self.N + m + 2), dtype=int)
-        
+
         self.D[m:] = oldD
         self.q[m:] = oldq
-        
+
         self.D[:m] = [self.uni_l.D] * m
         self.q[:m] = [self.uni_l.q] * m
 
@@ -411,7 +413,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
-        
+
         self.grown_left += m
 
 
@@ -421,16 +423,16 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
-        
+
         oldD = self.D
         oldq = self.q
 
         self.D = sp.zeros((self.N + m + 2), dtype=int)
         self.q = sp.zeros((self.N + m + 2), dtype=int)
-        
+
         self.D[:-m] = oldD
         self.q[:-m] = oldq
-        
+
         self.D[-m:] = [self.uni_l.D] * m
         self.q[-m:] = [self.uni_l.q] * m
 
@@ -446,10 +448,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
-        
+
         self.grown_right += m
-        
-    
+
+
     def shrink_left(self, m):
         """Experimental shrinking of the state.
         Generic-section matrices are simply replaced
@@ -467,22 +469,22 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         for n in xrange(self.N + 2):
             self.A[n][:] = oldA[n + m]
-            
+
         self.A[0][:] = oldA[0]
 
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
-        
+
         self.shrunk_left += m
-        
+
     def shrink_right(self, m):
         """See shrink_left().
         """
         oldA = self.A
         oldl_0 = self.l[0]
         oldr_N = self.r[self.N]
-        
+
         self.D = self.D[:-m]
         self.q = self.q[:-m]
 
@@ -491,16 +493,16 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         for n in xrange(self.N + 1):
             self.A[n][:] = oldA[n]
-            
+
         for n in xrange(self.N + 1, self.N + 2):
             self.A[n][:] = oldA[n + m]
 
         self.l[0] = oldl_0
         self.r[self.N] = oldr_N
         self.r[self.N + 1] = self.r[self.N]
-        
+
         self.shrunk_right += m
-    
+
     def get_A(self, n):
         if n < 0:
             return self.A[0]
@@ -508,7 +510,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             return self.A[self.N + 1]
         else:
             return self.A[n]
-    
+
     def get_l(self, n):
         """Gets an l[n], even if n < 0 or n > N + 1
         """
@@ -553,23 +555,23 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             The operator.
         n : int
             The site number.
-        """        
+        """
         A = self.get_A(n)
 
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (A.shape[0], A.shape[0]))
-            
+
         res = tm.eps_r_op_1s(self.get_r(n), A, A, op)
         return mm.adot(self.get_l(n - 1), res)
 
     def expect_2s(self, op, n):
         """Computes the expectation value of a nearest-neighbour two-site operator.
-        
-        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array 
-        such that op[s, t, u, v] = <st|op|uv> or a function of the form 
+
+        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array
+        such that op[s, t, u, v] = <st|op|uv> or a function of the form
         op(s, t, u, v) = <st|op|uv>.
-        
+
         Parameters
         ----------
         o : ndarray or callable
@@ -580,11 +582,11 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         A = self.get_A(n)
         Ap1 = self.get_A(n + 1)
         AA = tm.calc_AA(A, Ap1)
-        
+
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (A.shape[0], Ap1.shape[0], A.shape[0], Ap1.shape[0]))
-            
+
         C = tm.calc_C_mat_op_AA(op, AA)
         res = tm.eps_r_op_2s_C12_AA34(self.get_r(n + 1), C, AA)
         return mm.adot(self.get_l(n - 1), res)
@@ -608,18 +610,18 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             The site number of the first site.
         n2 : int
             The site number of the second site (must be > n1).
-        """        
+        """
         A1 = self.get_A(n1)
         A2 = self.get_A(n2)
 
         if callable(op1):
             op1 = sp.vectorize(op1, otypes=[sp.complex128])
-            op1 = sp.fromfunction(op1, (A1.shape[0], A1.shape[0]))        
-        
+            op1 = sp.fromfunction(op1, (A1.shape[0], A1.shape[0]))
+
         if callable(op2):
             op2 = sp.vectorize(op2, otypes=[sp.complex128])
-            op2 = sp.fromfunction(op2, (A2.shape[0], A2.shape[0]))        
-        
+            op2 = sp.fromfunction(op2, (A2.shape[0], A2.shape[0]))
+
         r_n = tm.eps_r_op_1s(self.get_r(n2), A2, A2, op2)
 
         for n in reversed(xrange(n1 + 1, n2)):
@@ -661,15 +663,15 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
     def apply_op_1s(self, op, n):
         """Applies a one-site operator op to site n.
-        
+
         Can be used to create excitations.
         """
-        
+
         if not (0 < n <= self.N):
             raise ValueError("Operators can only be applied to sites 1 to N!")
-        
+
         newA = sp.zeros_like(self.A[n])
-        
+
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (self.q[n], self.q[n]))
@@ -679,42 +681,42 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
                 newA[s] += self.A[n][t] * op[s, t]
 
         self.A[n] = newA
-        
+
     def overlap(self, other, sanity_checks=False):
         if not self.N == other.N:
             print "States must have same number of non-uniform sites!"
             return
-            
+
         if not sp.all(self.D == other.D):
             print "States must have same bond-dimensions!"
             return
-            
+
         if not sp.all(self.q == other.q):
             print "States must have same Hilbert-space dimensions!"
             return
-        
+
         dL, phiL, gLl = self.uni_l.fidelity_per_site(other.uni_l, full_output=True, left=True)
-        
+
         dR, phiR, gRr = self.uni_r.fidelity_per_site(other.uni_r, full_output=True, left=False)
-        
+
         gLl = gLl.reshape(self.uni_l.D, self.uni_l.D)
         gRr = gRr.reshape(self.uni_r.D, self.uni_r.D)
-        
+
         gr = mm.H(la.inv(gRr).dot(sp.asarray(self.uni_r.r)))
         gri = mm.H(la.inv(sp.asarray(self.uni_r.r)).dot(gRr))
-        
+
         if sanity_checks:
-            AR = other.uni_r.A.copy()        
+            AR = other.uni_r.A.copy()
             for s in xrange(AR.shape[0]):
                 AR[s] = gr.dot(AR[s]).dot(gri)
-                
+
             print la.norm(AR - self.uni_r.A)
-        
+
         r = gr.dot(sp.asarray(other.uni_r.r)).dot(mm.H(gr))
-        fac = la.norm(sp.asarray(self.uni_r.r)) / la.norm(r)        
+        fac = la.norm(sp.asarray(self.uni_r.r)) / la.norm(r)
         gr *= sp.sqrt(fac)
         gri /= sp.sqrt(fac)
-        
+
         if sanity_checks:
             r *= fac
             print la.norm(r - self.uni_r.r)
@@ -727,48 +729,48 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         gl = la.inv(sp.asarray(self.uni_l.l)).dot(gLl)
         gli = la.inv(gLl).dot(sp.asarray(self.uni_l.l))
-        
+
         l = mm.H(gli).dot(sp.asarray(other.uni_l.l)).dot(gli)
         fac = la.norm(sp.asarray(self.uni_l.l)) / la.norm(l)
 
         gli *= sp.sqrt(fac)
         gl /= sp.sqrt(fac)
-        
+
         if sanity_checks:
             l *= fac
             print la.norm(l - self.uni_l.l)
-        
+
             l = mm.H(gli).dot(sp.asarray(other.uni_l.l)).dot(gli)
             print la.norm(l - self.uni_l.l)
-        
+
         #print (dL, dR, phiL, phiR)
 
         if not abs(dL - 1) < 1E-12:
             print "Left bulk states do not match!"
             return 0
-            
+
         if not abs(dR - 1) < 1E-12:
             print "Right bulk states do not match!"
             return 0
-                    
+
         AN = other.A[self.N].copy()
         for s in xrange(AN.shape[0]):
             AN[s] = AN[s].dot(gri)
-            
+
         A1 = other.A[1].copy()
         for s in xrange(A1.shape[0]):
             A1[s] = gl.dot(A1[s])
-        
+
         r = tm.eps_r_noop(self.uni_r.r, self.A[self.N], AN)
         for n in xrange(self.N - 1, 1, -1):
             r = tm.eps_r_noop(r, self.A[n], other.A[n])
         r = tm.eps_r_noop(r, self.A[1], A1)
-    
+
         return mm.adot(self.uni_l.l, r)
 
     def save_state(self, file):
         raise NotImplementedError("save_state not implemented in sandwich case")
 
-        
+
     def load_state(self, file):
         raise NotImplementedError("load_state not implemented in sandwich case")
