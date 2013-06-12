@@ -297,7 +297,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-6, k=2, ncv=None, one_tol=1E-14):
+    def correlation_length(self, tol=1E-12, k=2, ncv=None):
         """
         Calculates the correlation length in units of the lattice spacing.
         
@@ -314,18 +314,24 @@ class EvoMPS_MPS_Uniform(object):
         """
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         
-        print ev
+        ev.sort()
                           
-        ind = sp.argmin(abs(1 - abs(ev)) > one_tol)
+        ev1 = abs(ev[-1])
         
-        if ind > 0:
-            mag = abs(ev[ind - 1])
+        if abs(ev1 - 1) > tol:
+            print "Warning: Largest eigenvalue != 1"
+
+        while True:
+            if ev.shape[0] > 1 and abs(ev[-1] - ev1) < tol:
+                ev = ev[:-1]
         else:
-            print "Warning: No eigenvalues with magnitude significantly different to 1 detected."
+                break
+
+        if ev.shape[0] == 0:
+            print "Warning: No eigenvalues detected with magnitude significantly different to largest."
             return sp.NaN
         
-        if mag > 1:
-            print "Warning: Largest eigenvalue != 1"
+        mag = abs(ev[-1])
         
         return -1 / sp.log(mag)
                 
@@ -1193,4 +1199,3 @@ class EvoMPS_MPS_Uniform(object):
         self.r[oldD:, :oldD].fill(la.norm(oldr) / oldD**2)
         self.r[:oldD, oldD:].fill(la.norm(oldr) / oldD**2)
         self.r[oldD:, oldD:].fill(la.norm(oldr) / oldD**2)
-        
