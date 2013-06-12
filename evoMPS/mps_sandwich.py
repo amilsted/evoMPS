@@ -270,6 +270,58 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             h_before, h_left_before, h_right_before = self.restore_CF_dbg()
 
             print (h_left_before, h_before, h_right_before)
+            
+        self.uni_l.A = self.uni_l.A #.copy()
+        #self.uni_l.l = self.uni_l.l.copy()
+        #r_old = self.uni_l.r.copy()
+        self.uni_l.calc_lr() #Ensures largest ev of E=1
+        if dbg:
+            print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
+        #uniform calc_lr() scales for RCF, but we have LCF, 
+        #so we have to correct the scaling here
+        fac = self.uni_l.D / self.uni_l.l.trace().real
+        if dbg:
+            print "Scale l[0]: %g" % fac
+        self.uni_l.l *= fac
+        self.uni_l.r *= 1/fac
+        
+        if self.sanity_checks:
+            if not sp.allclose(self.uni_l.l, self.l[0], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: True l[0] and l[L] mismatch!", la.norm(self.l[0] - self.uni_l.l)
+
+            if not sp.allclose(self.uni_l.r, r_old, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: Bad r[L]!", la.norm(r_old - self.uni_l.r)
+
+            if not sp.allclose(self.uni_l.A, self.A[0], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: A[0] was scaled!", la.norm(self.A[0] - self.uni_l.A)
+                
+        #self.uni_l.l = self.l[0]
+        #self.uni_l.r = r_old
+        #self.uni_l.A = self.A[0]
+        self.l[0] = self.uni_l.l
+        self.A[0] = self.uni_l.A
+        
+        self.uni_r.A = self.uni_r.A #.copy()
+        self.uni_r.r = self.uni_r.r #.copy()
+        #l_old = self.uni_r.l.copy()
+        self.uni_r.calc_lr() #Ensures largest ev of E=1
+        if dbg:
+            print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
+        if self.sanity_checks:
+            if not sp.allclose(self.uni_r.A, self.A[self.N + 1], atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: A[R] was scaled! ", la.norm(self.A[self.N + 1] - self.uni_r.A)
+            
+            if not sp.allclose(l_old, self.uni_r.l, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: Bad l[R]! ", la.norm(l_old - self.uni_r.l)
+
+            if not sp.allclose(self.r[self.N], self.uni_r.r, atol=1E-12, rtol=1E-12):
+                print "Sanity Fail in restore_CF!: r[N] and r[R] mismatch!", la.norm(self.r[self.N] - self.uni_r.r)
+            
+        #self.uni_r.l = l_old
+        #self.uni_r.r = self.r[self.N]
+        #self.uni_r.A = self.A[self.N + 1]
+        self.r[self.N] = self.uni_r.r
+        self.A[self.N + 1] = self.uni_r.A
 
         self._restore_CF_ONR()
         
@@ -292,61 +344,12 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.uni_l.l = self.l[0]
         self.uni_l.l_before_CF = self.uni_l.l
         self.uni_l.r_before_CF = self.uni_l.r
-        
-        if self.sanity_checks:
-            self.uni_l.A = self.uni_l.A.copy()
-            #self.uni_l.l = self.uni_l.l.copy()
-            r_old = self.uni_l.r.copy()
-            self.uni_l.calc_lr() #Ensures largest ev of E=1
-            if dbg:
-                print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
-            #uniform calc_lr() scales for RCF, but we have LCF, 
-            #so we have to correct the scaling here
-            fac = self.uni_l.D / self.uni_l.l.trace().real
-            if dbg:
-                print "Scale l[0]: %g" % fac
-            self.uni_l.l *= fac
-            self.uni_l.r *= 1/fac
-
-            if not sp.allclose(self.uni_l.l, self.l[0], atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: True l[0] and l[L] mismatch!", la.norm(self.l[0] - self.uni_l.l)
-
-            if not sp.allclose(self.uni_l.r, r_old, atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: Bad r[L]!", la.norm(r_old - self.uni_l.r)
-
-            if not sp.allclose(self.uni_l.A, self.A[0], atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: A[0] was scaled!", la.norm(self.A[0] - self.uni_l.A)
-                
-            self.uni_l.l = self.l[0]
-            self.uni_l.r = r_old
-            self.uni_l.A = self.A[0]
 
         #r[N] is identity, l_R = ?
         self.uni_r.A = self.A[self.N + 1]
         self.uni_r.r = self.r[self.N]
         self.uni_r.l_before_CF = self.uni_r.l
         self.uni_r.r_before_CF = self.uni_r.r
-
-        if self.sanity_checks:
-            self.uni_r.A = self.uni_r.A.copy()
-            self.uni_r.r = self.uni_r.r.copy()
-            l_old = self.uni_r.l.copy()
-            self.uni_r.calc_lr() #Ensures largest ev of E=1
-            if dbg:
-                print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
-            
-            if not sp.allclose(self.uni_r.A, self.A[self.N + 1], atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: A[R] was scaled! ", la.norm(self.A[self.N + 1] - self.uni_r.A)
-            
-            if not sp.allclose(l_old, self.uni_r.l, atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: Bad l[R]! ", la.norm(l_old - self.uni_r.l)
-
-            if not sp.allclose(self.r[self.N], self.uni_r.r, atol=1E-12, rtol=1E-12):
-                print "Sanity Fail in restore_CF!: r[N] and r[R] mismatch!", la.norm(self.r[self.N] - self.uni_r.r)
-            
-            self.uni_r.l = l_old
-            self.uni_r.r = self.r[self.N]
-            self.uni_r.A = self.A[self.N + 1]
         
         #Set l[N + 1] as well...
         self.l[self.N + 1][:] = tm.eps_l_noop(self.l[self.N], 
