@@ -38,11 +38,11 @@ plot_results = True
 """
 Next, we define our Hamiltonian and some observables.
 """
-x_ss = sp.array([[0, 1],
+Sx = sp.array([[0, 1],
                  [1, 0]])
-y_ss = 1.j * sp.array([[0, -1],
+Sy = 1.j * sp.array([[0, -1],
                        [1, 0]])
-z_ss = sp.array([[1, 0],
+Sz = sp.array([[1, 0],
                  [0, -1]])
 
 """
@@ -57,8 +57,8 @@ The following function will return a Hamiltonian for the chain, given the
 length N and the parameters J and h.
 """
 def get_ham(N, J, h):
-    ham = -J * (sp.kron(x_ss, x_ss) + h * sp.kron(z_ss, sp.eye(2))).reshape(2, 2, 2, 2)
-    ham_end = ham + h * sp.kron(sp.eye(2), z_ss).reshape(2, 2, 2, 2)
+    ham = -J * (sp.kron(Sx, Sx) + h * sp.kron(Sz, sp.eye(2))).reshape(2, 2, 2, 2)
+    ham_end = ham + h * sp.kron(sp.eye(2), Sz).reshape(2, 2, 2, 2)
     return [None] + [ham] * (N - 2) + [ham_end]
 
 """
@@ -167,14 +167,14 @@ if __name__ == '__main__':
         """
         Compute expectation values!
         """
-        Sx_3 = s.expect_1s(x_ss, 3) #Spin observables for site 3.
-        Sy_3 = s.expect_1s(y_ss, 3)
-        Sz_3 = s.expect_1s(z_ss, 3)
+        Sx_3 = s.expect_1s(Sx, 3) #Spin observables for site 3.
+        Sy_3 = s.expect_1s(Sy, 3)
+        Sz_3 = s.expect_1s(Sz, 3)
         row.append("%.3g" % Sx_3.real)
         row.append("%.3g" % Sy_3.real)
         row.append("%.3g" % Sz_3.real)
 
-        m_n = map(lambda n: s.expect_1s(z_ss, n).real, xrange(1, N + 1)) #Magnetization
+        m_n = map(lambda n: s.expect_1s(Sz, n).real, xrange(1, N + 1)) #Magnetization
         m = sp.sum(m_n)
 
         row.append("%.9g" % m)

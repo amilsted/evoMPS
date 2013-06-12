@@ -41,11 +41,11 @@ plot_results = True
 """
 Next, we define our Hamiltonian and some observables.
 """
-x_ss = sp.array([[0, 1],
+Sx = sp.array([[0, 1],
                  [1, 0]])
-y_ss = 1.j * sp.array([[0, -1],
+Sy = 1.j * sp.array([[0, -1],
                        [1, 0]])
-z_ss = sp.array([[1, 0],
+Sz = sp.array([[1, 0],
                  [0, -1]])
 
 """
@@ -60,7 +60,7 @@ The following function will return a Hamiltonian for the chain, given the
 the parameters J and h.
 """
 def get_ham(J, h):
-    ham = -J * (sp.kron(x_ss, x_ss) + h * sp.kron(z_ss, sp.eye(2))).reshape(2, 2, 2, 2)
+    ham = -J * (sp.kron(Sx, Sx) + h * sp.kron(Sz, sp.eye(2))).reshape(2, 2, 2, 2)
     return ham
 
 lam = J / h
@@ -139,14 +139,14 @@ if __name__ == '__main__':
         """
         Compute expectation values!
         """
-        Sx = s.expect_1s(x_ss)
-        Sy = s.expect_1s(y_ss)
-        Sz = s.expect_1s(z_ss)
-        row.append("%.3g" % Sx.real)
-        row.append("%.3g" % Sy.real)
-        row.append("%.3g" % Sz.real)
+        exSx = s.expect_1s(Sx)
+        exSy = s.expect_1s(Sy)
+        exSz = s.expect_1s(Sz)
+        row.append("%.3g" % exSx.real)
+        row.append("%.3g" % exSy.real)
+        row.append("%.3g" % exSz.real)
 
-        M.append(Sz.real)
+        M.append(exSz.real)
 
         """
         Carry out next step!
@@ -169,7 +169,7 @@ if __name__ == '__main__':
             print 'Finding excitations!'
             if top_non_triv:
                 s2 = copy.deepcopy(s)
-                flip_x = la.expm(1.j * sp.pi / 2. * z_ss)
+                flip_x = la.expm(1.j * sp.pi / 2. * Sz)
                 s2.apply_op_1s(flip_x)
                 s2.update()
             ex_ev = []
