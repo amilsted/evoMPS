@@ -217,6 +217,11 @@ if __name__ == '__main__':
         plt.plot(ex_p, ex_ev, 'bo', label='top. trivial')
         if top_non_triv:
             plt.plot(ex_p, ex_ev_nt, 'ro', label='top. non-trivial')
+
+        elem_ex = lambda p: 2 * J * sp.sqrt(1 + h**2 / J**2 - 2 * h / J * sp.cos(p))
+        p = sp.linspace(0, sp.pi, num=100)
+        plt.plot(p, elem_ex(p), 'c-', label='exact elem. excitation')
+
         plt.title('Excitation spectrum')
         plt.xlabel('p')
         plt.ylabel('dE')
