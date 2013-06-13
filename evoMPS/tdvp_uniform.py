@@ -20,7 +20,7 @@ from mps_uniform import EvoMPS_MPS_Uniform
 from mps_uniform_pinv import pinv_1mE
         
 class Excite_H_Op:
-    def __init__(self, tdvp, donor, p):
+    def __init__(self, tdvp, donor, p, verbose=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -59,10 +59,13 @@ class Excite_H_Op:
         self.M_prev = None
         self.y_pi_prev = None
     
+        self.verbose = verbose
+
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
         
         self.calls += 1
+        if self.verbose:
         print "Calls: %u" % self.calls
         
         res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.donor, 
@@ -885,7 +888,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return res, M, y_pi        
     
-    def _prepare_excite_op_top_triv(self, p):
+    def _prepare_excite_op_top_triv(self, p, verbose=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
 
@@ -893,13 +896,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, self, p)
+        op = Excite_H_Op(self, self, p, verbose=verbose)
 
         return op        
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None,
-                        which='SM', return_eigenvectors=False):
+                        which='SM', return_eigenvectors=False, verbose=False):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -932,6 +935,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Which eigenvalues to find ('SM' means the k smallest).
         return_eigenvectors : bool
             Whether to return eigenvectors as well as eigenvalues.
+        verbose : bool
+            Whether to print the number of calls for each matvec operation.
             
         Returns
         -------
@@ -940,7 +945,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_triv(p)
+        op = self._prepare_excite_op_top_triv(p, verbose=verbose)
         
         res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
                          return_eigenvectors=return_eigenvectors, 
@@ -948,8 +953,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_triv(p)
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, verbose=False):
+        op = self._prepare_excite_op_top_triv(p, verbose=verbose)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -965,7 +970,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _prepare_excite_op_top_nontriv(self, donor, p):
+    def _prepare_excite_op_top_nontriv(self, donor, p, verbose=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -986,14 +991,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         donor.calc_l_r_roots()
         donor.Vsh = tm.calc_Vsh(donor.A, donor.r_sqrt, sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, donor, p)
+        op = Excite_H_Op(self, donor, p, verbose=verbose)
 
         return op 
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+                           ncv=None, verbose=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p, verbose=verbose)
                             
         res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
                             return_eigenvectors=return_eigenvectors, 
@@ -1001,8 +1006,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return res
         
-    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
+                                 verbose=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p, verbose=verbose)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
