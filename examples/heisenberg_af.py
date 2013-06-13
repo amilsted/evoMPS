@@ -24,15 +24,15 @@ Jz = 1.00
 
 Jx_quench = 1                 #Factors after quench
 Jy_quench = 1
-Jz_quench = 0.5
+Jz_quench = 2
 
 tol_im = 1E-6                 #Ground state tolerance (norm of projected evolution vector)
 
 step = 0.1                    #Imaginary time step size
 realstep = 0.01               #Real time step size
-real_steps = 100              #Number of real time steps to simulate
+real_steps = 1000             #Number of real time steps to simulate
 
-load_saved_ground = False     #Whether to load a saved ground state
+load_saved_ground = True      #Whether to load a saved ground state
 
 auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
