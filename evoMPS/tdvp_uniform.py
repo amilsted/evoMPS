@@ -66,7 +66,7 @@ class Excite_H_Op:
         
         self.calls += 1
         if self.verbose:
-        print "Calls: %u" % self.calls
+            print "Calls: %u" % self.calls
         
         res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.donor, 
                                                          *self.prereq,
