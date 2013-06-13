@@ -327,7 +327,7 @@ class EvoMPS_MPS_Uniform(object):
         while True:
             if ev.shape[0] > 1 and abs(ev[-1] - ev1) < tol:
                 ev = ev[:-1]
-        else:
+            else:
                 break
 
         if ev.shape[0] == 0:
