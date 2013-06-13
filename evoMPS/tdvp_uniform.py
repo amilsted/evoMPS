@@ -1023,7 +1023,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         
     def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
-                         trybracket=True):
+                         trybracket=True, verbose=False):
         taus=[]
         hs=[]
         
@@ -1106,7 +1106,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                     maxiter=20,
                                                     full_output=True)
         except ValueError:
-            log.warning("Bracketing attempt failed...")
+            log.debug("Bracketing attempt failed...")
             tau_opt, h_min, itr, calls = opti.brent(f, 
                                                     brack=fb_brack, 
                                                     tol=tol,
@@ -1167,7 +1167,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return h.real < self.h.real, h
 
-    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False):
+    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False, verbose=False):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
@@ -1185,13 +1185,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if reset:
             beta = 0.
-            log.warning("RESET CG")
+            log.debug("RESET CG")
             
             B_CG = B
         else:
             beta = (eta**2) / eta_0**2
         
-            log.warning("BetaFR = %s", beta)
+            log.debug("BetaFR = %s", beta)
         
             beta = max(0, beta.real)
         
@@ -1202,17 +1202,17 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         rb0 = self.r_before_CF.copy()
         
         tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
-                                           trybracket=False)
+                                           trybracket=False, verbose=verbose)
             
         if self.h.real < h_min:
-            log.warning("RESET due to energy rise!")
+            log.debug("RESET due to energy rise!")
             B_CG = B
             self.l_before_CF = lb0
             self.r_before_CF = rb0
             tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
             if self.h.real < h_min:
-                log.warning("RESET FAILED: Setting tau=0!")
+                log.debug("RESET FAILED: Setting tau=0!")
                 self.l_before_CF = lb0
                 self.r_before_CF = rb0
                 tau = 0
