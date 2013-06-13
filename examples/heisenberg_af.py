@@ -3,266 +3,286 @@
 
 """
 A demonstration of evoMPS by simulation of quench dynamics
-for the transverse Ising model.
+for the Heisenberg model.
 
 @author: Ashley Milsted
 """
-
-import scipy as sp
-import scipy.linalg as la
-import matplotlib.pyplot as plt
 import math as ma
-
-import evoMPS.tdvp_gen as tdvp_gen
-
-x_ss_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0], 
-                                   [1, 0, 1], 
-                                   [0, 1, 0]])
-y_ss_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0], 
-                                         [-1, 0, 1], 
-                                         [0, -1, 0]])
-z_ss_s1 = sp.array([[1, 0, 0], 
-                    [0, 0, 0], 
-                    [0, 0, -1]])
-                    
-x_ss_pauli = sp.array([[0, 1], 
-                       [1, 0]])
-y_ss_pauli = 1.j * sp.array([[0, -1], 
-                             [1, 0]])
-z_ss_pauli = sp.array([[1, 0], 
-                       [0, -1]])
-
-def get_ham(S, Jx, Jy, Jz):
-    if S == 1:
-        return (Jx * sp.kron(x_ss_s1, x_ss_s1) 
-                + Jy * sp.kron(y_ss_s1, y_ss_s1)
-                + Jz * sp.kron(z_ss_s1, z_ss_s1)).reshape(3, 3, 3, 3)
-    elif S == 0.5:
-        return (Jx * sp.kron(x_ss_pauli, x_ss_pauli) 
-                + Jy * sp.kron(y_ss_pauli, y_ss_pauli)
-                + Jz * sp.kron(z_ss_pauli, z_ss_pauli)).reshape(2, 2, 2, 2)
-    else:
-        return None
+import scipy as sp
+import evoMPS.tdvp_gen as tdvp
 
 """
-Choose spin-1 or spin-1/2.
+First, we set up some global variables to be used as parameters.
 """
-q = 0
-S = 1
+S = 1                         #Spin: Can be 0.5 or 1.
+N = 10                        #The length of the finite spin chain.
+bond_dim = 32                 #The maximum bond dimension
+
+Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
+Jy = 1.00
+Jz = 1.00
+
+Jx_quench = 1                 #Factors after quench
+Jy_quench = 1
+Jz_quench = 2
+
+tol_im = 1E-6                 #Ground state tolerance (norm of projected evolution vector)
+
+step = 0.1                    #Imaginary time step size
+realstep = 0.01               #Real time step size
+real_steps = 1000             #Number of real time steps to simulate
+
+load_saved_ground = True      #Whether to load a saved ground state
+
+auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
+zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+
+plot_results = True
+
+sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
+"""
+Next, we define our Hamiltonian and some observables.
+"""
+Sx_s1 = ma.sqrt(0.5) * sp.array([[0, 1, 0],
+                                 [1, 0, 1],
+                                 [0, 1, 0]])
+Sy_s1 = ma.sqrt(0.5) * 1.j * sp.array([[0, 1, 0],
+                                       [-1, 0, 1],
+                                       [0, -1, 0]])
+Sz_s1 = sp.array([[1, 0, 0],
+                  [0, 0, 0],
+                  [0, 0, -1]])
+
+Sx_pauli = sp.array([[0, 1],
+                     [1, 0]])
+Sy_pauli = 1.j * sp.array([[0, -1],
+                           [1, 0]])
+Sz_pauli = sp.array([[1, 0],
+                     [0, -1]])
 
 if S == 0.5:
-    q = 2
-    z_ss = z_ss_pauli
-    y_ss = y_ss_pauli
-    x_ss = x_ss_pauli
+    qn = 2
+    Sz = Sz_pauli
+    Sy = Sy_pauli
+    Sx = Sx_pauli
 elif S == 1:
-    q = 3
-    z_ss = z_ss_s1
-    y_ss = y_ss_s1
-    x_ss = x_ss_s1
+    qn = 3
+    Sz = Sz_s1
+    Sy = Sy_s1
+    Sx = Sx_s1
 else:
     print "Only S = 1 or S = 1/2 are supported!"
     exit()
 
 """
-Next, we set up some global variables to be used as parameters to 
-the evoMPS class.
+A nearest-neighbour Hamiltonian is a sequence of 4-dimensional arrays, one for
+each pair of sites.
+For each term, the indices 0 and 1 are the 'bra' indices for the first and
+second sites and the indices 2 and 3 are the 'ket' indices:
+
+  ham[n][s,t,u,v] = <st|h|uv> (for sites n and n+1)
+
+The following function will return a Hamiltonian for the chain, given the
+length N and the parameters J and h.
 """
-
-N = 16 #The length of the finite spin chain.
-
+def get_ham(N, Jx, Jy, Jz):
+    h = (Jx * sp.kron(Sx, Sx) + Jy * sp.kron(Sy, Sy)
+         + Jz * sp.kron(Sz, Sz)).reshape(qn, qn, qn, qn)
+    return [h] * N
 
 """
-The bond dimension for each site is given as a vector, length N.
+The bond dimension for each site is given as a vector, length N + 1.
 Here we set the bond dimension = bond_dim for all sites.
 """
-bond_dim = 32 #The maximum bond dimension
-
+D = [bond_dim] * (N + 1)
 
 """
-Set the initial Hamiltonian parameters.
+The site Hilbert space dimension is also given as a vector, length N + 1.
+Here, we set all sites to dimension = 2.
 """
-J = 1
+q = [qn] * (N + 1)
 
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp_gen.EvoMPS_TDVP_Generic(N, [bond_dim] * (N + 1), 
-                                 [q] * (N + 1), 
-                                 [get_ham(S, J, J, J)] * N)
+s = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, Jx, Jy, Jz))
+s.zero_tol = zero_tol
+s.sanity_checks = sanity_checks
 
 """
-We're going to simulate a quench after we find the ground state.
-Set the new J parameter for the real time evolution here.
-"""
-J_real = 2
-
-"""
-Now set the step sizes for the imaginary and the real time evolution.
-These are currently fixed.
-"""
-step = 0.1
-realstep = 0.01
-
-"""
-Now set the tolerance for the imaginary time evolution.
-When the change in the energy falls below this level, the
-real time simulation of the quench will begin.
-"""
-tol_im = 1E-4
-total_steps = 2000
-
-"""
-The following handles loading the ground state from a file.
+The following loads a ground state from a file.
 The ground state will be saved automatically when it is declared found.
-If this script is run again with the same settings, an existing
-ground state will be loaded, if present.
 """
-grnd_fname = "heis_af_N%d_D%d_q%d_J%g_s%g_dtau%g_ground.npy" % (N, q, bond_dim, J, tol_im, step)
+grnd_fname = "heis_af_N%d_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (N, bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
 
-try:
-   a_file = open(grnd_fname, 'rb')
-   s.load_state(a_file)
-   a_file.close
-   real_time = True
-   loaded = True
-   print 'Using saved ground state: ' + grnd_fname
-except IOError as e:
-   print 'No existing ground state could be opened.'
-   real_time = False
-   loaded = False
-
-"""
-Prepare some loop variables and some vectors to hold data from each step.
-"""
-t = 0. + 0.j
-imsteps = 0
-
-reCF = []
-reNorm = []
-
-T = sp.zeros((total_steps), dtype=sp.complex128)
-K1 = sp.zeros((total_steps), dtype=sp.complex128)
-lN = sp.zeros((total_steps), dtype=sp.complex128)
-
-Sx_3 = sp.zeros((total_steps), dtype=sp.complex128) #Observables for site 3.
-Sy_3 = sp.zeros((total_steps), dtype=sp.complex128)
-Sz_3 = sp.zeros((total_steps), dtype=sp.complex128)
-
-Mx = sp.zeros((total_steps), dtype=sp.complex128)   #Magnetization in x-direction.
-   
-   
-"""
-Print a table header.
-"""
-print "Bond dimensions: " + str(s.D)
-print
-col_heads = ["Step", "t", "H", "dH", 
-             "sig_x_3", "sig_y_3", "sig_z_3",
-             "E_vn_3,4", "M_x", "eta"] #These last three are for testing the midpoint method.
-print "\t".join(col_heads)
-print
-eta = 1
-for i in xrange(total_steps):
-    T[i] = t
-    
-    row = [str(i)]
-    row.append(str(t))
-    
-    s.update()
-        
-    K1[i] = s.H_expect
-    row.append("%.15g" % K1[i].real)
-    
-    if i > 0:        
-        dK1 = K1[i].real - K1[i - 1].real
-    else:
-        dK1 = K1[i]
-    
-    row.append("%.2e" % (dK1.real))
-        
-    """
-    Compute obserables!
-    """
-    
-    Sx_3[i] = s.expect_1s(x_ss, 10) #Spin observables for site 3.
-    Sy_3[i] = s.expect_1s(y_ss, 10)
-    Sz_3[i] = s.expect_1s(z_ss, 10)
-    row.append("%.3g" % Sx_3[i].real)
-    row.append("%.3g" % Sy_3[i].real)
-    row.append("%.3g" % Sz_3[i].real)
-    
-#    rho_34 = s.density_2s(3, 4) #Reduced density matrix for sites 3 and 4.
-#    E_v = -sp.trace(sp.dot(rho_34, la.logm(rho_34)/sp.log(2))) #The von Neumann entropy.
-    
-#    row.append("%.9g" % E_v.real)
-    
-    m = 0   #x-Magnetization
-    for n in xrange(1, N + 1):
-        m += s.expect_1s(x_ss, n) 
-        
-    row.append("%.9g" % m.real)
-    Mx[i] = m
-    
-    """
-    Switch to real time evolution if we have the ground state.
-    """
-    if loaded or (not real_time and eta < tol_im):
+if load_saved_ground:
+    try:
+        a_file = open(grnd_fname, 'rb')
+        s.load_state(a_file)
+        a_file.close
         real_time = True
-        s.save_state(grnd_fname)
-        s.ham = [get_ham(S, J, J_real, J)] * N
-        step = realstep * 1.j
+        loaded = True
+        s.ham = get_ham(N, Jx_quench, Jy_quench, Jz_quench)
+        print 'Using saved ground state: ' + grnd_fname
+    except IOError as e:
+        real_time = False
         loaded = False
-        print 'Starting real time evolution!'
+        print 'No existing ground state could be opened.'
+else:
+    real_time = False
+    loaded = False
 
-    
+
+if __name__ == '__main__':
     """
-    Carry out next step!
+    Prepare some loop variables and some vectors to hold data from each step.
     """
-    if not real_time:
-        s.take_step(step)     
-        imsteps += 1
+    t = 0
+
+    Tim = []
+    Him = []
+    exSim = []
+
+    Tre = []
+    Hre = []
+    exSre = []
+
+    """
+    Print a table header.
+    """
+    print "Bond dimensions: " + str(s.D)
+    print
+    col_heads = ["Step", "t", "<H>", "d<H>",
+                 "Sx_3", "Sy_3", "Sz_3",
+                 "eta"] #These last three are for testing the midpoint method.
+    print "\t".join(col_heads)
+    print
+
+    if real_time:
+        T = Tre
+        H = Hre
+        exS = exSre
     else:
-        s.take_step_RK4(step)
-    
-    eta = s.eta.real.sum()
-    row.append(str(eta))
-    print "\t".join(row)
-    
-    t += 1.j * sp.conj(step)
+        T = Tim
+        H = Him
+        exS = exSim
 
-"""
-Simple plots of the results.
-"""
+    eta = 1
+    i = 0
+    while True:
+        T.append(t)
 
-if imsteps > 0: #Plot imaginary time evolution of K1 and Mx
-    tau = T.imag[0:imsteps]
-    
-    fig1 = plt.figure(1)
-    fig2 = plt.figure(2) 
-    K1_tau = fig1.add_subplot(111)
-    K1_tau.set_xlabel('tau')
-    K1_tau.set_ylabel('H')
-    M_tau = fig2.add_subplot(111)
-    M_tau.set_xlabel('tau')
-    M_tau.set_ylabel('M_x')    
-    
-    K1_tau.plot(tau, K1.real[0:imsteps])
-    M_tau.plot(tau, Mx.real[0:imsteps])
+        s.update(auto_truncate=auto_truncate)
 
-#Now plot the real time evolution of K1 and Mx
-t = T.real[imsteps + 1:]
-fig3 = plt.figure(3)
-fig4 = plt.figure(4)
+        H.append(s.H_expect.real)
 
-K1_t = fig3.add_subplot(111)
-K1_t.set_xlabel('t')
-K1_t.set_ylabel('H')
-M_t = fig4.add_subplot(111)
-M_t.set_xlabel('t')
-M_t.set_ylabel('M_x')
+        row = [str(i)]
+        row.append(str(t))
+        row.append("%.15g" % H[-1])
 
-K1_t.plot(t, K1.real[imsteps + 1:])
-M_t.plot(t, Mx.real[imsteps + 1:])
+        if len(H) > 1:
+            dH = H[-1] - H[-2]
+        else:
+            dH = 0
 
-plt.show()
+        row.append("%.2e" % (dH.real))
+
+        """
+        Compute expectation values!
+        """
+        Sx_3 = s.expect_1s(Sx, 3) #Spin observables for site 3.
+        Sy_3 = s.expect_1s(Sy, 3)
+        Sz_3 = s.expect_1s(Sz, 3)
+        row.append("%.3g" % Sx_3.real)
+        row.append("%.3g" % Sy_3.real)
+        row.append("%.3g" % Sz_3.real)
+
+        m_n = map(lambda n: s.expect_1s(Sz, n).real, xrange(1, N + 1)) #Magnetization
+        exS.append(m_n)
+
+        """
+        Switch to real time evolution if we have the ground state.
+        """
+        if (not real_time and eta < tol_im):
+            real_time = True
+            s.save_state(grnd_fname)
+            s.ham = get_ham(N, Jx_quench, Jy_quench, Jz_quench)
+            T = Tre
+            H = Hre
+            exS = exSre
+            i = 0
+            t = 0
+            print 'Starting real time evolution!'
+
+        """
+        Carry out next step!
+        """
+        if not real_time:
+            s.take_step(step)
+            t += 1.j * step
+        else:
+            s.take_step_RK4(realstep * 1.j)
+            t += realstep
+
+        eta = s.eta.real.sum()
+        row.append("%.6g" % eta)
+
+        print "\t".join(row)
+
+        i += 1
+        if real_time and i > real_steps:
+            break
+
+    """
+    Simple plots of the results.
+    """
+    if plot_results:
+        import matplotlib.pyplot as plt
+
+        if len(Tim) > 0: #Plot imaginary time evolution of K1 and Mx
+            tau = sp.array(Tim).imag
+
+            fig1 = plt.figure(1)
+            fig2 = plt.figure(2)
+            H_tau = fig1.add_subplot(111)
+            H_tau.set_xlabel('tau')
+            H_tau.set_ylabel('H')
+            H_tau.set_title('Imaginary time evolution: Energy')
+            M_tau = fig2.add_subplot(111)
+            M_tau.set_xlabel('n')
+            M_tau.set_ylabel('tau')
+            M_tau.set_title('Imaginary time evolution: Sz')
+
+            H_tau.plot(tau, Him)
+
+            exSim = sp.array(exSim)
+            img = M_tau.imshow(exSim, origin='lower', aspect='auto',
+                               extent=[1, N, 0, tau[-1]],
+                               vmin=exSim[-1].min(), vmax=exSim[-1].max())
+            cb = fig2.colorbar(img)
+            cb.set_label('Sz')
+
+        #Now plot the real time evolution of K1 and Mx
+        t = Tre
+        fig3 = plt.figure(3)
+        fig4 = plt.figure(4)
+
+        H_t = fig3.add_subplot(111)
+        H_t.set_xlabel('t')
+        H_t.set_ylabel('H')
+        H_t.set_title('Real time evolution: Energy')
+        M_t = fig4.add_subplot(111)
+        M_t.set_xlabel('n')
+        M_t.set_ylabel('t')
+        M_t.set_title('Real time evolution: Sz')
+
+        H_t.plot(t, Hre)
+
+        exSre = sp.array(exSre)
+        img = M_t.imshow(exSre, origin='lower', aspect='auto',
+                         extent=[1, N, 0, t[-1]])
+        cb = fig4.colorbar(img)
+        cb.set_label('Sz')
+
+        plt.show()

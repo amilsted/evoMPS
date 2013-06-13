@@ -20,7 +20,7 @@ from mps_uniform import EvoMPS_MPS_Uniform
 from mps_uniform_pinv import pinv_1mE
         
 class Excite_H_Op:
-    def __init__(self, tdvp, donor, p):
+    def __init__(self, tdvp, donor, p, verbose=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -59,10 +59,13 @@ class Excite_H_Op:
         self.M_prev = None
         self.y_pi_prev = None
     
+        self.verbose = verbose
+
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
         
         self.calls += 1
+        if self.verbose:
         print "Calls: %u" % self.calls
         
         res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.donor, 
@@ -219,7 +222,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def calc_K(self):
         """Generates the K matrix used to calculate B.
         
-        This also updates the energy-density expectation value self.h.
+        This also updates the energy-density expectation value self.h_expect.
         
         This is called automatically by self.update().
         
@@ -233,9 +236,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             Hr = tm.eps_r_op_3s_C123_AAA456(self.r, self.C, self.AAA)
         
-        self.h = m.adot(self.l, Hr)
+        self.h_expect = m.adot(self.l, Hr)
         
-        QHr = Hr - self.r * self.h
+        QHr = Hr - self.r * self.h_expect
         
         self.calc_PPinv(QHr, out=self.K, solver=self.K_solver)
         
@@ -476,7 +479,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         eyed = np.eye(self.q**self.ham_sites)
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
-        ham_ = self.ham - self.h.real * eyed
+        ham_ = self.ham - self.h_expect.real * eyed
             
         V_ = sp.transpose(donor.Vsh, axes=(0, 2, 1)).conj()
         
@@ -660,7 +663,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         eyed = np.eye(self.q**self.ham_sites)
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
-        ham_ = self.ham - self.h.real * eyed
+        ham_ = self.ham - self.h_expect.real * eyed
         
         V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
         for s in xrange(donor.q):
@@ -885,7 +888,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return res, M, y_pi        
     
-    def _prepare_excite_op_top_triv(self, p):
+    def _prepare_excite_op_top_triv(self, p, verbose=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
 
@@ -893,13 +896,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_l_r_roots()
         self.Vsh = tm.calc_Vsh(self.A, self.r_sqrt, sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, self, p)
+        op = Excite_H_Op(self, self, p, verbose=verbose)
 
         return op        
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None,
-                        which='SM', return_eigenvectors=False):
+                        which='SM', return_eigenvectors=False, verbose=False):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -932,6 +935,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Which eigenvalues to find ('SM' means the k smallest).
         return_eigenvectors : bool
             Whether to return eigenvectors as well as eigenvalues.
+        verbose : bool
+            Whether to print the number of calls for each matvec operation.
             
         Returns
         -------
@@ -940,7 +945,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_triv(p)
+        op = self._prepare_excite_op_top_triv(p, verbose=verbose)
         
         res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
                          return_eigenvectors=return_eigenvectors, 
@@ -948,8 +953,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_triv(p)
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, verbose=False):
+        op = self._prepare_excite_op_top_triv(p, verbose=verbose)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -965,7 +970,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _prepare_excite_op_top_nontriv(self, donor, p):
+    def _prepare_excite_op_top_nontriv(self, donor, p, verbose=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -986,14 +991,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         donor.calc_l_r_roots()
         donor.Vsh = tm.calc_Vsh(donor.A, donor.r_sqrt, sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, donor, p)
+        op = Excite_H_Op(self, donor, p, verbose=verbose)
 
         return op 
 
     def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+                           ncv=None, verbose=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p, verbose=verbose)
                             
         res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
                             return_eigenvectors=return_eigenvectors, 
@@ -1001,8 +1006,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return res
         
-    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
+                                 verbose=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p, verbose=verbose)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -1035,11 +1041,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             if tau == 0:
                 if verbose:
                     print (0, "tau=0")
-                return self.h.real                
+                return self.h_expect.real
             try:
                 i = taus.index(tau)
                 if verbose:
-                    print (tau, hs[i], hs[i] - self.h.real, "from stored")
+                    print (tau, hs[i], hs[i] - self.h_expect.real, "from stored")
                 return hs[i]
             except ValueError:
                 for s in xrange(self.q):
@@ -1060,7 +1066,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     h = self.expect_3s(self.ham)
                 
                 if verbose:
-                    print (tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r)
+                    print (tau, h.real, h.real - self.h_expect.real, self.itr_l, self.itr_r)
                 
                 res = h.real
                 
@@ -1090,7 +1096,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             pass
         
         if skipIfLower:
-            if f(dtau_init) < self.h.real:
+            if f(dtau_init) < self.h_expect.real:
                 return dtau_init
         
         fb_brack = (dtau_init * 0.9, dtau_init * 1.1)
@@ -1166,7 +1172,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.AA = AA0
         self.C = C0
         
-        return h.real < self.h.real, h
+        return h.real < self.h_expect.real, h
 
     def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False, verbose=False):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
@@ -1207,7 +1213,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
                                            trybracket=False, verbose=verbose)
             
-        if self.h.real < h_min:
+        if self.h_expect.real < h_min:
             if verbose:
                 print "RESET due to energy rise!"
             B_CG = B
@@ -1215,7 +1221,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.r_before_CF = rb0
             tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
-            if self.h.real < h_min:
+            if self.h_expect.real < h_min:
                 if verbose:
                     print "RESET FAILED: Setting tau=0!"
                 self.l_before_CF = lb0

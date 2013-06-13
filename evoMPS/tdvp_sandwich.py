@@ -407,7 +407,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         self.h = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
                   + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
-                  - (self.N + 1) * self.uni_r.h)
+                  - (self.N + 1) * self.uni_r.h_expect)
         
 #        self.h_left = mm.adot_noconj(K_left, self.r[0])
 #        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
