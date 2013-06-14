@@ -584,6 +584,63 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
         
     return B
     
+class EOp_CUDA:
+    def __init__(self, A1, A2, left):
+        """Creates a new LinearOperator interface to the superoperator E.
+        
+        This is a wrapper to be used with SciPy's sparse linear algebra routines.
+        
+        Parameters
+        ----------
+        A1 : ndarray
+            Ket parameter tensor. 
+        A2 : ndarray
+            Bra parameter tensor.
+        left : bool
+            Whether to multiply with a vector to the left (or to the right).
+        """
+        self.A1G = []
+        for A1s in A1:
+            self.A1G.append(garr.to_gpu(A1s))
+            
+        self.A2G = []
+        for A2s in A1:
+            self.A2G.append(garr.to_gpu(A2s))
+        
+        self.D = A1.shape[1]
+        
+        self.shape = (self.D**2, self.D**2)
+        
+        self.dtype = sp.dtype(A1[0].dtype)
+        
+        self.out = garr.empty((self.D, self.D), dtype=self.dtype)
+        
+        self.calls = 0
+        
+        self.left = left
+        
+        self.hdl = cb.cublasCreate()
+    
+    def matvec(self, v):
+        """Matrix-vector multiplication. 
+        Result = Ev or vE (if self.left == True).
+        """
+        x = v.reshape((self.D, self.D))
+        
+        xG = garr.to_gpu(x)
+        
+        if self.left:
+            Ex = eps_l_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+        else:
+            Ex = eps_r_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+        
+        self.calls += 1
+        
+        return Ex.get().ravel()
+        
+    def close_cuda(self):
+        cb.cublasDestroy(self.hdl)
+    
 if __name__ == '__main__':
     test_calc_lr(512, 16)
     #test_nrm()

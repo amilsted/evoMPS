@@ -245,7 +245,10 @@ class EvoMPS_MPS_Uniform(object):
         n = x.size #we will scale x so that stuff doesn't get too small
         
         #start = time.clock()
-        opE = EOp(A1, A2, calc_l)
+        if self.ev_use_cuda:
+            opE = ch.EOp_CUDA(A1, A2, calc_l)
+        else:
+            opE = EOp(A1, A2, calc_l)
         x *= n / norm(x.ravel())
         try:
             ev, eV = las.eigs(opE, which='LM', k=k, v0=x.ravel(), tol=tol, ncv=ncv)
@@ -254,6 +257,9 @@ class EvoMPS_MPS_Uniform(object):
             log.warning("Reset! (l? %s)", calc_l)
             ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
             conv = True
+            
+        if self.ev_use_cuda:
+            opE.close_cuda()
             
         #print ev2
         #print ev2 * ev2.conj()
@@ -459,7 +465,7 @@ class EvoMPS_MPS_Uniform(object):
         self.l_before_CF = np.asarray(self.l_before_CF)
         self.r_before_CF = np.asarray(self.r_before_CF)
         
-        if self.ev_use_cuda:
+        if not self.ev_use_arpack and self.ev_use_cuda:
             self.l, self.conv_l, self.itr_l = self._calc_lr_cuda(self.l_before_CF, 
                                                     tmp, 
                                                     calc_l=True,
@@ -482,7 +488,7 @@ class EvoMPS_MPS_Uniform(object):
                                         
         self.l_before_CF = self.l.copy()
 
-        if self.ev_use_cuda:
+        if not self.ev_use_arpack and self.ev_use_cuda:
             self.r, self.conv_r, self.itr_r = self._calc_lr_cuda(self.r_before_CF, 
                                                     tmp, 
                                                     calc_l=False,
