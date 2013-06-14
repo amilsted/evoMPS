@@ -4,7 +4,7 @@ Created on Sat Jul  7 15:26:57 2012
 
 @author: ash
 """
-
+import matmul as m
 import scipy as sp
 import scipy.linalg as la
 import pycuda.autoinit
@@ -637,6 +637,63 @@ class EOp_CUDA:
         self.calls += 1
         
         return Ex.get().ravel()
+        
+    def close_cuda(self):
+        cb.cublasDestroy(self.hdl)
+        
+class PinvOp_CUDA:
+    def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
+        assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
+        
+        self.A1G = []
+        for A1s in A1:
+            self.A1G.append(garr.to_gpu(A1s))
+            
+        self.A2G = []
+        for A2s in A1:
+            self.A2G.append(garr.to_gpu(A2s))
+        
+        self.l = l
+        self.r = r
+        
+        self.lG = garr.to_gpu(sp.asarray(l))
+        self.rG = garr.to_gpu(sp.asarray(r))
+        self.p = p
+        self.left = left
+        self.pseudo = pseudo
+        
+        self.D = A1.shape[1]
+        
+        self.shape = (self.D**2, self.D**2)
+        
+        self.dtype = A1.dtype
+        
+        self.out = garr.empty((self.D, self.D), dtype=self.dtype)
+        
+        self.hdl = cb.cublasCreate()
+    
+    def matvec(self, v):
+        x = v.reshape((self.D, self.D))
+        
+        xG = garr.to_gpu(x)
+        
+        
+        if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
+            Ehx = eps_l_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            if self.pseudo:
+                QEQhx = Ehx - self.lG * m.adot(self.r, x)
+                res = QEQhx.mul_add(-sp.exp(-1.j * self.p), xG, 1)
+            else:
+                res = Ehx.mul_add(-sp.exp(-1.j * self.p), xG, 1)
+        else:
+            Ex = eps_r_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            if self.pseudo:
+                QEQx = Ex - self.rG * m.adot(self.l, x)
+                res = QEQx.mul_add(-sp.exp(1.j * self.p), xG, 1)
+            else:
+                res = Ex.mul_add(-sp.exp(1.j * self.p), xG, 1)
+        
+        return res.get().ravel()
         
     def close_cuda(self):
         cb.cublasDestroy(self.hdl)

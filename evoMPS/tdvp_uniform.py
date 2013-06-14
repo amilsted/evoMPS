@@ -93,7 +93,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             dtype : numpy dtype = None
                 Specifies the array type.
         """
-
+        self.ppinv_use_cuda = False
         self.ham = ham
         """The local Hamiltonian term. Can be changed, for example, to perform
            a quench. The number of neighbouring sites acted on must be 
@@ -230,7 +230,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         out = pinv_1mE(x, A1, A2, self.l, r, p=p, left=left, pseudo=pseudo, 
                        out=out, tol=self.itr_rtol, solver=solver,
-                       sanity_checks=self.sanity_checks, sc_data=sc_data)
+                       sanity_checks=self.sanity_checks, sc_data=sc_data,
+                       op_use_cuda=self.ppinv_use_cuda)
 
         return out
         

@@ -15,6 +15,8 @@ import logging
 
 log = logging.getLogger(__name__)
 
+import tdvp_common_cuda as cu
+
 class PinvOp:    
     def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
         assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
@@ -89,7 +91,8 @@ def pinv_1mE_brute_LOP(A1, A2, l, r, p=0, pseudo=True, left=False):
     return la.inv(bop)
     
 def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
-             out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None):
+             out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None,
+             op_use_cuda=False):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
     
@@ -101,7 +104,10 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
     if out is None:
         out = np.ones_like(A1[0])
     
-    op = PinvOp(p, A1, A2, l, r, left=left, pseudo=pseudo)
+    if op_use_cuda:
+        op = cu.PinvOp_CUDA(p, A1, A2, l, r, left=left, pseudo=pseudo)
+    else:
+        op = PinvOp(p, A1, A2, l, r, left=left, pseudo=pseudo)
     
     res = out.ravel()
     x = x.ravel()
@@ -151,6 +157,9 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
             #d = abs(RHS_test - x).sum() / abs(x).sum()
             if not d2 < tol:
                 log.warning("Sanity check failed: Bad ppinv brute solution! Off by: %s %s", d2, sc_data)
+    
+    if op_use_cuda:
+        op.close_cuda()
     
     out[:] = res
     
