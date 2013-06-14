@@ -605,7 +605,7 @@ def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
         cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
         
     return out
-    
+
 def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
     
@@ -626,7 +626,7 @@ def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
         cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
         
     return out
-    
+
 class EOp_CUDA:
     def __init__(self, A1, A2, left):
         """Creates a new LinearOperator interface to the superoperator E.
@@ -655,7 +655,7 @@ class EOp_CUDA:
         
         self.out = garr.empty((self.D, self.D), dtype=self.dtype)        
         self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
-        
+
         self.calls = 0
         
         self.left = left
@@ -665,13 +665,13 @@ class EOp_CUDA:
         self.streams = []
         for s in xrange(A1.shape[0]):
             self.streams.append(cd.Stream())
-    
+
     def matvec(self, v):
         """Matrix-vector multiplication. 
         Result = Ev or vE (if self.left == True).
         """
         x = v.reshape((self.D, self.D))
-        
+
         self.xG.set(x)
         
         if self.left:
