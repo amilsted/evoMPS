@@ -16,7 +16,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        autogrow=False, autogrow_amount=2, autogrow_max_N=1000,
        op=None, op_every=5, prev_op_data=None, op_save_as=None,
        en_save_as=None,
-       entropy_save_as=None,
+       entropy_save_as=None, eta_save_as=None,
        overlap_with=None,
        overlap_save_as=None,
        append_saved=True,
@@ -56,6 +56,18 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         else:
             Sf = open(entropy_save_as, "w")
         
+    etadata = []
+    if (not eta_save_as is None):
+        if append_saved:
+            try:
+                etadata = sp.genfromtxt(eta_save_as).tolist()
+            except:
+                print "No previous  eta-data, or error loading!"
+                pass
+            etaf = open(eta_save_as, "a")
+        else:
+            etaf = open(eta_save_as, "w")
+
     if not op_save_as is None:
         if append_saved:
             try:
@@ -125,6 +137,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                             row.insert(0, 0)
                         for row in Sdata:
                             row.insert(0, 0)
+                        for row in etadata:
+                            row.insert(0, 0)
     
                 if etas[-1] > sim.eta_uni * 10:
                     rewrite_opf = True
@@ -138,6 +152,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                         for row in endata:
                             row.append(0)
                         for row in Sdata:
+                            row.append(0)
+                        for row in etadata:
                             row.append(0)
 
         else:            
@@ -226,6 +242,19 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 Sf.write("\t".join(map(str, row)) + "\n")
                 Sf.flush()
                 
+        if (not eta_save_as is None):
+            row = sim.eta.real.tolist()
+            etadata.append(row)
+            if rewrite_opf:
+                etaf.close()
+                etaf = open(eta_save_as, "w")
+                for row in etadata:
+                    etaf.write("\t".join(map(str, row)) + "\n")
+                etaf.flush()
+            else:
+                etaf.write("\t".join(map(str, row)) + "\n")
+                etaf.flush()
+
         if (not overlap_with is None) and (i % op_every == 0):
             row = [abs(sim.overlap(overlap_with))]
             oldata.append(row)
@@ -233,7 +262,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 olf.write("\t".join(map(str, row)) + "\n")
                 olf.flush()
             
-        if i > counter_start and etas.mean().real < tol:# eta.real < tol:
+        if i > counter_start and etas.sum().real < tol:# eta.real < tol:
             print "Tolerance reached!"
             break
             
@@ -246,6 +275,9 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     if (not entropy_save_as is None):
         Sf.close()
         
+    if (not eta_save_as is None):
+        etaf.close()
+
     if (not overlap_save_as is None):
         olf.close()
         
@@ -375,7 +407,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         self.h = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
                   + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
-                  - (self.N + 1) * self.uni_r.h)
+                  - (self.N + 1) * self.uni_r.h_expect)
         
 #        self.h_left = mm.adot_noconj(K_left, self.r[0])
 #        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
@@ -738,6 +770,18 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.shrunk_left = toload[7][1, 0]
             self.shrunk_right = toload[7][1, 1]
             
+            self.uni_l.A = self.A[0]
+            self.uni_l.l = self.l[0]
+            self.uni_l.l_before_CF = self.uni_l.l
+            self.uni_l.r_before_CF = self.uni_l.r
+            
+            self.uni_r.A = self.A[self.N + 1]
+            self.uni_r.r = self.r[self.N]
+            self.uni_r.l_before_CF = self.uni_r.l
+            self.uni_r.r_before_CF = self.uni_r.r
+
+            print "loaded."
+
             return toload[8]
             
         except AttributeError:

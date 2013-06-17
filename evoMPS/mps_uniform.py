@@ -107,7 +107,7 @@ class EvoMPS_MPS_Uniform(object):
         
         self.eps = np.finfo(self.typ).eps
                 
-        self._init_arrays(D, q)        
+        self._init_arrays(D, q)
                     
         self.randomize()
 

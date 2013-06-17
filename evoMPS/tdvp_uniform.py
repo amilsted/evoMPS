@@ -222,7 +222,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def calc_K(self):
         """Generates the K matrix used to calculate B.
         
-        This also updates the energy-density expectation value self.h.
+        This also updates the energy-density expectation value self.h_expect.
         
         This is called automatically by self.update().
         
@@ -236,9 +236,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             Hr = tm.eps_r_op_3s_C123_AAA456(self.r, self.C, self.AAA)
         
-        self.h = m.adot(self.l, Hr)
+        self.h_expect = m.adot(self.l, Hr)
         
-        QHr = Hr - self.r * self.h
+        QHr = Hr - self.r * self.h_expect
         
         self.calc_PPinv(QHr, out=self.K, solver=self.K_solver)
         
@@ -479,7 +479,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         eyed = np.eye(self.q**self.ham_sites)
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
-        ham_ = self.ham - self.h.real * eyed
+        ham_ = self.ham - self.h_expect.real * eyed
             
         V_ = sp.transpose(donor.Vsh, axes=(0, 2, 1)).conj()
         
@@ -663,7 +663,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         eyed = np.eye(self.q**self.ham_sites)
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
-        ham_ = self.ham - self.h.real * eyed
+        ham_ = self.ham - self.h_expect.real * eyed
         
         V_ = sp.zeros((donor.Vsh.shape[0], donor.Vsh.shape[2], donor.Vsh.shape[1]), dtype=self.typ)
         for s in xrange(donor.q):
@@ -1037,10 +1037,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         def f(tau, *args):
             if tau == 0:
                 log.debug((0, "tau=0"))
-                return self.h.real                
+                return self.h_expect.real
             try:
                 i = taus.index(tau)
-                log.debug((tau, hs[i], hs[i] - self.h.real, "from stored"))
+                log.debug((tau, hs[i], hs[i] - self.h_expect.real, "from stored"))
                 return hs[i]
             except ValueError:
                 for s in xrange(self.q):
@@ -1060,7 +1060,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 else:
                     h = self.expect_3s(self.ham)
                 
-                log.debug((tau, h.real, h.real - self.h.real, self.itr_l, self.itr_r))
+                log.debug((tau, h.real, h.real - self.h_expect.real, self.itr_l, self.itr_r))
                 
                 res = h.real
                 
@@ -1090,7 +1090,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             pass
         
         if skipIfLower:
-            if f(dtau_init) < self.h.real:
+            if f(dtau_init) < self.h_expect.real:
                 return dtau_init
         
         fb_brack = (dtau_init * 0.9, dtau_init * 1.1)
@@ -1165,7 +1165,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.AA = AA0
         self.C = C0
         
-        return h.real < self.h.real, h
+        return h.real < self.h_expect.real, h
 
     def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False, verbose=False):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
@@ -1204,14 +1204,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
                                            trybracket=False, verbose=verbose)
             
-        if self.h.real < h_min:
+        if self.h_expect.real < h_min:
             log.debug("RESET due to energy rise!")
             B_CG = B
             self.l_before_CF = lb0
             self.r_before_CF = rb0
             tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, trybracket=False)
         
-            if self.h.real < h_min:
+            if self.h_expect.real < h_min:
                 log.debug("RESET FAILED: Setting tau=0!")
                 self.l_before_CF = lb0
                 self.r_before_CF = rb0
