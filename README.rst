@@ -6,6 +6,7 @@ Quantum many-particle dynamics in 1D with matrix product states
 ---------------------------------------------------------------
 
 Tutorial videos:
+
 * Installation <http://vimeo.com/user19042101/evomps-tutorial-installation>
 * Find ground state <http://vimeo.com/user19042101/evomps-tutorial-ground>
 * Find excitations <http://vimeo.com/user19042101/evomps-tutorial-excitations>
