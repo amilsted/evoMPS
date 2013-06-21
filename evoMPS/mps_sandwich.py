@@ -38,13 +38,31 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.typ = sp.complex128
 
         self.zero_tol = sp.finfo(self.typ).resolution
+        """Tolerance for detecting zeros. This is used when (pseudo-) inverting 
+           l and r."""
 
         self._sanity_checks = False
 
         self.N = N
+        """The number of sites. Do not change after initializing."""
+        
         self.N_centre = N / 2
+        """The 'centre' site. This affects the gauge-fixing and canonical
+           form. It is the site between the left-gauge parts and the 
+           right-gauge parts."""
+           
         self.D = sp.repeat(uni_ground.D, self.N + 2)
+        """Vector containing the bond-dimensions. A[n] is a 
+           q[n] x D[n - 1] x D[n] tensor."""
+           
         self.q = sp.repeat(uni_ground.q, self.N + 2)
+        """Vector containing the site Hilbert space dimensions. A[n] is a 
+           q[n] x D[n - 1] x D[n] tensor."""
+           
+        self.S_hc = sp.repeat(sp.NaN, self.N + 1)
+        """Vector containing the von Neumann entropy S_hc[n] corresponding to 
+           splitting the state between sites n and n + 1. Available only
+           after performing update(restore_CF=True) or restore_CF()."""   
 
         self.uni_l = copy.deepcopy(uni_ground)
         self.uni_l.symm_gauge = False
@@ -71,7 +89,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.l[0] = self.uni_l.l
 
 
-    def _init_arrays(self):
+    def _init_arrays(self):        
         #Deliberately add a None to the end to catch [-1] indexing!
         self.A = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
 
@@ -88,6 +106,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
     @property
     def sanity_checks(self):
+        """Whether to perform additional (potentially costly) sanity checks."""
         return self._sanity_checks
 
     @sanity_checks.setter
@@ -99,13 +118,11 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not implemented in sandwich case")
 
-    def update(self, restore_cf=True, normalize=True):
+    def update(self, restore_CF=True, normalize=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
-
-        Return the excess energy.
         """
-        if restore_cf:
+        if restore_CF:
             self.restore_CF()
         else:
             if normalize:

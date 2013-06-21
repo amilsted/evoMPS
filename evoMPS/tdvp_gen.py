@@ -53,6 +53,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """       
 
         self.ham = ham
+        """The Hamiltonian. Can be changed, for example, to perform
+           a quench. The number of neighbouring sites acted on must be 
+           specified in ham_sites."""
+        
         if ham_sites is None:
             if not callable(ham):
                 self.ham_sites = len(ham[1].shape) / 2
@@ -86,9 +90,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
         
         self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+        """The per-site contributions to the norm of the TDVP tangent vector 
+           (projection of the exact time evolution onto the MPS tangent plane. 
+           Only available after calling take_step()."""
+        self.eta.fill(sp.NaN)
         
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
-        self.H_expect = 0
+        """The local energy expectation values (of each Hamiltonian term), 
+           available after calling update() or calc_K()."""
+        self.h_expect.fill(sp.NaN)
+           
+        self.H_expect = sp.NaN
+        """The energy expectation value, available after calling update()
+           or calc_K()."""
 
     
     def calc_C(self, n_low=-1, n_high=-1):

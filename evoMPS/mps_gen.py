@@ -46,16 +46,28 @@ class EvoMPS_MPS_Generic(object):
         self.typ = sp.complex128
         
         self.sanity_checks = True
+        """Whether to perform additional (potentially costly) sanity checks."""
         
         self.canonical_form = 'right'
+        """Canonical form to use when performing restore_CF(). Possible
+           settings are 'right' and 'left'."""
         
         self.eps = sp.finfo(self.typ).eps
         
         self.zero_tol = sp.finfo(self.typ).resolution
+        """Tolerance for detecting zeros. This is used when (pseudo-) inverting 
+           l and r."""
         
         self.N = N
+        """The number of sites. Do not change after initializing."""
+        
         self.D = sp.array(D)
-        self.q = sp.array(q)        
+        """Vector containing the bond-dimensions. A[n] is a 
+           q[n] x D[n - 1] x D[n] tensor."""
+        
+        self.q = sp.array(q)
+        """Vector containing the site Hilbert space dimensions. A[n] is a 
+           q[n] x D[n - 1] x D[n] tensor."""
 
         if (self.D.ndim != 1) or (self.q.ndim != 1):
             raise ValueError('D and q must be 1-dimensional!')

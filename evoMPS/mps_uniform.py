@@ -89,23 +89,47 @@ class EvoMPS_MPS_Uniform(object):
         self.itr_atol = 1E-14
         
         self.zero_tol = sp.finfo(self.typ).resolution
-        
-        self.itr_l = 0
-        self.itr_r = 0
+        """Tolerance for detecting zeros. This is used when (pseudo-) inverting 
+           l and r."""
         
         self.pow_itr_max = 2000
+        """Maximum number of iterations to use in the power-iteration algorithm 
+           for finding l and r."""
+           
         self.ev_use_arpack = True
+        """Whether to use ARPACK (implicitly restarted Arnoldi iteration) to 
+           find l and r."""
+           
         self.ev_arpack_nev = 1
+        """The number of eigenvalues to find when calculating l and r. If the
+           spectrum is approximately degenerate, this may need to be increased."""
+           
         self.ev_arpack_ncv = None
+        """The number of intermediate vectors stored during arnoldi iteration.
+           See the documentation for scipy.sparse.linalg.eig()."""
                 
         self.symm_gauge = True
+        """Whether to use symmetric canonical form or (if False) right canonical form."""
         
         self.sanity_checks = False
+        """Whether to perform additional (potentially costly) sanity checks."""
+
         self.check_fac = 50
+        self.eps = np.finfo(self.typ).eps
         
         self.userdata = None        
+        """This variable is saved (pickled) with the state. 
+           For storing arbitrary user data."""
         
-        self.eps = np.finfo(self.typ).eps
+        #Initialize some more instance attributes.
+        self.itr_l = 0
+        """Contains the number of eigenvalue solver iterations needed to find l."""
+        self.itr_r = 0
+        """Contains the number of eigenvalue solver iterations needed to find r."""
+        
+        self.S_hc = sp.NaN
+        """After calling restore_CF() or update(restore_CF=True), this contains
+           the von Neumann entropy of one infinite half of the system."""
                 
         self._init_arrays(D, q)
                     

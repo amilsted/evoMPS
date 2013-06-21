@@ -95,6 +95,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
 
         self.ham = ham
+        """The local Hamiltonian term. Can be changed, for example, to perform
+           a quench. The number of neighbouring sites acted on must be 
+           specified in ham_sites."""
+        
         if ham_sites is None:
             try:
                 self.ham_sites = len(ham.shape) / 2
@@ -110,8 +114,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         super(EvoMPS_TDVP_Uniform, self).__init__(D, q, dtype=dtype)
                         
-        self.eta = 0
-
+        self.eta = sp.NaN
+        """The norm of the TDVP tangent vector (projection of the exact time
+           evolution onto the MPS tangent plane. Only available after calling
+           take_step()."""
+           
+        self.h_expect = sp.NaN
+        """The energy density expectation value, available only after calling
+           update() or calc_K()."""
     
     def _init_arrays(self, D, q):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q)

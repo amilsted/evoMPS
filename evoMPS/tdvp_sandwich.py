@@ -24,7 +24,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
        csv_file=None,
        tol=0,
        print_eta_n=False):
-    """A simple integration loop for testing"""
+    """A 'simple' integration loop for testing"""
     h_prev = 0
 
     if not prev_op_data is None:
@@ -164,8 +164,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         #    rcf = (i % 4 == 0)
         #else:
         rcf = True
-        sim.update(restore_cf=rcf) #now we are measuring the stepped state
-        h = sim.h
+        sim.update(restore_CF=rcf) #now we are measuring the stepped state
+        h = sim.dH_expect
         #hs = sim.h_expect - sim.uni_l.h
 #        if not hs_prev is None:
 #            diff = hs - hs_prev
@@ -292,11 +292,19 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         super(EvoMPS_TDVP_Sandwich, self).__init__(N, uni_ground)
         
-        assert uni_ground.ham_sites == 2, 'Sandwiches only supported for nearest-neighbour Hamiltonians at present!'
+        assert uni_ground.ham_sites == 2, 'Sandwiches only supported for \
+                                           nearest-neighbour Hamiltonians at present!'
         
         self.uni_l.calc_B()
         self.eta_uni = self.uni_l.eta
         print self.eta_uni
+        
+        self.h_nn = None
+        """The Hamiltonian for the nonuniform region. 
+           Can be changed, for example, to perform
+           a quench or to study an impurity problem. 
+           The number of neighbouring sites acted on must be 
+           specified in ham_sites."""
         
         if callable(self.uni_l.ham):
             self.h_nn = lambda n, s, t, u, v: self.uni_l.ham(s, t, u, v)
@@ -325,6 +333,22 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.K_l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
         for n in xrange(self.N_centre, self.N + 2):
             self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)
+            
+        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
+        self.eta.fill(sp.NaN)
+        """The per-site contributions to the norm of the TDVP tangent vector 
+           (projection of the exact time evolution onto the MPS tangent plane. 
+           Only available after calling take_step()."""
+        
+        self.h_expect = sp.empty((self.N + 1), dtype=self.typ)
+        self.h_expect.fill(sp.NaN)
+        """The local energy expectation values (of each Hamiltonian term), 
+           available after calling update() or calc_K()."""
+           
+        self.dH_expect = sp.NaN
+        """The energy-difference (compared to the uniform bulk state) 
+           expectation value, available after calling update()
+           or calc_K()."""
     
     def _calc_AAc_AAcm1(self):
         for n in [self.N_centre - 1, self.N_centre]:
@@ -405,9 +429,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
             self.h_expect[n - 1] = he
 
-        self.h = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
-                  + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
-                  - (self.N + 1) * self.uni_r.h_expect)
+        self.dH_expect = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
+                          + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
+                          - (self.N + 1) * self.uni_r.h_expect)
         
 #        self.h_left = mm.adot_noconj(K_left, self.r[0])
 #        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
@@ -590,13 +614,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 
-    def update(self, restore_cf=True, normalize=True):
+    def update(self, restore_CF=True, normalize=True):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
         Return the excess energy.
         """
-        super(EvoMPS_TDVP_Sandwich, self).update(restore_cf=restore_cf, normalize=normalize)
+        super(EvoMPS_TDVP_Sandwich, self).update(restore_CF=restore_CF, normalize=normalize)
         
         self._calc_AAc_AAcm1()
         self.calc_C()
@@ -664,7 +688,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B[n] = None
 
-        self.update(restore_cf=False, normalize=False)
+        self.update(restore_CF=False, normalize=False)
         
         B = [None]
         for n in xrange(1, self.N + 1):
@@ -676,7 +700,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 B_fin[n] += 2 * B[n]
                 B[n] = None
 
-        self.update(restore_cf=False, normalize=False)
+        self.update(restore_CF=False, normalize=False)
 
         B = [None]
         for n in xrange(1, self.N + 1):
@@ -688,7 +712,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 B_fin[n] += 2 * B[n]
                 B[n] = None
 
-        self.update(restore_cf=False, normalize=False)
+        self.update(restore_CF=False, normalize=False)
 
         for n in xrange(1, self.N + 1):
             B = self.calc_B(n, set_eta=False) #k4
