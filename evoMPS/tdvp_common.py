@@ -13,6 +13,9 @@ import scipy.linalg as la
 import numpy as np
 import matmul as mm
 import nullspace as ns   
+import logging
+
+log = logging.getLogger(__name__)
 
 def eps_l_noop(x, A1, A2):
     """Implements the left epsilon map.
@@ -571,10 +574,12 @@ def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False, return_rank=False, sc_
         
         if sanity_checks:
             if ev.min() < -zero_tol:
-                print "Sanity Fail in herm_sqrt_inv(): Throwing away negative eigenvalues!", ev.min(), sc_data
+                log.warning("Sanity Fail in herm_sqrt_inv(): Throwing away negative eigenvalues! %s %s",
+                            ev.min(), sc_data)
             
             if not np.allclose(x_sqrt.dot(x_sqrt), x):
-                print "Sanity Fail in herm_sqrt_inv(): x_sqrt is bad!", la.norm(x_sqrt.dot(x_sqrt) - x), sc_data
+                log.warning("Sanity Fail in herm_sqrt_inv(): x_sqrt is bad! %s %s",
+                            la.norm(x_sqrt.dot(x_sqrt) - x), sc_data)
             
             if EV is None: 
                 nulls = sp.zeros(x.shape[0])
@@ -587,7 +592,8 @@ def herm_sqrt_inv(x, zero_tol=1E-15, sanity_checks=False, return_rank=False, sc_
                 
             eye = np.eye(x.shape[0])
             if not np.allclose(x_sqrt.dot(x_sqrt_i), eye - nulls):
-                print "Sanity Fail in herm_sqrt_inv(): x_sqrt_i is bad!", la.norm(x_sqrt.dot(x_sqrt_i) - eye + nulls), sc_data
+                log.warning("Sanity Fail in herm_sqrt_inv(): x_sqrt_i is bad! %s %s",
+                            la.norm(x_sqrt.dot(x_sqrt_i) - eye + nulls), sc_data)
     
     if return_rank:
         return x_sqrt, x_sqrt_i, rank
@@ -616,9 +622,9 @@ def calc_Vsh(A, r_s, sanity_checks=False):
 
     if sanity_checks:
         if not sp.allclose(mm.mmul(Vconj.conj(), R), 0):
-            print "Sanity Fail in calc_Vsh!: VR != 0"
+            log.warning("Sanity Fail in calc_Vsh!: VR != 0")
         if not sp.allclose(mm.mmul(Vconj, Vconj.conj().T), sp.eye(Vconj.shape[0])):
-            print "Sanity Fail in calc_Vsh!: V H(V) != eye"
+            log.warning("Sanity Fail in calc_Vsh!: V H(V) != eye")
         
     Vconj = Vconj.reshape((q * D - Dm1, D, q))
 
@@ -629,7 +635,7 @@ def calc_Vsh(A, r_s, sanity_checks=False):
         Vs = sp.transpose(Vsh, axes=(0, 2, 1)).conj()
         M = eps_r_noop(r_s, Vs, A)
         if not sp.allclose(M, 0):
-            print "Sanity Fail in calc_Vsh!: Bad Vsh"
+            log.warning("Sanity Fail in calc_Vsh!: Bad Vsh")
 
     return Vsh
 
@@ -648,9 +654,9 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
 
     if sanity_checks:
         if not sp.allclose(L.dot(V), 0):
-            print "Sanity Fail in calc_Vsh_l!: LV != 0"
+            log.warning("Sanity Fail in calc_Vsh_l!: LV != 0")
         if not sp.allclose(V.conj().T.dot(V), sp.eye(V.shape[1])):
-            print "Sanity Fail in calc_Vsh_l!: V H(V) != eye"
+            log.warning("Sanity Fail in calc_Vsh_l!: V H(V) != eye")
         
     V = V.reshape((q, Dm1, q * Dm1 - D))
 
@@ -660,7 +666,7 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
     if sanity_checks:
         M = eps_l_noop(lm1_sqrt, A, V)
         if not sp.allclose(M, 0):
-            print "Sanity Fail in calc_Vsh_l!: Bad Vsh"
+            log.warning("Sanity Fail in calc_Vsh_l!: Bad Vsh")
 
     return Vsh
 
@@ -823,7 +829,8 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
             assert np.all(ev == np.sort(ev)), "Sanity fail in herm_fac_with_inv(): Unexpected eigenvalue ordering"
             
             if ev.min() < -zero_tol:
-                print "Sanity fail in herm_fac_with_inv(): Discarding negative eigenvalues!", ev.min(), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Discarding negative eigenvalues! %s %s",
+                            ev.min(), sc_data)
         
         nonzeros = np.count_nonzero(ev > zero_tol) 
 
@@ -846,7 +853,8 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
             
     if sanity_checks:
         if not sp.allclose(A, A.conj().T, atol=1E-13, rtol=1E-13):
-            print "Sanity fail in herm_fac_with_inv(): A is not Hermitian!", la.norm(A - A.conj().T), sc_data
+            log.warning("Sanity fail in herm_fac_with_inv(): A is not Hermitian! %s %s",
+                        la.norm(A - A.conj().T), sc_data)
         
         eye = sp.zeros((A.shape[0]), dtype=A.dtype)
         eye[-nonzeros:] = 1
@@ -854,22 +862,28 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         
         if lower:
             if not sp.allclose(xi.dot(x), eye, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad left inverse!", la.norm(xi.dot(x) - eye), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad left inverse! %s %s",
+                            la.norm(xi.dot(x) - eye), sc_data)
     
             if not sp.allclose(x.dot(x.conj().T), A, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad decomp!", la.norm(x.dot(x.conj().T) - A), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad decomp! %s %s",
+                            la.norm(x.dot(x.conj().T) - A), sc_data)
                 
             if not sp.allclose(xi.dot(A).dot(xi.conj().T), eye, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad A inverse!", la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
+                            la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
         else:
             if not sp.allclose(x.dot(xi), eye, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad right inverse!", la.norm(x.dot(xi) - eye), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad right inverse! %s %s",
+                            la.norm(x.dot(xi) - eye), sc_data)
     
             if not sp.allclose(x.conj().T.dot(x), A, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad decomp!", la.norm(x.conj().T.dot(x) - A), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad decomp! %s %s",
+                            la.norm(x.conj().T.dot(x) - A), sc_data)
                 
             if not sp.allclose(xi.conj().T.dot(A).dot(xi), eye, atol=1E-13, rtol=1E-13):
-                print "Sanity fail in herm_fac_with_inv(): Bad A inverse!", la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data
+                log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
+                            la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
                         
     if return_rank:
         return x, xi, nonzeros
@@ -937,7 +951,8 @@ def restore_RCF_r(A, r, G_n_i, zero_tol=1E-15, sanity_checks=False, sc_data=''):
         As = np.sum(A, axis=0)
         if not sp.allclose(GiG.dot(As).dot(G_n_i), 
                            As.dot(G_n_i), atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_RCF_r!: Bad GT!", la.norm(GiG.dot(As).dot(G_n_i) - As.dot(G_n_i)), sc_data
+            log.warning("Sanity Fail in restore_RCF_r!: Bad GT! %s %s",
+                        la.norm(GiG.dot(As).dot(G_n_i) - As.dot(G_n_i)), sc_data)
 
     for s in xrange(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
@@ -952,11 +967,13 @@ def restore_RCF_r(A, r, G_n_i, zero_tol=1E-15, sanity_checks=False, sc_data=''):
     if sanity_checks:
         r_nm1_ = G_nm1.dot(M).dot(G_nm1.conj().T)
         if not sp.allclose(r_nm1_, r_nm1.A, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_RCF_r!: r != g old_r gH!", la.norm(r_nm1_ - r_nm1), sc_data
+            log.warning("Sanity Fail in restore_RCF_r!: r != g old_r gH! %s %s",
+                        la.norm(r_nm1_ - r_nm1), sc_data)
         
         r_nm1_ = eps_r_noop(r, A, A)
         if not sp.allclose(r_nm1_, r_nm1.A, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_RCF_r!: r is bad!", la.norm(r_nm1_ - r_nm1), sc_data
+            log.warning("Sanity Fail in restore_RCF_r!: r is bad! %s %s",
+                        la.norm(r_nm1_ - r_nm1), sc_data)
 
     return r_nm1, G_nm1, G_nm1_i
 
@@ -1019,8 +1036,8 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
     if sanity_checks:
         l_ = eps_l_noop(lm1, A, A)
         if not sp.allclose(l_, l, atol=1E-12, rtol=1E-12):
-            print "Sanity Fail in restore_RCF_l!: l is bad!"
-            print la.norm(l_ - l)
+            log.warning("Sanity Fail in restore_RCF_l!: l is bad!")
+            log.warning(la.norm(l_ - l))
 
     G = EV.conj().T
 
@@ -1028,7 +1045,7 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
         eye = sp.eye(A.shape[2])
         if not sp.allclose(sp.dot(G, G_i), eye,
                            atol=1E-12, rtol=1E-12):
-            print "Sanity Fail in restore_RCF_l!: Bad GT! (off by %g)" % la.norm(sp.dot(G, G_i) - eye)
+            log.warning("Sanity Fail in restore_RCF_l!: Bad GT! (off by %g)", la.norm(sp.dot(G, G_i) - eye))
             
     return l, G, G_i
 
@@ -1053,7 +1070,7 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
             eye = mm.simple_diag_matrix(np.append(np.zeros(A.shape[2] - new_D),
                                                    np.ones(new_D)), dtype=A.dtype)
         if not sp.allclose(G.dot(Gi), eye, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_LCF_l!: Bad GT!"
+            log.warning("Sanity Fail in restore_LCF_l!: Bad GT!")
 
     for s in xrange(A.shape[0]):
         A[s] = Gm1.dot(A[s]).dot(Gi)
@@ -1069,8 +1086,8 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
 
         l_ = eps_l_noop(lm1_, A, A)
         if not sp.allclose(l_, l.A, atol=1E-13, rtol=1E-13):
-            print "Sanity Fail in restore_LCF_l!: l is bad"
-            print la.norm(l_ - l)
+            log.warning("Sanity Fail in restore_LCF_l!: l is bad")
+            log.warning(la.norm(l_ - l))
 
     return l, G, Gi
     
@@ -1099,8 +1116,8 @@ def restore_LCF_r(A, r, Gi, sanity_checks=False):
     if sanity_checks:
         rm1_ = eps_r_noop(r, A, A)
         if not sp.allclose(rm1_, rm1, atol=1E-12, rtol=1E-12):
-            print "Sanity Fail in restore_LCF_r!: r is bad!"
-            print la.norm(rm1_ - rm1)
+            log.warning("Sanity Fail in restore_LCF_r!: r is bad!")
+            log.warning(la.norm(rm1_ - rm1))
 
     Gm1_i = EV
 
@@ -1108,6 +1125,6 @@ def restore_LCF_r(A, r, Gi, sanity_checks=False):
         eye = sp.eye(A.shape[1])
         if not sp.allclose(sp.dot(Gm1, Gm1_i), eye,
                            atol=1E-12, rtol=1E-12):
-            print "Sanity Fail in restore_LCF_r!: Bad GT! (off by %g)" % la.norm(sp.dot(Gm1, Gm1_i) - eye)
+            log.warning("Sanity Fail in restore_LCF_r!: Bad GT! (off by %g)", la.norm(sp.dot(Gm1, Gm1_i) - eye))
             
     return rm1, Gm1, Gm1_i

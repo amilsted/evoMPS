@@ -11,6 +11,9 @@ import scipy.linalg as la
 import scipy.sparse.linalg as las
 import tdvp_common as tm
 import matmul as m
+import logging
+
+log = logging.getLogger(__name__)
 
 class PinvOp:    
     def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
@@ -110,7 +113,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
     res, info = solver(op, x, x0=res, maxiter=maxiter, tol=tol) #tol: norm( b - A*x ) / norm( b )
     
     if info != 0:
-        print "Warning: Did not converge on solution for ppinv!", sc_data
+        log.warning("Warning: Did not converge on solution for ppinv! %s", sc_data)
     
     #Test
     if sanity_checks and x.shape[0] > 1:
@@ -122,7 +125,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
             d = la.norm(RHS_test - x) / norm
         #d = abs(RHS_test - x).sum() / abs(x).sum()
         if not d < tol:
-            print "Sanity check failed: Bad ppinv solution! Off by: ", d, sc_data
+            log.warning("Sanity check failed: Bad ppinv solution! Off by: %s %s", d, sc_data)
     
     res = res.reshape((D, D))
         
@@ -136,7 +139,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
             res_brute = pinvE.dot(x).reshape((D, D))
         
         if not la.norm(res - res_brute) < la.norm(res) * tol * 10:
-            print "Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g" % (str(left), la.norm(res - res_brute) / la.norm(res)), sc_data
+            log.warning("Brute check fail in calc_PPinv (left: %s): Bad brute check! Off by: %g %s", left, la.norm(res - res_brute) / la.norm(res), sc_data)
         
         if sanity_checks and x.shape[0] > 1:
             RHS_test = op.matvec(res_brute.ravel())
@@ -147,7 +150,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
                 d2 = la.norm(RHS_test - x) / norm
             #d = abs(RHS_test - x).sum() / abs(x).sum()
             if not d2 < tol:
-                print "Sanity check failed: Bad ppinv brute solution! Off by: ", d2, sc_data
+                log.warning("Sanity check failed: Bad ppinv brute solution! Off by: %s %s", d2, sc_data)
     
     out[:] = res
     
