@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>evoMPS by amilsted</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>evoMPS</h1>
+        <p>Quantum many-particle dynamics in 1D with matrix product states</p>
+
+        <p class="view"><a href="https://github.com/amilsted/evoMPS">View the Project on GitHub <small>amilsted/evoMPS</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/amilsted/evoMPS/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/amilsted/evoMPS/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/amilsted/evoMPS">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <p><img src="https://dl.dropboxusercontent.com/u/12738669/evoMPS/evoMPSlogo_200.png" alt="evoMPS"></p>
+
+<p>Tutorial videos:</p>
+
+<ul>
+<li><a href="http://vimeo.com/user19042101/evomps-tutorial-installation">Installation</a></li>
+<li><a href="http://vimeo.com/user19042101/evomps-tutorial-ground">Find ground state</a></li>
+<li><a href="http://vimeo.com/user19042101/evomps-tutorial-excitations">Find excitations</a></li>
+</ul><h2>
+<a name="introduction" class="anchor" href="#introduction"><span class="octicon octicon-link"></span></a>Introduction</h2>
+
+<p>evoMPS simulates time-evolution (real or imaginary) of one-dimensional 
+many-particle quantum systems using matrix product states
+(MPS) and the time dependent variational principle (TDVP).</p>
+
+<p>It can be used to efficiently find ground states and simulate dynamics.</p>
+
+<p>The evoMPS implementation assumes a nearest-neighbour or next-nearest-neighbour
+Hamiltonian and one of the following situations:</p>
+
+<ul>
+<li>states on a finite chain with open boundary conditions</li>
+<li>spatially uniform states on an infinite chain</li>
+<li>otherwise uniform states with a localized nonuniformity on an infinite chain (only nearest-neighbour at present)</li>
+</ul><p>It is based on algorithms published by: </p>
+
+<ul>
+<li>Jutho Haegeman</li>
+<li>\J. Ignacio Cirac</li>
+<li>Tobias J. Osborne</li>
+<li>Iztok Pizorn</li>
+<li>Henri Verschelde</li>
+<li>Frank Verstraete</li>
+</ul><p>and available on arxiv.org under <a href="http://arxiv.org/abs/1103.0936v2">arXiv:1103.0936v2</a>. 
+The algorithm for handling localized
+nonuniformities on infinite chains was developed by:</p>
+
+<ul>
+<li>Ashley Milsted</li>
+<li>Tobias J. Osborne</li>
+<li>Frank Verstraete</li>
+<li>Jutho Haegeman</li>
+</ul><p>and is detailed in <a href="http://arxiv.org/abs/1207.0691">arXiv:1207.0691</a>.
+For details, see doc/implementation_details.pdf and the source code itself,
+which I endeavour to annotate thoroughly.</p>
+
+<p>evoMPS is implemented in Python using Scipy <a href="http://www.scipy.org">http://www.scipy.org</a> and
+benefits from optimized linear algebra libraries being installed (BLAS and LAPACK).
+For more details, see INSTALL.</p>
+
+<p>evoMPS was originally developed as part of an MSc project by Ashley Milsted,
+supervised by Tobias Osborne at the Institute for Theoretical Physics of
+Leibniz Universität Hannover <a href="http://www.itp.uni-hannover.de/">http://www.itp.uni-hannover.de/</a>.</p>
+
+<h2>
+<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage</h2>
+
+<p>The evoMPS algorithms are presented as python classes to be used in a script.
+Some example scripts can be found in the "examples" directory.
+To run an example script without installing the evoMPS modules, copy it to the base 
+directory first e.g. under Windows::</p>
+
+<pre><code>copy examples\transverse_ising_uniform.py .
+python transverse_ising_uniform.py
+</code></pre>
+
+<p>Essentially, the user defines a spin chain Hilbert space
+and a nearest-neighbour Hamiltonian and then carries out a series of small 
+time steps (numerically integrating the "Schrödinger equation" for the MPS parameters)::</p>
+
+<pre><code>sim = EvoMPS_TDVP_Uniform(bond_dim, local_hilb_dim, my_hamiltonian)
+
+for i in range(max_steps):
+    sim.update()
+
+    my_exp_val = sim.expect_1s(my_op)
+
+    sim.take_step_RK4(dtau)
+</code></pre>
+
+<p>Operators, including the Hamiltonian, are defined as arrays like this::</p>
+
+<pre><code>pauli_z = numpy.array([[1, 0],
+                       [0, -1]])
+</code></pre>
+
+<p>or as python callables (functions) like this::</p>
+
+<pre><code>def pauli_z(s, t):
+    if s == t:
+        return (-1.0)**s
+    else:
+        return 0
+</code></pre>
+
+<p>Calculating expectation values or other quantities can be done after each step 
+as desired.</p>
+
+<p>Switching between imaginary time evolution (for finding the ground state)
+and real time evolution is as easy as multiplying the time step size by a factor of i!</p>
+
+<h2>
+<a name="contact" class="anchor" href="#contact"><span class="octicon octicon-link"></span></a>Contact</h2>
+
+<p>Please send comments to:</p>
+
+<p>ashmilsted at </p>
+
+<p>To submit ideas or bug reports, please use the GitHub Issues system <a href="http://github.com/amilsted/evoMPS/">http://github.com/amilsted/evoMPS/</a>.</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/amilsted">amilsted</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
