@@ -4,24 +4,6 @@ Created on Thu Oct 13 17:29:27 2011
 
 @author: Ashley Milsted
 
-To subclass, or not to subclass?
-
- Option 1:
-     Sandwich contains gen and uni objects that store the actual state.
-     Wrappers like getA() bridge the gaps.
-
- Option 2:
-     Sandwich is a subclass of generic MPS.
-     Need to override stuff.
-
- Option 3:
-     Sandwich neither uses nor inherits from gen MPS.
-     Duplication of code...
-
- Problem: What to do for TDVP?
-     If we inherit from gen MPS, can we still inherit from gen TDVP?
-     ...Possibly
-
 """
 import scipy as sp
 import scipy.linalg as la
