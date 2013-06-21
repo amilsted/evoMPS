@@ -1,5 +1,5 @@
 ========
- evoMPS
+ evoMPS \|. \|.:\|::>
 ========
 ---------------------------------------------------------------
 Quantum many-particle dynamics in 1D with matrix product states
