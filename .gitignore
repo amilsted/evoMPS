@@ -1,0 +1,21 @@
+*.py[cod]
+
+# C extensions
+*.so
+
+# Packages
+*.egg
+*.egg-info
+build
+
+# Installer logs
+pip-log.txt
+
+# Rope
+.ropeproject
+
+# Vim
+*.swp
+
+# Output files
+*.npy
