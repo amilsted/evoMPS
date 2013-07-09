@@ -342,6 +342,7 @@ class EvoMPS_MPS_Uniform(object):
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         
         ev.sort()
+        log.debug("Eigenvalues of the transfer operator: %s", ev)
                           
         ev1 = abs(ev[-1])
         
@@ -358,7 +359,7 @@ class EvoMPS_MPS_Uniform(object):
             log.warning("Warning: No eigenvalues detected with magnitude significantly different to largest.")
             return sp.NaN
         
-        mag = abs(ev[-1])
+        mag = abs(ev[-1].real)
         
         return -1 / sp.log(mag)
                 
