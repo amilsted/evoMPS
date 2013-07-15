@@ -340,16 +340,22 @@ class EvoMPS_MPS_Uniform(object):
             Number of Arnoldii basis vectors to store.
         """
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
+        log.debug("Eigenvalues of the transfer operator: %s", ev)
+        
+        #We only require the absolute values, and sort() does not handle
+        #complex values nicely (it sorts by real part).
+        ev = abs(ev)
         
         ev.sort()
+        log.debug("Eigenvalue magnitudes of the transfer operator: %s", ev)
                           
-        ev1 = abs(ev[-1])
+        ev1 = ev[-1]
         
         if abs(ev1 - 1) > tol:
             log.warning("Warning: Largest eigenvalue != 1")
 
         while True:
-            if ev.shape[0] > 1 and abs(ev[-1] - ev1) < tol:
+            if ev.shape[0] > 1 and (ev1 - ev[-1]) < tol:
                 ev = ev[:-1]
             else:
                 break
@@ -358,9 +364,7 @@ class EvoMPS_MPS_Uniform(object):
             log.warning("Warning: No eigenvalues detected with magnitude significantly different to largest.")
             return sp.NaN
         
-        mag = abs(ev[-1])
-        
-        return -1 / sp.log(mag)
+        return -1 / sp.log(ev[-1])
                 
     def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
