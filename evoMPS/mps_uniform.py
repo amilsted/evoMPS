@@ -34,13 +34,14 @@ class EOp:
         self.A1 = A1
         self.A2 = A2
         
-        self.D = A1.shape[1]
+        self.D1 = A1.shape[1]
+        self.D2 = A2.shape[1]
         
-        self.shape = (self.D**2, self.D**2)
+        self.shape = (self.D1 * self.D2, self.D1 * self.D2)
         
         self.dtype = np.dtype(A1.dtype)
         
-        self.out = np.empty((self.D, self.D), dtype=self.dtype)
+        self.out = np.empty((self.D1, self.D2), dtype=self.dtype)
         
         self.calls = 0
         
@@ -53,7 +54,7 @@ class EOp:
         """Matrix-vector multiplication. 
         Result = Ev or vE (if self.left == True).
         """
-        x = v.reshape((self.D, self.D))
+        x = v.reshape((self.D1, self.D2))
 
         Ex = self.eps(x, self.A1, self.A2, self.out)
         
@@ -777,7 +778,9 @@ class EvoMPS_MPS_Uniform(object):
         self.calc_AA()
         
         
-    def fidelity_per_site(self, other, full_output=False, left=False):
+    def fidelity_per_site(self, other, full_output=False, left=False, 
+                          force_dense=False, force_sparse=False,
+                          dense_cutoff=64):
         """Returns the per-site fidelity d.
           
         Also returns the largest eigenvalue "w" of the overlap transfer
@@ -796,6 +799,12 @@ class EvoMPS_MPS_Uniform(object):
             Whether to return the eigenvector V.
         left : bool
             Whether to find the left eigenvector (instead of the right)
+        force_dense : bool
+            Forces use of a dense eigenvalue decomposition algorithm
+        force_sparse : bool
+            Forces use of a sparse, iterative eigenvalue solver (except if D == 1)
+        dense_cutoff : int
+            The matrix dimension above which a sparse eigenvalue solver is used 
         
         Returns
         -------
@@ -806,18 +815,37 @@ class EvoMPS_MPS_Uniform(object):
         V : ndarray
             The right (or left if left == True) eigenvector corresponding to w (if full_output == True).
         """
-        if self.D == 1:
+        As = [self.A, other.A]
+        
+        ED = self.D * other.D
+        
+        if ED == 1:
             ev = 0
             for s in xrange(self.q):
-                ev += self.A[s] * other.A[s].conj()
+                ev += As[0][s] * As[1][s].conj()
             if left:
                 ev = ev.conj()
             if full_output:
                 return abs(ev), ev, sp.ones((1), dtype=self.typ)
             else:
                 return abs(ev), ev
+        elif (ED <= dense_cutoff or force_dense) and not force_sparse:
+            E = sp.zeros((ED, ED), dtype=As[0].dtype)
+            for s in xrange(As[0].shape[0]):
+                E += sp.kron(As[0][s], As[1][s].conj())
+                
+            if full_output:
+                ev, eV = la.eig(E, left=left, right=not left)
+            else:
+                ev = la.eigvals(E)
+            
+            ind = abs(ev).argmax()
+            if full_output:
+                return abs(ev[ind]), ev[ind], eV[:, ind]
+            else:
+                return abs(ev[ind]), ev[ind]
         else:
-            opE = EOp(self.A, other.A, left)
+            opE = EOp(As[0], As[1], left)
             res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
             if full_output:
                 ev, eV = res
