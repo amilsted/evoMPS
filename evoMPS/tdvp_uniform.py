@@ -1166,8 +1166,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                         tol=tol,
                                                         maxiter=max_iter,
                                                         full_output=True)
-                                                            
-                print "NUM_ITR = ", itr
     
                 #hopefully optimize next calc_lr
                 nearest_tau_ind = abs(np.array(taus) - tau_opt).argmin()
