@@ -3,7 +3,7 @@
 
 """
 A demonstration of evoMPS: Calculation of approximate excitation spectrum
-for the transverse Ising model.
+for the Heisenberg model.
 
 @author: Ashley Milsted
 """
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         i += 1
 
         """
-        Switch to real time evolution if we have the ground state.
+        Find excitations if we have the ground state.
         """
         if eta < tol_im or loaded:
             s.save_state(grnd_fname)

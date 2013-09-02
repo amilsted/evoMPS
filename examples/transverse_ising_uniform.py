@@ -165,7 +165,7 @@ if __name__ == '__main__':
         i += 1
 
         """
-        Switch to real time evolution if we have the ground state.
+        Find excitations if we have the ground state.
         """
         if eta < tol_im or loaded:
             s.save_state(grnd_fname)
