@@ -584,6 +584,49 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
         
     return B
     
+def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
+    D = A1[0].shape[0]
+    Dm1 = D
+    
+    out.fill(0)
+    
+    for s in xrange(len(A1)):
+        cb.cublasSetStream(handle, streams[s].handle)
+        cb.cublasZgemm(handle, 'N', 'N', D, Dm1, D, 1., x.gpudata, D, 
+                       A1[s].gpudata, D, 0., tmp[s].gpudata, D)
+        cb.cublasZgemm(handle, 'C', 'N', Dm1, Dm1, D, 1., A2[s].gpudata, D, 
+                       tmp[s].gpudata, D, 0., tmp2[s].gpudata, Dm1)
+        
+    for s in streams:
+        s.synchronize()
+        
+    cb.cublasSetStream(handle, 0)
+    for s in xrange(len(A1)):
+        cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+        
+    return out
+    
+def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
+    D = A1[0].shape[0]
+    
+    out.fill(0)
+    
+    for s in xrange(len(A1)):
+        cb.cublasSetStream(handle, streams[s].handle)
+        cb.cublasZgemm(handle, 'N', 'C', D, D, D, 1., x.gpudata, D, 
+                       A1[s].gpudata, D, 0., tmp[s].gpudata, D)
+        cb.cublasZgemm(handle, 'N', 'N', D, D, D, 1., A2[s].gpudata, D, 
+                       tmp[s].gpudata, D, 0., tmp2[s].gpudata, D)
+        
+    for s in streams:
+        s.synchronize()
+        
+    cb.cublasSetStream(handle, 0)
+    for s in xrange(len(A1)):
+        cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+        
+    return out
+    
 class EOp_CUDA:
     def __init__(self, A1, A2, left):
         """Creates a new LinearOperator interface to the superoperator E.
@@ -599,13 +642,10 @@ class EOp_CUDA:
         left : bool
             Whether to multiply with a vector to the left (or to the right).
         """
-        self.A1G = []
-        for A1s in A1:
-            self.A1G.append(garr.to_gpu(A1s))
-            
-        self.A2G = []
-        for A2s in A1:
-            self.A2G.append(garr.to_gpu(A2s))
+        self.A1G = map(garr.to_gpu, A1)
+        self.A2G = map(garr.to_gpu, A2)
+        self.tmp = map(garr.empty_like, self.A1G)
+        self.tmp2 = map(garr.empty_like, self.A1G)
         
         self.D = A1.shape[1]
         
@@ -613,13 +653,18 @@ class EOp_CUDA:
         
         self.dtype = sp.dtype(A1[0].dtype)
         
-        self.out = garr.empty((self.D, self.D), dtype=self.dtype)
+        self.out = garr.empty((self.D, self.D), dtype=self.dtype)        
+        self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
         
         self.calls = 0
         
         self.left = left
         
         self.hdl = cb.cublasCreate()
+        
+        self.streams = []
+        for s in xrange(A1.shape[0]):
+            self.streams.append(cd.Stream())
     
     def matvec(self, v):
         """Matrix-vector multiplication. 
@@ -627,31 +672,35 @@ class EOp_CUDA:
         """
         x = v.reshape((self.D, self.D))
         
-        xG = garr.to_gpu(x)
+        self.xG.set(x)
         
         if self.left:
-            Ex = eps_l_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            Ex = eps_l_noop_strm(self.xG, self.A1G, self.A2G, self.out, 
+                                 self.tmp, self.tmp2, self.streams, self.hdl)
         else:
-            Ex = eps_r_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            Ex = eps_r_noop_strm(self.xG, self.A1G, self.A2G, self.out, 
+                                 self.tmp, self.tmp2, self.streams, self.hdl)
         
         self.calls += 1
         
         return Ex.get().ravel()
         
     def close_cuda(self):
-        cb.cublasDestroy(self.hdl)
+        if not self.hdl is None:
+            cb.cublasDestroy(self.hdl)
+            self.hdl = None
+        
+    def __del__(self):
+        self.close_cuda()
         
 class PinvOp_CUDA:
     def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
         assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
         
-        self.A1G = []
-        for A1s in A1:
-            self.A1G.append(garr.to_gpu(A1s))
-            
-        self.A2G = []
-        for A2s in A1:
-            self.A2G.append(garr.to_gpu(A2s))
+        self.A1G = map(garr.to_gpu, A1)
+        self.A2G = map(garr.to_gpu, A2)
+        self.tmp = map(garr.empty_like, self.A1G)
+        self.tmp2 = map(garr.empty_like, self.A1G)
         
         self.l = l
         self.r = r
@@ -669,34 +718,58 @@ class PinvOp_CUDA:
         self.dtype = A1.dtype
         
         self.out = garr.empty((self.D, self.D), dtype=self.dtype)
+        self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
         
         self.hdl = cb.cublasCreate()
+        
+        self.streams = []
+        for s in xrange(A1.shape[0]):
+            self.streams.append(cd.Stream())
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        xG = garr.to_gpu(x)
+        self.xG.set(x)
         
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = eps_l_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            Ehx = eps_l_noop_strm(self.xG, self.A1G, self.A2G, self.out, 
+                                 self.tmp, self.tmp2, self.streams, self.hdl)
             if self.pseudo:
                 QEQhx = Ehx - self.lG * m.adot(self.r, x)
-                res = QEQhx.mul_add(-sp.exp(-1.j * self.p), xG, 1)
+                #res = QEQhx.mul_add(-sp.exp(-1.j * self.p), self.xG, 1)
+                cb.cublasZaxpy(self.hdl, self.D**2, -sp.exp(-1.j * self.p), 
+                               QEQhx.gpudata, 1, self.xG.gpudata, 1)
+                res = self.xG
             else:
-                res = Ehx.mul_add(-sp.exp(-1.j * self.p), xG, 1)
+                #res = Ehx.mul_add(-sp.exp(-1.j * self.p), self.xG, 1)
+                cb.cublasZaxpy(self.hdl, self.D**2, -sp.exp(-1.j * self.p), 
+                               Ehx.gpudata, 1, self.xG.gpudata, 1)
+                res = self.xG
         else:
-            Ex = eps_r_2(xG, self.A1G, self.A2G, self.out, self.hdl)
+            Ex = eps_r_noop_strm(self.xG, self.A1G, self.A2G, self.out, 
+                                 self.tmp, self.tmp2, self.streams, self.hdl)
             if self.pseudo:
                 QEQx = Ex - self.rG * m.adot(self.l, x)
-                res = QEQx.mul_add(-sp.exp(1.j * self.p), xG, 1)
+                #res = QEQx.mul_add(-sp.exp(1.j * self.p), self.xG, 1)
+                cb.cublasZaxpy(self.hdl, self.D**2, -sp.exp(1.j * self.p), 
+                               QEQx.gpudata, 1, self.xG.gpudata, 1)
+                res = self.xG
             else:
-                res = Ex.mul_add(-sp.exp(1.j * self.p), xG, 1)
+                #res = Ex.mul_add(-sp.exp(1.j * self.p), self.xG, 1)
+                cb.cublasZaxpy(self.hdl, self.D**2, -sp.exp(1.j * self.p), 
+                               Ex.gpudata, 1, self.xG.gpudata, 1)
+                res = self.xG
         
         return res.get().ravel()
         
     def close_cuda(self):
-        cb.cublasDestroy(self.hdl)
+        if not self.hdl is None:
+            cb.cublasDestroy(self.hdl)
+            self.hdl = None
+        
+    def __del__(self):
+        self.close_cuda()
     
 if __name__ == '__main__':
     test_calc_lr(512, 16)
