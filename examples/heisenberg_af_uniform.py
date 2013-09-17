@@ -3,7 +3,7 @@
 
 """
 A demonstration of evoMPS: Calculation of approximate excitation spectrum
-for the Heisenberg model.
+for the transverse Ising model.
 
 @author: Ashley Milsted
 """
@@ -17,7 +17,7 @@ First, we set up some global variables to be used as parameters.
 """
 
 S = 1                         #Spin: Can be 0.5 or 1.
-bond_dim = 16                 #The maximum bond dimension
+bond_dim = 128                #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
 Jy = 1.00
@@ -27,7 +27,7 @@ tol_im = 1E-10                #Ground state tolerance (norm of projected evoluti
 
 step = 0.1                    #Imaginary time step size
 
-load_saved_ground = True      #Whether to load a saved ground state (if it exists)
+load_saved_ground = False     #Whether to load a saved ground state (if it exists)
 
 auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
@@ -38,6 +38,8 @@ num_momenta = 20              #Number of points on momentum axis
 plot_results = True
 
 sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
+use_cuda = True
 
 """
 Next, we define our Hamiltonian and some observables.
@@ -95,6 +97,9 @@ Now we are ready to create an instance of the evoMPS class.
 s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, qn, get_ham(Jx, Jy, Jz))
 s.zero_tol = zero_tol
 s.sanity_checks = sanity_checks
+s.ev_use_cuda = use_cuda
+s.ppinv_use_cuda = use_cuda
+s.symm_gauge = False
 
 """
 The following loads a ground state from a file.
@@ -183,7 +188,7 @@ if __name__ == '__main__':
         i += 1
 
         """
-        Find excitations if we have the ground state.
+        Switch to real time evolution if we have the ground state.
         """
         if eta < tol_im or loaded:
             s.save_state(grnd_fname)
