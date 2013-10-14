@@ -371,6 +371,45 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
+    def calc_B_2s(self):
+        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+        Vrh = self.Vsh
+        
+        Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
+        
+        etaBB = sp.sqrt(m.adot(Y, Y))
+        print etaBB.real
+        
+        U, sv, Vh = la.svd(Y)
+        
+        print sp.count_nonzero(sv <= 1E-8)
+        
+        #dD = sp.count_nonzero(sv > 1E-8)
+        dD = 4
+        
+        sv = m.simple_diag_matrix(sv[:dD])
+        
+        ss = sv.sqrt()
+        
+        Z1 = ss.dot_left(U[:, :dD])
+        
+        Z2 = ss.dot(Vh[:dD, :])
+        
+        BB1 = sp.zeros((self.q, self.D, dD), dtype=self.A.dtype)
+        
+        for s in xrange(self.q):
+            BB1[s] = self.l_sqrt_i.dot(Vlh[s].conj().T).dot(Z1)
+        
+        BB2 = sp.zeros((self.q, dD, self.D), dtype=self.A.dtype)
+        
+        for s in xrange(self.q):
+            BB2[s] = self.r_sqrt_i.dot_left(Z2.dot(Vrh[s].conj().T))
+        
+        return BB1, BB2, sv.diag[0], etaBB
+        
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
@@ -396,7 +435,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None):
+    def take_step(self, dtau, B=None, dynexp=False, maxD=128):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A -= dtau * B with B from self.calc_B() by default.
@@ -413,7 +452,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if B is None:
             B = self.calc_B()
         
-        self.A += -dtau * B
+        if dynexp and self.D < maxD:
+            BB1, BB2, s0, etaBB = self.calc_B_2s()
+            if etaBB.real > self.eta.real * 10:
+                oldD = self.D
+                dD = BB1.shape[2]
+                self.expand_D(self.D + dD, refac=0, imfac=0)
+                self.A[:, :oldD, :oldD] += -dtau * B
+                self.A[:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1
+                self.A[:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2
+                self.A[:, oldD:, oldD:].fill(0)
+                print "expanded to:", self.D
+            else:
+                self.A += -dtau * B
+        else:
+            self.A += -dtau * B
             
     def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
