@@ -778,11 +778,11 @@ class EvoMPS_MPS_Uniform(object):
         if self.symm_gauge:
             self.l = m.simple_diag_matrix(tmp_l[:self.D], dtype=self.typ)
             self.r = m.simple_diag_matrix(tmp_l[:self.D], dtype=self.typ)
-            self.A = tmp_A[:, :self.D, :self.D]
+            self.A = np.array(tmp_A[:, :self.D, :self.D])
         else:
             self.l = m.simple_diag_matrix(tmp_l[-self.D:], dtype=self.typ)
             self.r = m.eyemat(self.D, dtype=self.typ)
-            self.A = tmp_A[:, -self.D:, -self.D:]
+            self.A = np.array(tmp_A[:, -self.D:, -self.D:])
             
         self.l_before_CF = self.l.A
         self.r_before_CF = self.r.A
