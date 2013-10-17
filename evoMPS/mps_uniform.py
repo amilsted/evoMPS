@@ -523,18 +523,22 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(self.l, m.H(self.l),
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: l is not hermitian!")
+                log.warning("Sanity check failed: l is not hermitian! Off by: %s",
+                            la.norm(self.l - m.H(self.l)))
 
             if not np.allclose(self.r, m.H(self.r),
             rtol=self.itr_rtol*self.check_fac, 
             atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: r is not hermitian!")
+                log.warning("Sanity check failed: r is not hermitian! Off by: %s",
+                            la.norm(self.r - m.H(self.r)))
             
-            if not np.all(la.eigvalsh(self.l) > 0):
-                log.warning("Sanity check failed: l is not pos. def.!")
+            minev = la.eigvalsh(self.l).min()
+            if minev <= 0:
+                log.warning("Sanity check failed: l is not pos. def.! Min. ev: %s", minev)
                 
-            if not np.all(la.eigvalsh(self.r) > 0):
-                log.warning("Sanity check failed: r is not pos. def.!")
+            minev = la.eigvalsh(self.r).min()
+            if minev <= 0:
+                log.warning("Sanity check failed: r is not pos. def.! Min. ev: %s", minev)
             
             norm = m.adot(self.l, self.r)
             if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
@@ -560,10 +564,14 @@ class EvoMPS_MPS_Uniform(object):
         if zero_tol is None:
             zero_tol = self.zero_tol
         
-        X, Xi = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol)
+        X, Xi = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol,
+                                     force_evd=False,
+                                     sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r')
         
-        Y, Yi = tm.herm_fac_with_inv(self.l, lower=False, zero_tol=zero_tol)          
-            
+        Y, Yi = tm.herm_fac_with_inv(self.l, lower=False, zero_tol=zero_tol,
+                                     force_evd=False,
+                                     sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l')          
+        
         U, sv, Vh = la.svd(Y.dot(X))
         
         #s contains the Schmidt coefficients,
@@ -584,27 +592,32 @@ class EvoMPS_MPS_Uniform(object):
             Sfull = np.asarray(S)
             
             if not np.allclose(g.dot(g_i), np.eye(self.D)):
-                log.warning("Sanity check failed! Restore_SCF, bad GT!")
+                log.warning("Sanity check failed! Restore_SCF, bad GT! Off by %s",
+                            la.norm(g.dot(g_i) - np.eye(self.D)))
             
             l = m.mmul(m.H(g_i), self.l, g_i)
             r = m.mmul(g, self.r, m.H(g))
             
             if not np.allclose(Sfull, l):
-                log.warning("Sanity check failed: Restorce_SCF, left failed!")
+                log.warning("Sanity check failed: Restore_SCF, left failed! Off by %s",
+                            la.norm(Sfull - l))
                 
             if not np.allclose(Sfull, r):
-                log.warning("Sanity check failed: Restorce_SCF, right failed!")
+                log.warning("Sanity check failed: Restore_SCF, right failed! Off by %s",
+                            la.norm(Sfull - r))
                 
             l = tm.eps_l_noop(Sfull, self.A, self.A)
             r = tm.eps_r_noop(Sfull, self.A, self.A)
             
             if not np.allclose(Sfull, l, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restorce_SCF, left bad!")
+                log.warning("Sanity check failed: Restore_SCF, left bad! Off by %s",
+                            la.norm(Sfull - l))
                 
             if not np.allclose(Sfull, r, rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restorce_SCF, right bad!")
+                log.warning("Sanity check failed: Restore_SCF, right bad! Off by %s",
+                            la.norm(Sfull - r))
 
         self.l = S
         self.r = S
@@ -636,7 +649,9 @@ class EvoMPS_MPS_Uniform(object):
         
         #First get G such that r = eye
         G, G_i, rank = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol,
-                                            return_rank=True)
+                                            return_rank=True,
+                                            sanity_checks=self.sanity_checks,
+                                            sc_data='Restore_RCF: r')
 
         self.l = m.mmul(m.H(G), self.l, G)
         
@@ -669,7 +684,8 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(self.r, r_, 
                                rtol=self.itr_rtol*self.check_fac,
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: RestoreRCF, bad r (bad GT).")
+                log.warning("Sanity check failed: Restore_RCF, bad r (bad GT).Off by %s", 
+                            la.norm(r_ - self.r))
             
             l = tm.eps_l_noop(self.l, self.A, self.A)
             r = tm.eps_r_noop(self.r, self.A, self.A)
@@ -677,12 +693,14 @@ class EvoMPS_MPS_Uniform(object):
             if not np.allclose(r, self.r,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, r not eigenvector! %s", la.norm(r - self.r))
+                log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
+                            la.norm(r - self.r))
 
             if not np.allclose(l, self.l,
                                rtol=self.itr_rtol*self.check_fac, 
                                atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, l not eigenvector! %s", la.norm(l - self.l))
+                log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
+                            la.norm(l - self.l))
         
         if ret_g:
             return G, G_i
