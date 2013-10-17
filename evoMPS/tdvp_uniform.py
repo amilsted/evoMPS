@@ -372,6 +372,51 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
+    def calc_BB_Y_2s(self, Vlh):
+        Vrh = self.Vsh
+        
+        Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
+        for s in xrange(self.q):
+            for t in xrange(self.q):
+                Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
+        
+        etaBB = sp.sqrt(m.adot(Y, Y))
+        
+        return Y, etaBB
+        
+    def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
+        Vrh = self.Vsh
+        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+        
+        Y, etaBB = self.calc_BB_Y_2s(Vlh)
+        
+        U, sv, Vh = la.svd(Y, check_finite=True)
+        
+        #print sp.count_nonzero(sv > sv_tol)
+        
+        dD = min(sp.count_nonzero(sv > sv_tol), dD_max)
+        #print sv[:10]
+                
+        sv = m.simple_diag_matrix(sv[:dD])
+        
+        ss = sv.sqrt()
+        
+        Z1 = ss.dot_left(U[:, :dD])
+        
+        Z2 = ss.dot(Vh[:dD, :])
+        
+        BB1 = sp.zeros((self.q, self.D, dD), dtype=self.A.dtype)
+        
+        for s in xrange(self.q):
+            BB1[s] = self.l_sqrt_i.dot(Vlh[s].conj().T).dot(Z1)
+        
+        BB2 = sp.zeros((self.q, dD, self.D), dtype=self.A.dtype)
+        
+        for s in xrange(self.q):
+            BB2[s] = self.r_sqrt_i.dot_left(Z2.dot(Vrh[s].conj().T))
+        
+        return BB1, BB2, etaBB
+        
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
@@ -397,7 +442,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None):
+    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, sv_tol=1E-14):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A -= dtau * B with B from self.calc_B() by default.
@@ -414,7 +459,23 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if B is None:
             B = self.calc_B()
         
-        self.A += -dtau * B
+        if dynexp and self.D < maxD:
+            res = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+            if not res is None:
+                BB1, BB2, etaBB = res
+                oldD = self.D
+                dD = BB1.shape[2]
+                self.expand_D(self.D + dD, refac=0, imfac=0)
+                #print BB1.shape, la.norm(BB1.ravel()), BB2.shape, la.norm(BB2.ravel())
+                self.A[:, :oldD, :oldD] += -dtau * B
+                self.A[:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1
+                self.A[:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2
+                self.A[:, oldD:, oldD:].fill(0)
+                log.info("Dynamically expanded! New D: %d", self.D)
+            else:
+                self.A += -dtau * B
+        else:
+            self.A += -dtau * B
             
     def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
@@ -1323,7 +1384,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def save_state(self, file, userdata=None):
         np.save(file, self.export_state(userdata))
         
-    def import_state(self, state, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+    def import_state(self, state, expand=False, truncate=False,
+                     expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
         newA = state[0]
         newl = state[1]
         newr = state[2]
@@ -1355,6 +1417,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.l_before_CF = self.l
             self.r_before_CF = self.r
             log.warning("EXPANDED!")
+        elif truncate and (len(newA.shape) == 3) \
+                and (newA.shape[0] == self.A.shape[0]) \
+                and (newA.shape[1] == newA.shape[2]) \
+                and (newA.shape[1] >= self.A.shape[1]):
+            newD = self.D
+            savedD = newA.shape[1]
+            self._init_arrays(savedD, self.q)
+            self.A[:] = newA
+            self.l = newl
+            self.r = newr
+            self.K[:] = newK
+            self.update()  # to make absolutely sure we're in CF
+            self.truncate(newD, update=True)
+            log.warning("TRUNCATED!")
         elif expand_q and (len(newA.shape) == 3) and (newA.shape[0] <= 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
         == self.A.shape[1]):
@@ -1386,9 +1462,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             return False
             
-    def load_state(self, file, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+    def load_state(self, file, expand=False, truncate=False, expand_q=False,
+                   shrink_q=False, refac=0.1, imfac=0.1):
         state = np.load(file)
-        return self.import_state(state, expand=expand, expand_q=expand_q, shrink_q=shrink_q, refac=refac, imfac=imfac)
+        return self.import_state(state, expand=expand, truncate=truncate,
+                                 expand_q=expand_q, shrink_q=shrink_q,
+                                 refac=refac, imfac=imfac)
             
     def set_q(self, newq):
         oldK = self.K        
@@ -1403,9 +1482,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         #self._init_arrays(newD, self.q)
                 
         self.K[:oldD, :oldD] = oldK
-        self.K[oldD:, :oldD].fill(la.norm(oldK) / oldD**2)
-        self.K[:oldD, oldD:].fill(la.norm(oldK) / oldD**2)
-        self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
+        #self.K[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        #self.K[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        #self.K[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        val = abs(oldK.mean())
+        m.randomize_cmplx(self.K.ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
         
     def expect_2s(self, op):
         if op is self.ham and self.ham_sites == 2:
