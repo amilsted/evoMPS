@@ -1383,7 +1383,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def save_state(self, file, userdata=None):
         np.save(file, self.export_state(userdata))
         
-    def import_state(self, state, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+    def import_state(self, state, expand=False, truncate=False,
+                     expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
         newA = state[0]
         newl = state[1]
         newr = state[2]
@@ -1415,6 +1416,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.l_before_CF = self.l
             self.r_before_CF = self.r
             log.warning("EXPANDED!")
+        elif truncate and (len(newA.shape) == 3) \
+                and (newA.shape[0] == self.A.shape[0]) \
+                and (newA.shape[1] == newA.shape[2]) \
+                and (newA.shape[1] >= self.A.shape[1]):
+            newD = self.D
+            savedD = newA.shape[1]
+            self._init_arrays(savedD, self.q)
+            self.A[:] = newA
+            self.l = newl
+            self.r = newr
+            self.K[:] = newK
+            self.update()  # to make absolutely sure we're in CF
+            self.truncate(newD, update=True)
+            log.warning("TRUNCATED!")
         elif expand_q and (len(newA.shape) == 3) and (newA.shape[0] <= 
         self.A.shape[0]) and (newA.shape[1] == newA.shape[2]) and (newA.shape[1]
         == self.A.shape[1]):
@@ -1446,9 +1461,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             return False
             
-    def load_state(self, file, expand=False, expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+    def load_state(self, file, expand=False, truncate=False, expand_q=False,
+                   shrink_q=False, refac=0.1, imfac=0.1):
         state = np.load(file)
-        return self.import_state(state, expand=expand, expand_q=expand_q, shrink_q=shrink_q, refac=refac, imfac=imfac)
+        return self.import_state(state, expand=expand, truncate=truncate,
+                                 expand_q=expand_q, shrink_q=shrink_q,
+                                 refac=refac, imfac=imfac)
             
     def set_q(self, newq):
         oldK = self.K        
