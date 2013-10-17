@@ -389,7 +389,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         Y, etaBB = self.calc_BB_Y_2s(Vlh)
         
-        U, sv, Vh = la.svd(Y, check_finite=True)
+        U, sv, Vh = la.svd(Y)
         
         #print sp.count_nonzero(sv > sv_tol)
         
