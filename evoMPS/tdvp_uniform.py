@@ -371,8 +371,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
-    def calc_BB_Y_2s(self):
-        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+    def calc_BB_Y_2s(self, Vlh):
         Vrh = self.Vsh
         
         Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
@@ -385,7 +384,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return Y, etaBB
         
     def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
-        Y, etaBB = self.calc_BB_Y_2s()
+        Vrh = self.Vsh
+        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+        
+        Y, etaBB = self.calc_BB_Y_2s(Vlh)
         
         U, sv, Vh = la.svd(Y, check_finite=True)
         
