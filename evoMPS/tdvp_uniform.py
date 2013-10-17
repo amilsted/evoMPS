@@ -371,7 +371,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
-    def calc_B_2s(self):
+    def calc_BB_Y_2s(self):
         Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
         Vrh = self.Vsh
         
@@ -381,15 +381,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
         
         etaBB = sp.sqrt(m.adot(Y, Y))
-        print etaBB.real
         
-        U, sv, Vh = la.svd(Y)
+        return Y, etaBB
         
-        print sp.count_nonzero(sv <= 1E-8)
+    def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
+        Y, etaBB = self.calc_BB_Y_2s()
         
-        #dD = sp.count_nonzero(sv > 1E-8)
-        dD = 4
+        U, sv, Vh = la.svd(Y, check_finite=True)
         
+        #print sp.count_nonzero(sv > sv_tol)
+        
+        dD = min(sp.count_nonzero(sv > sv_tol), dD_max)
+        #print sv[:10]
+                
         sv = m.simple_diag_matrix(sv[:dD])
         
         ss = sv.sqrt()
@@ -408,7 +412,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for s in xrange(self.q):
             BB2[s] = self.r_sqrt_i.dot_left(Z2.dot(Vrh[s].conj().T))
         
-        return BB1, BB2, sv.diag[0], etaBB
+        return BB1, BB2, etaBB
         
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
@@ -435,7 +439,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None, dynexp=False, maxD=128):
+    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, sv_tol=1E-14):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A -= dtau * B with B from self.calc_B() by default.
@@ -453,16 +457,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B = self.calc_B()
         
         if dynexp and self.D < maxD:
-            BB1, BB2, s0, etaBB = self.calc_B_2s()
-            if etaBB.real > self.eta.real * 10:
+            res = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+            if not res is None:
+                BB1, BB2, etaBB = res
                 oldD = self.D
                 dD = BB1.shape[2]
                 self.expand_D(self.D + dD, refac=0, imfac=0)
+                #print BB1.shape, la.norm(BB1.ravel()), BB2.shape, la.norm(BB2.ravel())
                 self.A[:, :oldD, :oldD] += -dtau * B
                 self.A[:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1
                 self.A[:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2
                 self.A[:, oldD:, oldD:].fill(0)
-                print "expanded to:", self.D
+                log.info("Dynamically expanded! New D: %d", self.D)
             else:
                 self.A += -dtau * B
         else:
