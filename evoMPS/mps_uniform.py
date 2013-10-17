@@ -1268,11 +1268,15 @@ class EvoMPS_MPS_Uniform(object):
         self.A[:, :oldD, :oldD] = oldA
 
         self.l[:oldD, :oldD] = oldl
-        self.l[:oldD, oldD:].fill(la.norm(oldl) / oldD**2)
-        self.l[oldD:, :oldD].fill(la.norm(oldl) / oldD**2)
-        self.l[oldD:, oldD:].fill(la.norm(oldl) / oldD**2)
+        val = abs(oldl.mean())
+        m.randomize_cmplx(self.l.ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
+        #self.l[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
+        #self.l[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
+        #self.l[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
         
         self.r[:oldD, :oldD] = oldr
-        self.r[oldD:, :oldD].fill(la.norm(oldr) / oldD**2)
-        self.r[:oldD, oldD:].fill(la.norm(oldr) / oldD**2)
-        self.r[oldD:, oldD:].fill(la.norm(oldr) / oldD**2)
+        val = abs(oldr.mean())
+        m.randomize_cmplx(self.r.ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
+        #self.r[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
+        #self.r[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
+        #self.r[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)

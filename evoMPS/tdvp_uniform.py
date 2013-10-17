@@ -1473,9 +1473,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         #self._init_arrays(newD, self.q)
                 
         self.K[:oldD, :oldD] = oldK
-        self.K[oldD:, :oldD].fill(la.norm(oldK) / oldD**2)
-        self.K[:oldD, oldD:].fill(la.norm(oldK) / oldD**2)
-        self.K[oldD:, oldD:].fill(la.norm(oldK) / oldD**2)
+        #self.K[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        #self.K[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        #self.K[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
+        val = abs(oldK.mean())
+        m.randomize_cmplx(self.K.ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
         
     def expect_2s(self, op):
         if op is self.ham and self.ham_sites == 2:
