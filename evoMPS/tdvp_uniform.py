@@ -372,6 +372,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return B
         
     def calc_BB_Y_2s(self, Vlh):
+        assert self.ham_sites == 2, "calc_BB_Y_2s only implemented for \
+                                     nearest-neighbour hamiltonians!"
+        
         Vrh = self.Vsh
         
         Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
