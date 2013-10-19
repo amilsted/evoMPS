@@ -93,7 +93,7 @@ class EvoMPS_MPS_Generic(object):
         for n in xrange(1, self.N + 1):
             self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-            self.A[n] = sp.empty((self.q[n], self.D[n - 1], self.D[n]), dtype=self.typ, order=self.odr)
+            self.A[n] = sp.zeros((self.q[n], self.D[n - 1], self.D[n]), dtype=self.typ, order=self.odr)
             
         sp.fill_diagonal(self.r[self.N], 1.)        
     
