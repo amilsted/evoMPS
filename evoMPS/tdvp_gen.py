@@ -95,6 +95,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
            Only available after calling take_step()."""
         self.eta.fill(sp.NaN)
         
+        self.etaBB = sp.zeros((self.N + 1), dtype=self.typ)
+        """Evolution captured by the two-site tangent plane but not by
+           the one-site tangent plane.
+           Only available after calling take_step() with dynexp=True."""
+        self.etaBB.fill(sp.NaN)
+        
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
         """The local energy expectation values (of each Hamiltonian term), 
            available after calling update() or calc_K()."""
@@ -358,7 +364,81 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             assert False, "left gauge-fixing not yet supported for three-site Hamiltonians"
             
-        return x        
+        return x
+        
+    def _calc_BB_Y_2s(self, C, Vlh, Vrh_p1, l_sqrt_m1, r_sqrt_p1):
+        assert self.ham_sites == 2, "calc_BB_Y_2s only implemented for \
+                                     nearest-neighbour hamiltonians!"
+        
+        Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=self.A[1].dtype)
+        for s in xrange(Vlh.shape[0]):
+            for t in xrange(Vrh_p1.shape[0]):
+                Y += Vlh[s].dot(l_sqrt_m1.dot(C[s, t])).dot(r_sqrt_p1.dot(Vrh_p1[t]))
+        
+        etaBB = sp.sqrt(m.adot(Y, Y))
+        
+        return Y, etaBB
+        
+    def calc_BB_Y_2s(self):
+        Y = sp.empty((self.N + 1), dtype=sp.ndarray)
+        etaBB = sp.zeros((self.N + 1), dtype=sp.complex128)
+        Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
+        Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
+        for n in xrange(1, self.N):
+            if (self.q[n + 1] * self.D[n + 1] - self.D[n] > 0 
+            and self.q[n] * self.D[n - 1] - self.D[n] > 0):
+                l_sqrt_m1, l_sqrt_i_m1, r_sqrt_p1, r_sqrt_i_p1 = tm.calc_l_r_roots(self.l[n - 1], 
+                                                                       self.r[n + 1], 
+                                                                       zero_tol=self.zero_tol,
+                                                                       sanity_checks=self.sanity_checks,
+                                                                       sc_data=('site', n))
+                Vrh[n + 1] = tm.calc_Vsh(self.A[n + 1], r_sqrt_p1, sanity_checks=self.sanity_checks)
+                Vlh[n] = tm.calc_Vsh_l(self.A[n], l_sqrt_m1, sanity_checks=self.sanity_checks)
+                
+                Y[n], etaBB[n] = self._calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_sqrt_m1, r_sqrt_p1)
+                
+        return Y, etaBB, Vlh, Vrh
+
+    def calc_BB_2s(self, Y, Vlh, Vrh, sv_tol=1E-10, max_dD=16):
+        dD = sp.zeros((self.N + 1), dtype=int)
+        BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
+        BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
+        for n in xrange(1, self.N):
+            if not Y[n] is None:
+                l_sqrt_m1, l_sqrt_i_m1, r_sqrt_p1, r_sqrt_i_p1 = tm.calc_l_r_roots(self.l[n - 1], 
+                                                                       self.r[n + 1], 
+                                                                       zero_tol=self.zero_tol,
+                                                                       sanity_checks=self.sanity_checks,
+                                                                       sc_data=('site', n))
+                                
+                U, sv, Vh = la.svd(Y[n])
+                
+                dDn = min(sp.count_nonzero(sv > sv_tol), max_dD)
+                
+                sv = m.simple_diag_matrix(sv[:dDn])
+                
+                ss = sv.sqrt()
+                
+                Z1 = ss.dot_left(U[:, :dDn])
+                
+                Z2 = ss.dot(Vh[:dDn, :])
+                
+                BB12n = sp.zeros((self.q[n], self.D[n - 1], dDn), dtype=self.A[1].dtype)
+                
+                for s in xrange(self.q[n]):
+                    BB12n[s] = l_sqrt_i_m1.dot(Vlh[n][s].conj().T).dot(Z1)
+                
+                BB21np1 = sp.zeros((self.q[n + 1], dDn, self.D[n + 1]), dtype=self.A[1].dtype)
+                
+                for s in xrange(self.q[n + 1]):
+                    BB21np1[s] = r_sqrt_i_p1.dot_left(Z2.dot(Vrh[n + 1][s].conj().T))
+                    
+                BB12[n] = BB12n
+                BB21[n + 1] = BB21np1
+                
+                dD[n] = dDn
+                
+        return BB12, BB21, dD
     
     def calc_B(self, n, set_eta=True):
         """Generates the TDVP tangent vector parameters for a single site B[n].
@@ -427,7 +507,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return None
 
     
-    def take_step(self, dtau, save_memory=True):   
+    def take_step(self, dtau, save_memory=False, dynexp=False, max_dD=16, sv_tol=1E-14):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
@@ -466,10 +546,37 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 B.append(self.calc_B(n))
                 eta_tot += self.eta[n]
                 
-            for n in xrange(1, self.N + 1):
-                if not B[n] is None:
-                    self.A[n] += -dtau * B[n]
+            Y, etaBB, Vlh, Vrh = self.calc_BB_Y_2s()
                 
+            if dynexp:
+                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, max_dD=max_dD, sv_tol=sv_tol)
+                
+                oldA = self.A
+                oldD = self.D.copy()
+                oldeta = self.eta
+                
+                self.D += dD
+                self._init_arrays()
+        
+                for n in xrange(1, self.N + 1):
+                    if not B[n] is None:
+                        oldA[n] += -dtau * B[n]
+                    self.A[n][:, :oldD[n - 1], :oldD[n]] = oldA[n]
+                    
+                    if not BB12[n] is None:
+                        self.A[n][:, :oldD[n - 1], oldD[n]:] = -1.j * sp.sqrt(dtau) * BB12[n]
+                    if not BB21[n] is None:
+                        self.A[n][:, oldD[n - 1]:, :oldD[n]] = -1.j * sp.sqrt(dtau) * BB21[n]
+                    
+                print "Dynamically expanded! New D: %s" % str(self.D)
+                self.eta = oldeta
+            else:
+                for n in xrange(1, self.N + 1):
+                    if not B[n] is None:
+                        self.A[n] += -dtau * B[n]
+                        
+            self.etaBB = etaBB
+                    
         return eta_tot
         
     def take_step_RK4(self, dtau):
