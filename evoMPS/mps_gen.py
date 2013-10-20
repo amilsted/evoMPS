@@ -221,7 +221,7 @@ class EvoMPS_MPS_Generic(object):
                 data = self.auto_truncate(update=False, 
                                           return_update_data=not restore_CF_after_trunc)
                 if data:
-                    log.warning("Auto-truncated! New D: %s", self.D)
+                    log.info("Auto-truncated! New D: %s", self.D)
                     if restore_CF_after_trunc:
                         self.restore_CF()
                     else:

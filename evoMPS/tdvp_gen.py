@@ -5,8 +5,6 @@ Created on Thu Oct 13 17:29:27 2011
 @author: Ashley Milsted
 
 TODO:
-    - Implement evaluation of the error due to restriction to bond dim.
-    - Add an algorithm for expanding the bond dimension.
     - Adaptive step size.
 
 """
@@ -15,6 +13,9 @@ import scipy.linalg as la
 import matmul as m
 import tdvp_common as tm
 from mps_gen import EvoMPS_MPS_Generic
+import logging
+
+log = logging.getLogger(__name__)
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
@@ -568,7 +569,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     if not BB21[n] is None:
                         self.A[n][:, oldD[n - 1]:, :oldD[n]] = -1.j * sp.sqrt(dtau) * BB21[n]
                     
-                print "Dynamically expanded! New D: %s" % str(self.D)
+                log.info("Dyn. expanded! New D: %s", self.D)
                 self.eta = oldeta
             else:
                 for n in xrange(1, self.N + 1):
