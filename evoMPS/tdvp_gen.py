@@ -380,25 +380,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         return Y, etaBB
         
-    def calc_BB_Y_2s(self):
+    def calc_BB_Y_2s(self, l_s, l_si, r_s, r_si, Vrh, Vlh):
         Y = sp.empty((self.N + 1), dtype=sp.ndarray)
         etaBB = sp.zeros((self.N + 1), dtype=sp.complex128)
-        Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
-        Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
         for n in xrange(1, self.N):
-            if (self.q[n + 1] * self.D[n + 1] - self.D[n] > 0 
-            and self.q[n] * self.D[n - 1] - self.D[n] > 0):
-                l_sqrt_m1, l_sqrt_i_m1, r_sqrt_p1, r_sqrt_i_p1 = tm.calc_l_r_roots(self.l[n - 1], 
-                                                                       self.r[n + 1], 
-                                                                       zero_tol=self.zero_tol,
-                                                                       sanity_checks=self.sanity_checks,
-                                                                       sc_data=('site', n))
-                Vrh[n + 1] = tm.calc_Vsh(self.A[n + 1], r_sqrt_p1, sanity_checks=self.sanity_checks)
-                Vlh[n] = tm.calc_Vsh_l(self.A[n], l_sqrt_m1, sanity_checks=self.sanity_checks)
+            if (not Vrh[n + 1] is None and not Vlh[n] is None):
+                Y[n], etaBB[n] = self._calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_s[n - 1], r_s[n + 1])
                 
-                Y[n], etaBB[n] = self._calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_sqrt_m1, r_sqrt_p1)
-                
-        return Y, etaBB, Vlh, Vrh
+        return Y, etaBB
 
     def calc_BB_2s(self, Y, Vlh, Vrh, sv_tol=1E-10, max_dD=16):
         dD = sp.zeros((self.N + 1), dtype=int)
@@ -441,7 +430,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
         return BB12, BB21, dD
     
-    def calc_B(self, n, set_eta=True):
+    def calc_B(self, n, set_eta=True, l_s_m1=None, l_si_m1=None, r_s=None, r_si=None, Vlh=None, Vrh=None):
         """Generates the TDVP tangent vector parameters for a single site B[n].
         
         A TDVP time step is defined as: A[n] -= dtau * B[n]
@@ -459,50 +448,52 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 if none is defined.
         """
         if self.gauge_fixing == 'right':
-            return self._calc_B_r(n, set_eta=set_eta)
+            return self._calc_B_r(n, set_eta=set_eta, l_s_m1=l_s_m1, l_si_m1=l_si_m1, r_s=r_s, r_si=r_si, Vrh=Vrh)
         else:
-            return self._calc_B_l(n, set_eta=set_eta)
+            return self._calc_B_l(n, set_eta=set_eta, l_s_m1=l_s_m1, l_si_m1=l_si_m1, r_s=r_s, r_si=r_si, Vlh=Vlh)
     
-    def _calc_B_r(self, n, set_eta=True):
+    def _calc_B_r(self, n, set_eta=True, l_s_m1=None, l_si_m1=None, r_s=None, r_si=None, Vrh=None):
         if self.q[n] * self.D[n] - self.D[n - 1] > 0:
-            l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
-                                                                   self.r[n], 
-                                                                   zero_tol=self.zero_tol,
-                                                                   sanity_checks=self.sanity_checks,
-                                                                   sc_data=('site', n))
+            if l_s_m1 is None:
+                l_s_m1, l_si_m1, r_s, r_si = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
+                                                           zero_tol=self.zero_tol,
+                                                           sanity_checks=self.sanity_checks,
+                                                           sc_data=('site', n))
             
-            Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
+            if Vrh is None:
+                Vrh = tm.calc_Vsh(self.A[n], r_s, sanity_checks=self.sanity_checks)
             
-            x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+            x = self.calc_x(n, Vrh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
                 self.eta[n] = sp.sqrt(m.adot(x, x))
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = m.mmul(l_sqrt_inv, x, m.H(Vsh[s]), r_sqrt_inv)
+                B[s] = m.mmul(l_si_m1, x, m.H(Vrh[s]), r_si)
             return B
         else:
             return None
 
-    def _calc_B_l(self, n, set_eta=True):
+    def _calc_B_l(self, n, set_eta=True, l_s_m1=None, l_si_m1=None, r_s=None, r_si=None, Vlh=None):
         if self.q[n] * self.D[n - 1] - self.D[n] > 0:
-            l_sqrt, l_sqrt_inv, r_sqrt, r_sqrt_inv = tm.calc_l_r_roots(self.l[n - 1], 
-                                                                   self.r[n], 
-                                                                   zero_tol=self.zero_tol,
-                                                                   sanity_checks=self.sanity_checks,
-                                                                   sc_data=('site', n))
+            if l_s_m1 is None:
+                l_s_m1, l_si_m1, r_s, r_si = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
+                                                           zero_tol=self.zero_tol,
+                                                           sanity_checks=self.sanity_checks,
+                                                           sc_data=('site', n))
             
-            Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
+            if Vlh is None:
+                Vlh = tm.calc_Vsh_l(self.A[n], l_s_m1, sanity_checks=self.sanity_checks)
             
-            x = self.calc_x_l(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv)
+            x = self.calc_x_l(n, Vlh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
                 self.eta[n] = sp.sqrt(m.adot(x, x))
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = m.mmul(l_sqrt_inv, m.H(Vsh[s]), x, r_sqrt_inv)
+                B[s] = m.mmul(l_si_m1, m.H(Vlh[s]), x, r_si)
             return B
         else:
             return None
@@ -543,11 +534,29 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             assert all(x is None for x in B), "take_step update incomplete!"
         else:
             B = [None] #There is no site zero
+            l_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+            l_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+            r_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+            r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+            Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
+            Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
             for n in xrange(1, self.N + 1):
-                B.append(self.calc_B(n))
+                l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
+                                                               zero_tol=self.zero_tol,
+                                                               sanity_checks=self.sanity_checks,
+                                                               sc_data=('site', n))
+            for n in xrange(1, self.N + 1):
+                Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
+                Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
+                
+            for n in xrange(1, self.N + 1):
+                Bn = self.calc_B(n, set_eta=True, l_s_m1=l_s[n-1], 
+                                 l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
+                                 Vlh=Vlh[n], Vrh=Vrh[n])
+                B.append(Bn)
                 eta_tot += self.eta[n]
                 
-            Y, etaBB, Vlh, Vrh = self.calc_BB_Y_2s()
+            Y, etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
                 
             if dynexp:
                 BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, max_dD=max_dD, sv_tol=sv_tol)

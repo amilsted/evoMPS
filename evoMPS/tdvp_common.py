@@ -612,6 +612,9 @@ def calc_Vsh(A, r_s, sanity_checks=False):
     Dm1 = A.shape[1]
     q = A.shape[0]
     
+    if q * D - Dm1 <= 0:
+        return None
+    
     R = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
 
     for s in xrange(q):
@@ -639,10 +642,13 @@ def calc_Vsh(A, r_s, sanity_checks=False):
 
     return Vsh
 
-def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
+def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):    
     D = A.shape[2]
     Dm1 = A.shape[1]
     q = A.shape[0]
+    
+    if q * Dm1 - D <= 0:
+        return None
     
     L = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
 
