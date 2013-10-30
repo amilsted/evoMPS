@@ -371,16 +371,39 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
-    def calc_BB_Y_2s(self, Vlh):
-        assert self.ham_sites == 2, "calc_BB_Y_2s only implemented for \
-                                     nearest-neighbour hamiltonians!"
-        
+    def calc_BB_Y_2s(self, Vlh):        
         Vrh = self.Vsh
+        Vr = sp.transpose(Vrh, axes=(0, 2, 1)).conj()
         
-        Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
+        Vrri = sp.zeros_like(Vr)            
+        try:
+            for s in xrange(self.q):
+                Vrri[s] = self.r_sqrt_i.dot_left(Vr[s])
+        except AttributeError:
+            for s in xrange(self.q):
+                Vrri[s] = Vr[s].dot(self.r_sqrt_i)
+        
+        Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj()        
+        liVl = sp.zeros_like(Vl)            
         for s in xrange(self.q):
-            for t in xrange(self.q):
-                Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
+            liVl[s] = self.l_sqrt_i.dot(Vl[s])
+    
+        if self.ham_sites == 2:
+            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
+            for s in xrange(self.q):
+                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_noop(self.r_sqrt, self.C[s], Vr)))
+                #for t in xrange(self.q):
+                #    Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
+        elif self.ham_sites == 3:
+            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
+            for s in xrange(self.q):
+                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_op_2s_C12(self.r, self.C[s], Vrri, self.A)))
+#                for t in xrange(self.q):
+#                    for u in xrange(self.q):
+#                        Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t, u])).dot(self.r.dot(self.A[u].conj().T)).dot(self.r_sqrt_i.dot(Vrh[t]))
+#                        Y += Vlh[t].dot(self.l_sqrt_i.dot(self.A[s].conj().T).dot(self.l.dot(self.C[s, t, u])).dot(self.r_sqrt.dot(Vrh[u])))
+            for u in xrange(self.q):
+                Y += tm.eps_l_op_2s_A1_A2_C34(self.l, self.A, liVl, self.C[:, :, u]).dot(self.r_sqrt.dot(Vrh[u]))
         
         etaBB = sp.sqrt(m.adot(Y, Y))
         
@@ -397,6 +420,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         #print sp.count_nonzero(sv > sv_tol)
         
         dD = min(sp.count_nonzero(sv > sv_tol), dD_max)
+        
+        if dD == 0:
+            return None
         #print sv[:10]
                 
         sv = m.simple_diag_matrix(sv[:dD])
@@ -444,7 +470,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, sv_tol=1E-14):
+    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, 
+                  sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A -= dtau * B with B from self.calc_B() by default.
@@ -462,9 +489,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B = self.calc_B()
         
         if dynexp and self.D < maxD:
-            res = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
-            if not res is None:
-                BB1, BB2, etaBB = res
+            if BB is None:
+                BB = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+            if not BB is None:
+                BB1, BB2, etaBB = BB
                 oldD = self.D
                 dD = BB1.shape[2]
                 self.expand_D(self.D + dD, refac=0, imfac=0)
