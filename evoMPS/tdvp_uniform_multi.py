@@ -323,7 +323,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 tst = tm.eps_r_noop(self.rs[k], Bs[k], self.As[k])
                 if not np.allclose(tst, 0):
                     log.warning("Sanity check failed: Gauge-fixing violation! %s" ,la.norm(tst))
-
+        
+        if set_eta:
+            self.eta = self.etas.sum()
+            
         return Bs
         
     def calc_BB_Y_2s(self, Vlh):        
@@ -1436,18 +1439,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K = oldK
                     
     def expand_D(self, newD, refac=100, imfac=0):
-        oldK = self.K
+        oldK0 = self.Ks[0]
         oldD = self.D
-                
+
         super(EvoMPS_TDVP_Uniform, self).expand_D(newD, refac=refac, imfac=imfac)
         #self._init_arrays(newD, self.q)
-                
-        self.K[:oldD, :oldD] = oldK
+        
+        self.Ks[0][:oldD, :oldD] = oldK0
         #self.K[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
         #self.K[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
         #self.K[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldK) / oldD**2)
-        val = abs(oldK.mean())
-        m.randomize_cmplx(self.K.ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
+        val = abs(oldK0.mean())
+        m.randomize_cmplx(self.Ks[0].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
         
     def expect_2s(self, op, n):
         if op is self.ham and self.ham_sites == 2:

@@ -932,8 +932,10 @@ class EvoMPS_MPS_Uniform(object):
         oldD = self.D
         oldAs = self.As
         
-        oldls = np.asarray(self.ls)
-        oldrs = np.asarray(self.rs)
+        oldls = self.ls
+        oldrs = self.rs
+        oldls = map(np.asarray, oldls)
+        oldrs = map(np.asarray, oldrs)
         
         self._init_arrays(newD, self.q, self.L)
         
@@ -949,7 +951,7 @@ class EvoMPS_MPS_Uniform(object):
     
     #        self.A[:, :oldD, oldD:] = oldA[:, :, :(newD - oldD)]
     #        self.A[:, oldD:, :oldD] = oldA[:, :(newD - oldD), :]
-            self.As[k][:, :oldD, :oldD] = oldAs
+            self.As[k][:, :oldD, :oldD] = oldAs[k]
     
             self.ls[k][:oldD, :oldD] = oldls[k]
             val = abs(oldls[k].mean())
