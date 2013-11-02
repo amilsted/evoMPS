@@ -1167,7 +1167,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     else:
                         for k in xrange(self.L):
                             h_exp += self.expect_3s(self.ham, k).real
-                        
+                    h_exp /= self.L
                     res = h_exp
                 
                 log.debug((tau, res, h_exp, h_exp - h_expect_0.real, self.itr_l, self.itr_r))
