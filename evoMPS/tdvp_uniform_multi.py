@@ -1359,7 +1359,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if (len(newAs) == self.L and newAs[0].shape == self.As[0].shape):
             self.As = newAs
-            self.K[0] = newK0
+            self.Ks[0] = newK0
             self.ls[-1] = np.asarray(newlL)
             self.rs[-1] = np.asarray(newrL)
             self.lL_before_CF = self.ls[-1]
@@ -1374,7 +1374,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             savedD = newAs[0].shape[1]
             self._init_arrays(savedD, self.q, self.L)
             self.As = newAs
-            self.K[0] = newK0
+            self.Ks[0] = newK0
             self.ls[-1] = np.asarray(newlL)
             self.rs[-1] = np.asarray(newrL)
             self.expand_D(newD, refac, imfac)
@@ -1389,7 +1389,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             savedD = newAs[0].shape[1]
             self._init_arrays(savedD, self.q, self.L)
             self.As = newAs
-            self.K[0] = newK0
+            self.Ks[0] = newK0
             self.ls[-1] = np.asarray(newlL)
             self.rs[-1] = np.asarray(newrL)
             self.update()  # to make absolutely sure we're in CF
@@ -1402,7 +1402,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             savedQ = newAs[0].shape[0]
             self._init_arrays(self.D, savedQ, self.L)
             self.As = newAs
-            self.K[0] = newK0
+            self.Ks[0] = newK0
             self.ls[-1] = np.asarray(newlL)
             self.rs[-1] = np.asarray(newrL)
             self.expand_q(newQ)
@@ -1416,7 +1416,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             savedQ = newAs[0].shape[0]
             self._init_arrays(self.D, savedQ)
             self.As = newAs
-            self.K[0] = newK0
+            self.Ks[0] = newK0
             self.ls[-1] = np.asarray(newlL)
             self.rs[-1] = np.asarray(newrL)
             self.shrink_q(newQ)
