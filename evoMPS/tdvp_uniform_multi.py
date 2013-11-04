@@ -295,8 +295,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         L = self.L
         
         Bs = []
+        Vshs = []
         for k in xrange(L):
             Vsh = tm.calc_Vsh(self.As[k], self.rs_sqrt[k], sanity_checks=self.sanity_checks)
+            Vshs.append(Vsh)
             
             if self.ham_sites == 2:
                 x = tm.calc_x(self.Ks[(k + 1) % L], self.Cs[k], self.Cs[(k-1)%L], 
@@ -327,81 +329,45 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if set_eta:
             self.eta = self.etas.sum()
             
+        self.Vshs = Vshs
+            
         return Bs
         
-    def calc_BB_Y_2s(self, Vlh):        
-        Vrh = self.Vsh
-        Vr = sp.transpose(Vrh, axes=(0, 2, 1)).conj()
-        
-        Vrri = sp.zeros_like(Vr)            
-        try:
-            for s in xrange(self.q):
-                Vrri[s] = self.r_sqrt_i.dot_left(Vr[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vrri[s] = Vr[s].dot(self.r_sqrt_i)
-        
-        Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj()        
-        liVl = sp.zeros_like(Vl)            
-        for s in xrange(self.q):
-            liVl[s] = self.l_sqrt_i.dot(Vl[s])
-    
+    def calc_BB_Y_2s(self, Vlhs):
+        L = self.L
+        Ys = sp.empty((L), dtype=sp.ndarray)
+        etaBBs = sp.zeros((L), dtype=sp.complex128)
         if self.ham_sites == 2:
-            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
-            for s in xrange(self.q):
-                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_noop(self.r_sqrt, self.C[s], Vr)))
-                #for t in xrange(self.q):
-                #    Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
-        elif self.ham_sites == 3:
-            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
-            for s in xrange(self.q):
-                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_op_2s_C12(self.r, self.C[s], Vrri, self.A)))
-#                for t in xrange(self.q):
-#                    for u in xrange(self.q):
-#                        Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t, u])).dot(self.r.dot(self.A[u].conj().T)).dot(self.r_sqrt_i.dot(Vrh[t]))
-#                        Y += Vlh[t].dot(self.l_sqrt_i.dot(self.A[s].conj().T).dot(self.l.dot(self.C[s, t, u])).dot(self.r_sqrt.dot(Vrh[u])))
-            for u in xrange(self.q):
-                Y += tm.eps_l_op_2s_A1_A2_C34(self.l, self.A, liVl, self.C[:, :, u]).dot(self.r_sqrt.dot(Vrh[u]))
+            for k in xrange(L):
+                Ys[k], etaBBs[k] = tm.calc_BB_Y_2s(self.Cs[k], Vlhs[k], self.Vshs[(k + 1) % L],
+                                                   self.ls_sqrt[k - 1], self.rs_sqrt[(k + 1) % L])
+        else:
+            for k in xrange(L):
+                Ys[k], etaBBs[k] = tm.calc_BB_Y_2s_ham_3s(self.As[k - 1], self.As[(k + 1) % L], 
+                                       self.Cs[k], self.Cs[k - 1], Vlhs[k], self.Vshs[(k + 1) % L],
+                                       self.ls[(k - 2) % L], self.rs[(k + 2) % L],
+                                       self.ls_sqrt[k - 1], self.ls_sqrt_i[k - 1], 
+                                       self.rs_sqrt[(k + 1) % L], self.rs_sqrt_i[(k + 1) % L])
         
-        etaBB = sp.sqrt(m.adot(Y, Y))
+        return Ys, etaBBs
         
-        return Y, etaBB
+    def calc_B_2s(self, max_dD=16, sv_tol=1E-14):
+        Vrhs = self.Vshs
+        Vlhs = []
+        L = self.L
+        for k in xrange(L):
+            Vlhs.append(tm.calc_Vsh_l(self.As[k], self.ls_sqrt[k - 1], sanity_checks=self.sanity_checks))
         
-    def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
-        Vrh = self.Vsh
-        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+        Ys, etaBBs = self.calc_BB_Y_2s(Vlhs)
         
-        Y, etaBB = self.calc_BB_Y_2s(Vlh)
+        BB1s = [None] * L
+        BB2s = [None] * L
+        for k in xrange(L):
+            BB1s[k], BB2s[(k + 1) % L], dD = tm.calc_BB_2s(Ys[k], Vlhs[k], Vrhs[(k + 1) % L], 
+                                              self.ls_sqrt_i[k - 1], self.rs_sqrt_i[(k + 1) % L],
+                                              max_dD=max_dD, sv_tol=0) #FIXME: Make D variable...
         
-        U, sv, Vh = la.svd(Y)
-        
-        #print sp.count_nonzero(sv > sv_tol)
-        
-        dD = min(sp.count_nonzero(sv > sv_tol), dD_max)
-        
-        if dD == 0:
-            return None
-        #print sv[:10]
-                
-        sv = m.simple_diag_matrix(sv[:dD])
-        
-        ss = sv.sqrt()
-        
-        Z1 = ss.dot_left(U[:, :dD])
-        
-        Z2 = ss.dot(Vh[:dD, :])
-        
-        BB1 = sp.zeros((self.q, self.D, dD), dtype=self.A.dtype)
-        
-        for s in xrange(self.q):
-            BB1[s] = self.l_sqrt_i.dot(Vlh[s].conj().T).dot(Z1)
-        
-        BB2 = sp.zeros((self.q, dD, self.D), dtype=self.A.dtype)
-        
-        for s in xrange(self.q):
-            BB2[s] = self.r_sqrt_i.dot_left(Z2.dot(Vrh[s].conj().T))
-        
-        return BB1, BB2, etaBB
+        return BB1s, BB2s, etaBBs
         
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
@@ -428,7 +394,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, Bs=None, dynexp=False, maxD=128, dD_max=16, 
+    def take_step(self, dtau, Bs=None, dynexp=False, maxD=128, max_dD=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -448,20 +414,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if dynexp and self.D < maxD:
             if BB is None:
-                BB = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+                BB = self.calc_B_2s(max_dD=max_dD, sv_tol=sv_tol)
             if not BB is None:
-                BB1, BB2, etaBB = BB
+                BB1s, BB2s, etaBBs = BB
                 oldD = self.D
-                dD = BB1.shape[2]
-                self.expand_D(self.D + dD, refac=0, imfac=0)
+                dD = BB1s[0].shape[2]
+                self.expand_D(self.D + dD, refac=0, imfac=0) #FIXME: Currently expands all D
                 #print BB1.shape, la.norm(BB1.ravel()), BB2.shape, la.norm(BB2.ravel())
-                self.A[:, :oldD, :oldD] += -dtau * B
-                self.A[:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1
-                self.A[:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2
-                self.A[:, oldD:, oldD:].fill(0)
+                for k in xrange(self.L):
+                    self.As[k][:, :oldD, :oldD] += -dtau * Bs[k]
+                    self.As[k][:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1s[k]
+                    self.As[k][:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2s[k]
+                    self.As[k][:, oldD:, oldD:].fill(0)
                 log.info("Dynamically expanded! New D: %d", self.D)
             else:
-                self.A += -dtau * B
+                for k in xrange(self.L):
+                    self.As[k] += -dtau * Bs[k]
         else:
             for k in xrange(self.L):
                 self.As[k] += -dtau * Bs[k]
