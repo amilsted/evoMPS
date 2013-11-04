@@ -373,7 +373,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         for n in xrange(1, self.N):
             if (not Vrh[n + 1] is None and not Vlh[n] is None):
                 if self.ham_sites == 2:
-                    Y[n], etaBB[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_s[n - 1], r_s[n + 1])
+                    Y[n], etaBB[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], 
+                                           Vrh[n + 1], l_s[n - 1], r_s[n + 1])
                 else:
                     Y[n], etaBB[n] = tm.calc_BB_Y_2s_ham_3s(self.A[n - 1], 
                        self.A[n + 2], self.C[n], self.C[n - 1], Vlh[n], 
