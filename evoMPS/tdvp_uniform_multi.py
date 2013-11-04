@@ -343,7 +343,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                    self.ls_sqrt[k - 1], self.rs_sqrt[(k + 1) % L])
         else:
             for k in xrange(L):
-                Ys[k], etaBBs[k] = tm.calc_BB_Y_2s_ham_3s(self.As[k - 1], self.As[(k + 1) % L], 
+                Ys[k], etaBBs[k] = tm.calc_BB_Y_2s_ham_3s(self.As[k - 1], self.As[(k + 2) % L], 
                                        self.Cs[k], self.Cs[k - 1], Vlhs[k], self.Vshs[(k + 1) % L],
                                        self.ls[(k - 2) % L], self.rs[(k + 2) % L],
                                        self.ls_sqrt[k - 1], self.ls_sqrt_i[k - 1], 
