@@ -367,66 +367,32 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         return x
         
-    def _calc_BB_Y_2s(self, C, Vlh, Vrh_p1, l_sqrt_m1, r_sqrt_p1):
-        assert self.ham_sites == 2, "calc_BB_Y_2s only implemented for \
-                                     nearest-neighbour hamiltonians!"
-        
-        Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=self.A[1].dtype)
-        for s in xrange(Vlh.shape[0]):
-            for t in xrange(Vrh_p1.shape[0]):
-                Y += Vlh[s].dot(l_sqrt_m1.dot(C[s, t])).dot(r_sqrt_p1.dot(Vrh_p1[t]))
-        
-        etaBB = sp.sqrt(m.adot(Y, Y))
-        
-        return Y, etaBB
-        
     def calc_BB_Y_2s(self, l_s, l_si, r_s, r_si, Vrh, Vlh):
         Y = sp.empty((self.N + 1), dtype=sp.ndarray)
         etaBB = sp.zeros((self.N + 1), dtype=sp.complex128)
         for n in xrange(1, self.N):
             if (not Vrh[n + 1] is None and not Vlh[n] is None):
-                Y[n], etaBB[n] = self._calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_s[n - 1], r_s[n + 1])
+                if self.ham_sites == 2:
+                    Y[n], etaBB[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], Vrh[n + 1], l_s[n - 1], r_s[n + 1])
+                else:
+                    Y[n], etaBB[n] = tm.calc_BB_Y_2s_ham_3s(self.A[n - 1], 
+                       self.A[n + 2], self.C[n], self.C[n - 1], Vlh[n], 
+                       Vrh[n + 1], self.l[n - 2], self.r[n + 2], l_s[n - 1],
+                       l_si[n - 1], r_s[n + 1], r_si[n + 1])
                 
         return Y, etaBB
 
-    def calc_BB_2s(self, Y, Vlh, Vrh, sv_tol=1E-10, max_dD=16):
+    def calc_BB_2s(self, Y, Vlh, Vrh, l_si, r_si, sv_tol=1E-10, max_dD=16):
         dD = sp.zeros((self.N + 1), dtype=int)
         BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
         BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
         for n in xrange(1, self.N):
             if not Y[n] is None:
-                l_sqrt_m1, l_sqrt_i_m1, r_sqrt_p1, r_sqrt_i_p1 = tm.calc_l_r_roots(self.l[n - 1], 
-                                                                       self.r[n + 1], 
-                                                                       zero_tol=self.zero_tol,
-                                                                       sanity_checks=self.sanity_checks,
-                                                                       sc_data=('site', n))
-                                
-                U, sv, Vh = la.svd(Y[n])
-                
-                dDn = min(sp.count_nonzero(sv > sv_tol), max_dD)
-                
-                sv = m.simple_diag_matrix(sv[:dDn])
-                
-                ss = sv.sqrt()
-                
-                Z1 = ss.dot_left(U[:, :dDn])
-                
-                Z2 = ss.dot(Vh[:dDn, :])
-                
-                BB12n = sp.zeros((self.q[n], self.D[n - 1], dDn), dtype=self.A[1].dtype)
-                
-                for s in xrange(self.q[n]):
-                    BB12n[s] = l_sqrt_i_m1.dot(Vlh[n][s].conj().T).dot(Z1)
-                
-                BB21np1 = sp.zeros((self.q[n + 1], dDn, self.D[n + 1]), dtype=self.A[1].dtype)
-                
-                for s in xrange(self.q[n + 1]):
-                    BB21np1[s] = r_sqrt_i_p1.dot_left(Z2.dot(Vrh[n + 1][s].conj().T))
-                    
-                BB12[n] = BB12n
-                BB21[n + 1] = BB21np1
-                
-                dD[n] = dDn
+                BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
+                                                            Vrh[n + 1], 
+                                                            l_si[n - 1], r_si[n + 1],
+                                                            max_dD=max_dD, sv_tol=sv_tol)
+
                 
         return BB12, BB21, dD
     
@@ -559,7 +525,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Y, etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
                 
             if dynexp:
-                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, max_dD=max_dD, sv_tol=sv_tol)
+                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, l_si, r_si, max_dD=max_dD, sv_tol=sv_tol)
                 
                 oldA = self.A
                 oldD = self.D.copy()
