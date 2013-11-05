@@ -359,7 +359,7 @@ class EvoMPS_MPS_Uniform(object):
             log.warning("Warning: No eigenvalues detected with magnitude significantly different to largest.")
             return sp.NaN
         
-        return -1 / sp.log(ev[-1])
+        return -self.L / sp.log(ev[-1])
                 
     
     def calc_lr(self):
