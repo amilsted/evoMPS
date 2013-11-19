@@ -793,6 +793,68 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
 
     return x
 
+def calc_BB_Y_2s(C, Vlh, Vrh_p1, l_s_m1, r_s_p1):
+    Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj()
+
+    Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=C.dtype)
+    for s in xrange(Vlh.shape[0]):
+        Y += Vlh[s].dot(l_s_m1.dot(eps_r_noop(r_s_p1, C[s], Vr_p1)))
+
+    etaBB = sp.sqrt(mm.adot(Y, Y))
+    
+    return Y, etaBB
+    
+def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_si_m1, r_s_p1, r_si_p1):
+    Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj()
+    
+    Vrri_p1 = sp.zeros_like(Vr_p1)
+    try:
+        for s in xrange(Vrri_p1.shape[0]):
+            Vrri_p1[s] = r_si_p1.dot_left(Vr_p1[s])
+    except AttributeError:
+        for s in xrange(Vrri_p1.shape[0]):
+            Vrri_p1[s] = Vr_p1[s].dot(r_si_p1)
+    
+    Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj()        
+    liVl = sp.zeros_like(Vl)            
+    for s in xrange(liVl.shape[0]):
+        liVl[s] = l_si_m1.dot(Vl[s])
+
+    Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=C.dtype)
+    for s in xrange(C.shape[0]):
+        Y += Vlh[s].dot(l_s_m1.dot(eps_r_op_2s_C12(r_p2, C[s], Vrri_p1, A_p2)))
+    for u in xrange(C_m1.shape[2]):
+        Y += eps_l_op_2s_A1_A2_C34(l_m2, A_m1, liVl, C_m1[:, :, u]).dot(r_s_p1.dot(Vrh_p1[u]))
+
+    etaBB = sp.sqrt(mm.adot(Y, Y))
+    
+    return Y, etaBB
+    
+def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, max_dD=16, sv_tol=1E-14):
+    U, sv, Vh = la.svd(Y)
+    
+    dDn = min(sp.count_nonzero(sv > sv_tol), max_dD)
+    
+    sv = mm.simple_diag_matrix(sv[:dDn])
+    
+    ss = sv.sqrt()
+    
+    Z1 = ss.dot_left(U[:, :dDn])
+    
+    Z2 = ss.dot(Vh[:dDn, :])
+    
+    BB12n = sp.zeros((Vlh.shape[0], l_si_m1.shape[0], dDn), dtype=Y.dtype)
+    
+    for s in xrange(Vlh.shape[0]):
+        BB12n[s] = l_si_m1.dot(Vlh[s].conj().T).dot(Z1)
+    
+    BB21np1 = sp.zeros((Vrh_p1.shape[0], dDn, Vrh_p1.shape[1]), dtype=Y.dtype)
+    
+    for s in xrange(Vrh_p1.shape[0]):
+        BB21np1[s] = r_si_p1.dot_left(Z2.dot(Vrh_p1[s].conj().T))
+        
+    return BB12n, BB21np1, dDn
+
 def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, 
                       force_evd=False, sanity_checks=False, sc_data=''):
     """Factorizes a Hermitian matrix using either Cholesky or eigenvalue decomposition.
