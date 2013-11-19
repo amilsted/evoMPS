@@ -97,9 +97,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.eta.fill(sp.NaN)
         
         self.etaBB = sp.zeros((self.N + 1), dtype=self.typ)
-        """Evolution captured by the two-site tangent plane but not by
-           the one-site tangent plane.
-           Only available after calling take_step() with dynexp=True."""
+        """Norm of the evolution captured by the two-site tangent plane but not 
+           by the one-site tangent plane. Only available after calling
+           take_step() with calc_Y_2s or dynexp."""
         self.etaBB.fill(sp.NaN)
         
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
@@ -383,7 +383,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
         return Y, etaBB
 
-    def calc_BB_2s(self, Y, Vlh, Vrh, l_si, r_si, sv_tol=1E-10, max_dD=16):
+    def calc_BB_2s(self, Y, Vlh, Vrh, l_si, r_si, sv_tol=1E-10, dD_max=16):
         dD = sp.zeros((self.N + 1), dtype=int)
         BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
         BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
@@ -392,7 +392,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
                                                             Vrh[n + 1], 
                                                             l_si[n - 1], r_si[n + 1],
-                                                            max_dD=max_dD, sv_tol=sv_tol)
+                                                            dD_max=dD_max, sv_tol=sv_tol)
 
                 
         return BB12, BB21, dD
@@ -466,12 +466,22 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return None
 
     
-    def take_step(self, dtau, save_memory=False, dynexp=False, max_dD=16, sv_tol=1E-14):   
+    def take_step(self, dtau, save_memory=False, calc_Y_2s=False, 
+                  dynexp=False, dD_max=16, sv_tol=1E-14):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
         
         If dtau is itself imaginary, real-time evolution results.
+        
+        Second-order corrections to the dynamics can be calculated if desired.
+        If they are, the norm of the second-order contributions for each bond 
+        is stored in the array self.eta_BB. For nearest-neighbour Hamiltonians, 
+        this captures all errors made by projecting onto the MPS tangent plane.
+                
+        The second-order contributions also form the basis of the dynamical 
+        expansion scheme (dynexp), which captures a configurable (dD_max)
+        amount of these contributions by increasing the bond dimension.
         
         Parameters
         ----------
@@ -479,11 +489,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             The (imaginary or real) amount of imaginary time (tau) to step.
         save_memory : bool
             Whether to save memory by avoiding storing all B[n] at once.
+        calc_Y_2s : bool
+            Whether to calculate the second-order contributions to the dynamics.
+        dynexp : bool
+            Whether to increase the bond dimension to capture more of the dynamics.
+        dD_max : int
+            The maximum amount by which to increase the bond dimension (for any site).
+        sv_tol : float
+            Only use singular values larger than this for dynamical expansion.
         """
         eta_tot = 0
-        self.eta.fill(0)
+        self.eta.fill(0)        
         
-        if self.gauge_fixing == 'right' and save_memory:
+        if self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp:
             B = [None] * (self.N + 1)
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
@@ -512,8 +530,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                                                zero_tol=self.zero_tol,
                                                                sanity_checks=self.sanity_checks,
                                                                sc_data=('site', n))
+            
             for n in xrange(1, self.N + 1):
                 Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
+            for n in xrange(1, self.N + 1):
                 Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
                 
             for n in xrange(1, self.N + 1):
@@ -522,15 +542,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                  Vlh=Vlh[n], Vrh=Vrh[n])
                 B.append(Bn)
                 eta_tot += self.eta[n]
-                
-            Y, etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
+            
+            if calc_Y_2s or dynexp:
+                Y, self.etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
                 
             if dynexp:
-                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, l_si, r_si, max_dD=max_dD, sv_tol=sv_tol)
+                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, l_si, r_si, dD_max=dD_max, sv_tol=sv_tol)
                 
                 oldA = self.A
                 oldD = self.D.copy()
                 oldeta = self.eta
+                oldetaBB = self.etaBB
                 
                 self.D += dD
                 self._init_arrays()
@@ -547,12 +569,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     
                 log.info("Dyn. expanded! New D: %s", self.D)
                 self.eta = oldeta
+                self.etaBB = oldetaBB
             else:
                 for n in xrange(1, self.N + 1):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
-                        
-            self.etaBB = etaBB
+                                    
                     
         return eta_tot
         

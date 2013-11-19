@@ -119,6 +119,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
            evolution onto the MPS tangent plane. Only available after calling
            take_step()."""
            
+        self.etaBB = sp.NaN
+        """Norm of the evolution captured by the two-site tangent plane but not 
+           by the one-site tangent plane. Only available after calling
+           take_step() with calc_Y_2s or dynexp."""
+           
         self.h_expect = sp.NaN
         """The energy density expectation value, available only after calling
            update() or calc_K()."""
@@ -371,79 +376,30 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         return B
         
-    def calc_BB_Y_2s(self, Vlh):        
-        Vrh = self.Vsh
-        Vr = sp.transpose(Vrh, axes=(0, 2, 1)).conj()
-        
-        Vrri = sp.zeros_like(Vr)            
-        try:
-            for s in xrange(self.q):
-                Vrri[s] = self.r_sqrt_i.dot_left(Vr[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vrri[s] = Vr[s].dot(self.r_sqrt_i)
-        
-        Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj()        
-        liVl = sp.zeros_like(Vl)            
-        for s in xrange(self.q):
-            liVl[s] = self.l_sqrt_i.dot(Vl[s])
-    
+    def calc_BB_Y_2s(self, Vlh=None):
+        if Vlh is None:
+            Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
+            
         if self.ham_sites == 2:
-            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
-            for s in xrange(self.q):
-                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_noop(self.r_sqrt, self.C[s], Vr)))
-                #for t in xrange(self.q):
-                #    Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t])).dot(self.r_sqrt.dot(Vrh[t]))
-        elif self.ham_sites == 3:
-            Y = sp.zeros((Vlh.shape[1], Vrh.shape[2]), dtype=self.A.dtype)
-            for s in xrange(self.q):
-                Y += Vlh[s].dot(self.l_sqrt.dot(tm.eps_r_op_2s_C12(self.r, self.C[s], Vrri, self.A)))
-#                for t in xrange(self.q):
-#                    for u in xrange(self.q):
-#                        Y += Vlh[s].dot(self.l_sqrt.dot(self.C[s, t, u])).dot(self.r.dot(self.A[u].conj().T)).dot(self.r_sqrt_i.dot(Vrh[t]))
-#                        Y += Vlh[t].dot(self.l_sqrt_i.dot(self.A[s].conj().T).dot(self.l.dot(self.C[s, t, u])).dot(self.r_sqrt.dot(Vrh[u])))
-            for u in xrange(self.q):
-                Y += tm.eps_l_op_2s_A1_A2_C34(self.l, self.A, liVl, self.C[:, :, u]).dot(self.r_sqrt.dot(Vrh[u]))
-        
-        etaBB = sp.sqrt(m.adot(Y, Y))
+            Y, etaBB = tm.calc_BB_Y_2s(self.C, Vlh, self.Vsh, self.l_sqrt, self.r_sqrt)
+        else:
+            Y, etaBB = tm.calc_BB_Y_2s_ham_3s(self.A, self.A, 
+                                       self.C, self.C, Vlh, self.Vsh,
+                                       self.l, self.r,
+                                       self.l_sqrt, self.l_sqrt_i, 
+                                       self.r_sqrt, self.r_sqrt_i)
         
         return Y, etaBB
         
-    def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
+    def calc_B_2s(self, Y, Vlh, dD_max=16, sv_tol=1E-14):
         Vrh = self.Vsh
-        Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
-        
-        Y, etaBB = self.calc_BB_Y_2s(Vlh)
         
         U, sv, Vh = la.svd(Y)
         
-        #print sp.count_nonzero(sv > sv_tol)
+        BB1, BB2, dD = tm.calc_BB_2s(Y, Vlh, Vrh, self.l_sqrt_i, self.r_sqrt_i,
+                                              dD_max=dD_max, sv_tol=sv_tol)
         
-        dD = min(sp.count_nonzero(sv > sv_tol), dD_max)
-        
-        if dD == 0:
-            return None
-        #print sv[:10]
-                
-        sv = m.simple_diag_matrix(sv[:dD])
-        
-        ss = sv.sqrt()
-        
-        Z1 = ss.dot_left(U[:, :dD])
-        
-        Z2 = ss.dot(Vh[:dD, :])
-        
-        BB1 = sp.zeros((self.q, self.D, dD), dtype=self.A.dtype)
-        
-        for s in xrange(self.q):
-            BB1[s] = self.l_sqrt_i.dot(Vlh[s].conj().T).dot(Z1)
-        
-        BB2 = sp.zeros((self.q, dD, self.D), dtype=self.A.dtype)
-        
-        for s in xrange(self.q):
-            BB2[s] = self.r_sqrt_i.dot_left(Z2.dot(Vrh[s].conj().T))
-        
-        return BB1, BB2, etaBB
+        return BB1, BB2
         
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
@@ -470,7 +426,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, 
+    def take_step(self, dtau, B=None, calc_Y_2s=False, dynexp=False, dD_max=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -484,15 +440,28 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             The (imaginary or real) amount of imaginary time (tau) to step.
         B : ndarray
             A custom parameter-space tangent vector to step along.
+        calc_Y_2s : bool
+            Whether to calculate the second-order contributions to the dynamics.
+        dynexp : bool
+            Whether to increase the bond dimension to capture more of the dynamics.
+        dD_max : int
+            The maximum amount by which to increase the bond dimension (for any site).
+        sv_tol : float
+            Only use singular values larger than this for dynamical expansion.
         """
         if B is None:
             B = self.calc_B()
         
-        if dynexp and self.D < maxD:
+        if calc_Y_2s or dynexp:
+            Vlh = tm.calc_Vsh_l(self.A, self.l_sqrt, sanity_checks=self.sanity_checks)
             if BB is None:
-                BB = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+                Y, self.etaBB = self.calc_BB_Y_2s(Vlh=Vlh)
+        
+        if dynexp:
+            if BB is None:
+                BB = self.calc_B_2s(Y, Vlh, dD_max=dD_max, sv_tol=sv_tol)
             if not BB is None:
-                BB1, BB2, etaBB = BB
+                BB1, BB2 = BB
                 oldD = self.D
                 dD = BB1.shape[2]
                 self.expand_D(self.D + dD, refac=0, imfac=0)
