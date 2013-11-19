@@ -26,16 +26,18 @@ tol_im = 1E-10                #Ground state tolerance (norm of projected evoluti
 
 step = 0.08                   #Imaginary time step size
 realstep = 0.01               #Real time step size
-real_steps = 100              #Number of real time steps to simulate
+real_steps = 300              #Number of real time steps to simulate
 
-load_saved_ground = True      #Whether to load a saved ground state
+load_saved_ground = True     #Whether to load a saved ground state
 
 auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
-zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+zero_tol = 1E-12              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
 
 plot_results = True
 
 sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
+real_time_dynexp = True       #Use dynamical expansion to allow bond dimension growth during real time evolution.
 
 """
 Next, we define our Hamiltonian and some observables.
@@ -134,7 +136,7 @@ if __name__ == '__main__':
     print
     col_heads = ["Step", "t", "<H>", "d<H>",
                  "sig_x_3", "sig_y_3", "sig_z_3",
-                 "M_x", "eta"] #These last three are for testing the midpoint method.
+                 "M_x", "eta", "err"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
 
@@ -201,14 +203,29 @@ if __name__ == '__main__':
         Carry out next step!
         """
         if not real_time:
-            s.take_step(step)
+            s.take_step(step, calc_Y_2s=True)
             t += 1.j * step
+            err = sp.NaN
         else:
-            s.take_step_RK4(realstep * 1.j)
+            if real_time_dynexp:
+                """
+                Do a small Euler step with dynamical expansion before doing the RK4 step.
+                Euler step size is chosen so that the error is of the same
+                order as the RK4 error.
+                """
+                dstep = realstep**(5./2.)
+                s.take_step(dstep * 1.j, dynexp=True, dD_max=4, sv_tol=1E-5)
+                err = s.etaBB.real.sum()
+                s.update(auto_truncate=False)
+            else:
+                err = sp.NaN
+                dstep = 0
+            s.take_step_RK4((realstep - dstep) * 1.j)
             t += realstep
 
-        eta = s.eta.real.sum()
+        eta = s.eta.real.sum()        
         row.append("%.6g" % eta)
+        row.append("%.6g" % err)
 
         print "\t".join(row)
 
