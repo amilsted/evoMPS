@@ -442,6 +442,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Whether to save memory by avoiding storing all B[n] at once.
         """
         eta_tot = 0
+        self.eta.fill(0)
         
         if self.gauge_fixing == 'right' and save_memory:
             B = [None] * (self.N + 1)
@@ -484,6 +485,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
         eta_tot = 0
+        self.eta.fill(0)
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)

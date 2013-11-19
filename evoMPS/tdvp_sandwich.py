@@ -647,6 +647,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
 
         eta_tot = 0
+        self.eta.fill(0)
         
         B = [None]
         for n in xrange(1, self.N + 1):
@@ -669,6 +670,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         and stable than forward Euler.
         """        
         eta_tot = 0
+        self.eta.fill(0)
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
