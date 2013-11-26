@@ -872,9 +872,9 @@ class EvoMPS_MPS_Uniform(object):
             if left:
                 ev = ev.conj()
             if full_output:
-                return abs(ev), ev, sp.ones((1), dtype=self.typ)
+                return abs(ev)**(1./self.L), ev, sp.ones((1), dtype=self.typ)
             else:
-                return abs(ev), ev
+                return abs(ev)**(1./self.L), ev
         elif (ED <= dense_cutoff or force_dense) and not force_sparse:
             E = m.eyemat(ED, dtype=As[0][0].dtype)
             for k in xrange(self.L):
@@ -890,18 +890,18 @@ class EvoMPS_MPS_Uniform(object):
             
             ind = abs(ev).argmax()
             if full_output:
-                return abs(ev[ind]), ev[ind], eV[:, ind]
+                return abs(ev[ind])**(1./self.L), ev[ind], eV[:, ind]
             else:
-                return abs(ev[ind]), ev[ind]
+                return abs(ev[ind])**(1./self.L), ev[ind]
         else:
             opE = EOp(As[0], As[1], left)
             res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
             if full_output:
                 ev, eV = res
-                return abs(ev[0]), ev[0], eV[:, 0]
+                return abs(ev[0])**(1./self.L), ev[0], eV[:, 0]
             else:
                 ev = res
-                return abs(ev[0]), ev[0]
+                return abs(ev[0])**(1./self.L), ev[0]
             
     def phase_align(self, other):
         """Adjusts the parameter tensor A by a phase-factor to align it with another state.
@@ -935,7 +935,8 @@ class EvoMPS_MPS_Uniform(object):
         the required transformation.
         
         This is only really useful if the corresponding gauge transformation
-        matrices are needed for some reason.
+        matrices are needed for some reason (otherwise you can just check
+        the fidelity and set the parameters equal).
         
         Parameters
         ----------
