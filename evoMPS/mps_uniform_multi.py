@@ -205,6 +205,30 @@ class EvoMPS_MPS_Uniform(object):
         self.conv_r = True
         
         self.tmp = np.zeros_like(self.As[0][0])
+        
+    def _calc_lr_brute(self):
+        Es = np.zeros((self.L, self.D**2, self.D**2), dtype=self.typ, order='C')
+        
+        for k in xrange(self.L):
+            for s in xrange(self.q):
+                Es[k] += sp.kron(self.A[k][s], self.A[k][s].conj())
+                
+        E = Es[0]
+        for k in xrange(1, self.L):
+            E = E.dot(Es[1])
+            
+        ev, eVL, eVR = la.eig(E, left=True, right=True)
+        
+        i = np.argmax(ev)
+        
+        self.A *= 1 / sp.sqrt(ev[i])        
+        
+        self.ls[-1] = eVL[:,i].reshape((self.D, self.D))
+        self.rs[-1] = eVR[:,i].reshape((self.D, self.D))
+        
+        norm = m.adot(self.l, self.r)
+        self.ls[-1] *= 1 / sp.sqrt(norm)
+        self.rs[-1] *= 1 / sp.sqrt(norm)        
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1s=None, A2s=None, rescale=True,
                         tol=1E-14, ncv=None, k=1):
@@ -236,7 +260,6 @@ class EvoMPS_MPS_Uniform(object):
     
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        #start = time.clock()
         opE = EOp(A1s, A2s, calc_l)
         x *= n / norm(x.ravel())
         try:
@@ -247,8 +270,6 @@ class EvoMPS_MPS_Uniform(object):
             ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
             conv = True
             
-        #print ev2
-        #print ev2 * ev2.conj()
         ind = ev.argmax()
         ev = np.real_if_close(ev[ind])
         ev = np.asscalar(ev)
@@ -266,12 +287,6 @@ class EvoMPS_MPS_Uniform(object):
         eV *= n / norm(eV.ravel())
         
         x[:] = eV
-        
-        #print "splinalg: %g" % (time.clock() - start)   
-        
-        #print "Herm? %g" % norm((eV - m.H(eV)).ravel())
-        #print "Norm of diff: %g" % norm((eV - x).ravel())
-        #print "Norms: (%g, %g)" % (norm(eV.ravel()), norm(x.ravel()))
                     
         if rescale and not abs(ev - 1) < tol:
             A1s[0] *= 1 / sp.sqrt(ev)
@@ -360,7 +375,55 @@ class EvoMPS_MPS_Uniform(object):
             return sp.NaN
         
         return -self.L / sp.log(ev[-1])
-                
+        
+    def _calc_lr(self, x, tmp, calc_l=False, A1s=None, A2s=None, rescale=True,
+                 max_itr=1000, rtol=1E-14, atol=1E-14):
+        """Power iteration to obtain eigenvector corresponding to largest
+           eigenvalue.
+        """        
+        if A1s is None:
+            A1s = self.As
+        if A2s is None:
+            A2s = self.As
+                        
+        try:
+            norm = la.get_blas_funcs("nrm2", [x])
+        except (ValueError, AttributeError):
+            norm = np.linalg.norm
+
+        n = x.size #we will scale x so that stuff doesn't get too small
+        
+        opE = EOp(A1s, A2s, calc_l)
+        
+        x = x.ravel()
+        tmp = tmp.ravel()
+
+        x *= n / norm(x)
+        tmp[:] = x
+        for i in xrange(max_itr):
+            x[:] = tmp
+            tmp[:] = opE.matvec(x)
+                    
+            ev_mag = norm(tmp) / n
+            ev = (tmp.mean() / x.mean()).real
+            tmp *= (1 / ev_mag)
+            if norm(tmp - x) < atol + rtol * n:
+                x[:] = tmp
+                break
+        
+        x = x.reshape((self.D, self.D))
+                    
+        if rescale and not abs(ev - 1) < atol:
+            A1s[0] *= 1 / sp.sqrt(ev)
+            if self.sanity_checks:
+                if not A1s[0] is A2s[0]:
+                    log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
+                tmp = opE.matvec(x.ravel())
+                ev = tmp.mean() / x.mean()
+                if not abs(ev - 1) < atol:
+                    log.warning("Sanity check failed: Largest ev after re-scale = %s", ev)
+        
+        return x, i < max_itr - 1, i
     
     def calc_lr(self):
         """Determines the dominant left and right eigenvectors of the transfer 
@@ -382,19 +445,36 @@ class EvoMPS_MPS_Uniform(object):
         self.lL_before_CF = np.asarray(self.lL_before_CF)
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
-        self.ls[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                               calc_l=True,
-                                               tol=self.itr_rtol,
-                                               k=self.ev_arpack_nev,
-                                               ncv=self.ev_arpack_ncv)
+        if self.ev_use_arpack:
+            self.ls[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
+                                                   calc_l=True,
+                                                   tol=self.itr_rtol,
+                                                   k=self.ev_arpack_nev,
+                                                   ncv=self.ev_arpack_ncv)
+        else:
+            self.ls[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
+                                                    tmp, 
+                                                    calc_l=True,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
                                         
         self.lL_before_CF = self.ls[-1].copy()
-
-        self.rs[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
-                                               calc_l=False,
-                                               tol=self.itr_rtol,
-                                               k=self.ev_arpack_nev,
-                                               ncv=self.ev_arpack_ncv)
+        
+        if self.ev_use_arpack:
+            self.rs[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
+                                                   calc_l=False,
+                                                   tol=self.itr_rtol,
+                                                   k=self.ev_arpack_nev,
+                                                   ncv=self.ev_arpack_ncv)
+        else:
+            self.rs[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
+                                                    tmp, 
+                                                    calc_l=False,
+                                                    max_itr=self.pow_itr_max,
+                                                    rtol=self.itr_rtol, 
+                                                    atol=self.itr_atol)
+            
         self.rL_before_CF = self.rs[-1].copy()
             
         #normalize eigenvectors:
@@ -442,7 +522,7 @@ class EvoMPS_MPS_Uniform(object):
                 rtol=self.itr_rtol*self.check_fac, 
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: l%u bad! Off by: %s", k,
-                                la.norm(tm.eps_l_noop(self.l, self.A, self.A) - self.l))
+                                la.norm(l - self.ls[k]))
 
                 r = self.rs[k]
                 for j in sp.arange(k, k - self.L, -1) % self.L:
@@ -451,7 +531,7 @@ class EvoMPS_MPS_Uniform(object):
                 rtol=self.itr_rtol*self.check_fac,
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: r%u bad! Off by: %s", k,
-                                la.norm(tm.eps_r_noop(self.r, self.A, self.A) - self.r))
+                                la.norm(r - self.rs[k]))
                 
                 if not np.allclose(self.ls[k], m.H(self.ls[k]),
                 rtol=self.itr_rtol*self.check_fac, 
@@ -477,7 +557,7 @@ class EvoMPS_MPS_Uniform(object):
                 if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                     log.warning("Sanity check failed: Bad norm = %s", norm)
     
-    def restore_SCF(self, ret_g=False, zero_tol=None):
+    def restore_SCF(self, zero_tol=None):
         """Restores symmetric canonical form.
         
         In this canonical form, self.l == self.r and are diagonal matrices
@@ -561,13 +641,8 @@ class EvoMPS_MPS_Uniform(object):
     
             self.ls[k] = S
             self.rs[k] = S
-        
-        if ret_g:
-            return g, g_i
-        else:
-            return
     
-    def restore_RCF(self, ret_g=False, zero_tol=None):
+    def restore_RCF(self, zero_tol=None):
         """Restores right canonical form.
         
         In this form, self.r = sp.eye(self.D) and self.l is diagonal, with
@@ -584,81 +659,125 @@ class EvoMPS_MPS_Uniform(object):
         g, g_i : ndarray
             Gauge transformation matrix g and its inverse g_i.
         """
-        assert False, "Not yet supported!"
         
         if zero_tol is None:
             zero_tol = self.zero_tol
         
-        #First get G such that r = eye
-        G, G_i, rank = tm.herm_fac_with_inv(self.r, lower=True, zero_tol=zero_tol,
-                                            return_rank=True,
-                                            sanity_checks=self.sanity_checks,
-                                            sc_data='Restore_RCF: r')
-
-        self.l = m.mmul(m.H(G), self.l, G)
-        
-        #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
-        ev, EV = la.eigh(self.l)
-
-        G = G.dot(EV)
-        G_i = m.H(EV).dot(G_i)
-        
-        for s in xrange(self.q):
-            self.A[s] = m.mmul(G_i, self.A[s], G)
-            
-        #ev contains the squares of the Schmidt coefficients,
-        self.S_hc = - np.sum(ev * sp.log2(ev))
-        
-        self.l = m.simple_diag_matrix(ev, dtype=self.typ)
-        
-        r_old = self.r
-        
-        if rank == self.D:
-            self.r = m.eyemat(self.D, self.typ)
-        else:
-            self.r = sp.zeros((self.D), dtype=self.typ)
-            self.r[-rank:] = 1
-            self.r = m.simple_diag_matrix(self.r, dtype=self.typ)
-
-        if self.sanity_checks:            
-            r_ = m.mmul(G_i, r_old, m.H(G_i)) 
-            
-            if not np.allclose(self.r, r_, 
-                               rtol=self.itr_rtol*self.check_fac,
-                               atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, bad r (bad GT).Off by %s", 
-                            la.norm(r_ - self.r))
-            
-            l = tm.eps_l_noop(self.l, self.A, self.A)
-            r = tm.eps_r_noop(self.r, self.A, self.A)
-            
-            if not np.allclose(r, self.r,
-                               rtol=self.itr_rtol*self.check_fac, 
-                               atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
-                            la.norm(r - self.r))
-
-            if not np.allclose(l, self.l,
-                               rtol=self.itr_rtol*self.check_fac, 
-                               atol=self.itr_atol*self.check_fac):
-                log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
-                            la.norm(l - self.l))
-        
-        if ret_g:
-            return G, G_i
-        else:
-            return
+        for k in xrange(self.L):
+            #First get G such that r = eye
+            G, G_i, rank = tm.herm_fac_with_inv(self.rs[k], lower=True, zero_tol=zero_tol,
+                                                return_rank=True,
+                                                sanity_checks=self.sanity_checks,
+                                                sc_data='Restore_RCF: r')
     
-    def restore_CF(self, ret_g=False):
+            self.ls[k] = G.conj().T.dot(self.ls[k].dot(G))
+            
+            #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
+            ev, EV = la.eigh(self.ls[k])
+    
+            G = G.dot(EV)
+            G_i = m.H(EV).dot(G_i)
+            
+            j = (k + 1) % self.L
+            for s in xrange(self.q):
+                self.As[j][s] = G_i.dot(self.As[j][s])
+                self.As[k][s] = self.As[k][s].dot(G)
+                
+            #ev contains the squares of the Schmidt coefficients,
+            self.S_hcs[k] = - np.sum(ev * sp.log2(ev))
+            
+            self.ls[k] = m.simple_diag_matrix(ev, dtype=self.typ)
+            
+            r_old = self.rs[k]
+            
+            if rank == self.D:
+                self.rs[k] = m.eyemat(self.D, self.typ)
+            else:
+                self.rs[k] = sp.zeros((self.D), dtype=self.typ)
+                self.rs[k][-rank:] = 1
+                self.rs[k] = m.simple_diag_matrix(self.rs[k], dtype=self.typ)
+    
+            if self.sanity_checks:            
+                r_ = G_i.dot(r_old.dot(G_i.conj().T)) 
+                
+                if not np.allclose(self.rs[k], r_, 
+                                   rtol=self.itr_rtol*self.check_fac,
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_RCF, bad r (bad GT). Off by %s", 
+                                la.norm(r_ - self.rs[k]))
+                
+                l = self.ls[k]
+                for j in (sp.arange(k + 1, k + self.L + 1) % self.L):
+                    l = tm.eps_l_noop(l, self.As[j], self.As[j])
+                r = self.rs[k]
+                for j in (sp.arange(k, k - self.L, -1) % self.L):
+                    r = tm.eps_r_noop(r, self.As[j], self.As[j])
+                
+                if not np.allclose(r, self.rs[k],
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
+                                la.norm(r - self.rs[k]))
+    
+                if not np.allclose(l, self.ls[k],
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
+                                la.norm(l - self.ls[k]))
+    
+    def restore_CF(self):
         """Restores canonical form.
         
         Performs self.restore_RCF() or self.restore_SCF()
         depending on self.symm_gauge.        
         """
         if self.symm_gauge:
-            return self.restore_SCF(ret_g=ret_g)
+            return self.restore_SCF()
         else:
-            return self.restore_RCF(ret_g=ret_g)
+            return self.restore_RCF()
+            
+    def auto_truncate(self, update=True, zero_tol=None):
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+        
+        new_D_l = 1
+        for k in xrange(self.L):
+            new_D_l = max(np.count_nonzero(self.ls[k].diag > zero_tol), new_D_l)
+        
+        if 0 < new_D_l < self.As[0].shape[1]:
+            self.truncate(new_D_l, update=False)
+            
+            if update:
+                self.update()
+                
+            return True
+        else:
+            return False
+    
+    def truncate(self, newD, update=True):
+        assert newD < self.D, 'new bond-dimension must be smaller!'
+        
+        tmp_As = self.As
+        tmp_ls = map(lambda x: x.diag, self.ls)
+        
+        self._init_arrays(newD, self.q, self.L)
+        
+        if self.symm_gauge:
+            for k in xrange(self.L):
+                self.ls[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
+                self.rs[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
+                self.As[k] = tmp_As[k][:, :self.D, :self.D]
+        else:
+            for k in xrange(self.L):
+                self.ls[k] = m.simple_diag_matrix(tmp_ls[k][-self.D:], dtype=self.typ)
+                self.rs[k] = m.eyemat(self.D, dtype=self.typ)
+                self.As[k] = tmp_As[k][:, -self.D:, -self.D:]
+            
+        self.lL_before_CF = self.ls[-1].A
+        self.rL_before_CF = self.rs[-1].A
+
+        if update:
+            self.update()
     
     def calc_AA(self):
         """Calculates the products A[s] A[t] for s, t in range(self.q).
@@ -698,6 +817,180 @@ class EvoMPS_MPS_Uniform(object):
                     self.restore_CF()
                 
         self.calc_AA()
+            
+    def fidelity_per_site(self, other, full_output=False, left=False, 
+                          force_dense=False, force_sparse=False,
+                          dense_cutoff=64):
+        """Returns the per-site fidelity d.
+              
+        Also returns the largest eigenvalue "w" of the overlap transfer
+        operator, as well as the corresponding eigenvector "V" in the
+        matrix representation.
+        
+        If the fidelity per site is 1:
+        
+          A^s = w g A'^s g^-1      (with g = V r'^-1)
+            
+        Parameters
+        ----------
+        other : EvoMPS_MPS_Uniform
+            MPS with which to calculate the per-site fidelity.
+        full_output : bool
+            Whether to return the eigenvector V.
+        left : bool
+            Whether to find the left eigenvector (instead of the right)
+        force_dense : bool
+            Forces use of a dense eigenvalue decomposition algorithm
+        force_sparse : bool
+            Forces use of a sparse, iterative eigenvalue solver (except if D == 1)
+        dense_cutoff : int
+            The matrix dimension above which a sparse eigenvalue solver is used 
+        
+        Returns
+        -------
+        d : float
+            The per-site fidelity.
+        w : float
+            The largest eigenvalue of the overlap transfer operator.
+        V : ndarray
+            The right (or left if left == True) eigenvector corresponding to w (if full_output == True).
+        """
+        assert self.q == other.q, "Hilbert spaces must have same dimensions!"
+        assert self.L == other.L, "Unit cell sizes must be equal!"
+        
+        As = [self.As, other.As]
+        
+        ED = self.D * other.D
+        
+        if ED == 1:
+            ev = 1
+            for k in xrange(self.L):
+                evk = 0
+                for s in xrange(self.q):    
+                    evk += As[0][k][s] * As[1][k][s].conj()
+                ev *= evk
+            if left:
+                ev = ev.conj()
+            if full_output:
+                return abs(ev), ev, sp.ones((1), dtype=self.typ)
+            else:
+                return abs(ev), ev
+        elif (ED <= dense_cutoff or force_dense) and not force_sparse:
+            E = m.eyemat(ED, dtype=As[0][0].dtype)
+            for k in xrange(self.L):
+                Ek = sp.zeros((ED, ED), dtype=As[0][0].dtype)
+                for s in xrange(As[0][k].shape[0]):
+                    Ek += sp.kron(As[0][k][s], As[1][k][s].conj())
+                E = E.dot(Ek)
+                
+            if full_output:
+                ev, eV = la.eig(E, left=left, right=not left)
+            else:
+                ev = la.eigvals(E)
+            
+            ind = abs(ev).argmax()
+            if full_output:
+                return abs(ev[ind]), ev[ind], eV[:, ind]
+            else:
+                return abs(ev[ind]), ev[ind]
+        else:
+            opE = EOp(As[0], As[1], left)
+            res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
+            if full_output:
+                ev, eV = res
+                return abs(ev[0]), ev[0], eV[:, 0]
+            else:
+                ev = res
+                return abs(ev[0]), ev[0]
+            
+    def phase_align(self, other):
+        """Adjusts the parameter tensor A by a phase-factor to align it with another state.
+        
+        This ensures that the largest eigenvalue of the overlap transfer operator
+        is real.
+        
+        An update() is needed after doing this!
+        
+        Parameters
+        ----------
+        other : EvoMPS_MPS_Uniform
+            MPS with which to calculate the per-site fidelity.
+        
+        Returns
+        -------
+        phi : complex
+            The phase difference (phase of the eigenvalue).
+        """
+        d, phi = self.fidelity_per_site(other, full_output=False, left=False)
+        
+        self.As[0] *= phi.conj()
+        
+        return phi
+
+    def gauge_align(self, other, tol=1E-12):
+        """Gauge-align the state with another.
+        
+        Given two states that differ only by a gauge-transformation
+        and a phase, this equalizes the parameter tensors by performing 
+        the required transformation.
+        
+        This is only really useful if the corresponding gauge transformation
+        matrices are needed for some reason.
+        
+        Parameters
+        ----------
+        other : EvoMPS_MPS_Uniform
+            MPS with which to calculate the per-site fidelity.
+        tol : float
+            Tolerance for detecting per-site fidelity != 1.
+            
+        Returns
+        -------
+        Nothing if the per-site fidelity is not 1. Otherwise:
+            
+        g : ndarray
+            The gauge-transformation matrix used.
+        g_i : ndarray
+            The inverse of g.
+        phi : complex
+            The phase factor.
+        """
+        d, phi, gRL = self.fidelity_per_site(other, full_output=True)
+        
+        if abs(d - 1) > tol:
+            return
+            
+        #Phase-align first
+        self.As[0] *= phi.conj()
+            
+        gRL = gRL.reshape(self.D, self.D)
+        
+        gs = [None] * self.L
+        gis = [None] * self.L
+                
+        for k in xrange(self.L - 1, -1, -1):
+            if k == self.L - 1:
+                gRk = gRL
+            else:
+                gRk = tm.eps_r_noop(other.rs[k + 1], self.As[k + 1], other.As[k + 1])
+                
+            try:
+                gs[k] = other.rs[k].inv().dotleft(gRk)
+            except:
+                gs[k] = gRk.dot(m.invmh(other.rs[k]))
+                
+            gis[k] = la.inv(gs[k])
+            
+            j = (k + 1) % self.L
+            for s in xrange(self.q):
+                self.As[j][s] = gis[k].dot(self.As[j][s])
+                self.As[k][s] = self.As[k][s].dot(gs[k])
+                
+            self.ls[k] = m.H(gs[k]).dot(self.ls[k].dot(gs[k]))
+            
+            self.rs[k] = gis[k].dot(self.rs[k].dot(m.H(gis[k])))
+        
+        return gs, gis, phi
             
     def expect_1s(self, op, n):
         """Computes the expectation value of a single-site operator.
@@ -880,7 +1173,51 @@ class EvoMPS_MPS_Uniform(object):
         self.As[n] = newA
         
         if do_update:
-            self.update()         
+            self.update()
+            
+    def expect_string_per_site_1s(self, op):
+        """Calculates the per-site factor of a string expectation value.
+        
+        The string operator is the product over all sites of a single-site
+        operator 'op'. 
+        
+        The expectation value is related to the infinite power of the per-site 
+        fidelity of the original state and the state obtained by applying the 
+        string. Since the operator need not preserve the norm, this can be 
+        greater than 1, in which case the expectation value diverges.
+        
+        The expectation value of a string is only well-defined if the string
+        is a symmetry of the state such that the per-site factor == 1, although
+        an absolute value of 1 ensures that it does not diverge or go to zero.
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The single-site operator. See self.expect_1s().
+            
+        Returns
+        -------
+        ev : complex
+            The per-site factor of the expectation value.
+        """
+        if callable(op):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+        
+        Asop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.As)
+        
+        if self.D == 1:
+            ev = 1
+            for k in xrange(self.L):
+                evk = 0
+                for s in xrange(self.q):
+                    evk += Asop[k][s] * self.As[k][s].conj()
+                ev *= evk
+            return ev**(1./self.L)
+        else:            
+            opE = EOp(Asop, self.As, False)
+            ev = las.eigs(opE, v0=np.asarray(self.rs[-1]), which='LM', k=1, ncv=6)
+            return ev[0]**(1./self.L)
                 
     def set_q(self, newq):
         """Alter the single-site Hilbert-space dimension q.
