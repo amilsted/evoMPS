@@ -8,8 +8,10 @@ TODO:
     - Adaptive step size.
 
 """
+import copy as cp
 import scipy as sp
 import scipy.linalg as la
+import scipy.optimize as opti
 import matmul as m
 import tdvp_common as tm
 from mps_gen import EvoMPS_MPS_Generic
@@ -466,7 +468,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return None
 
     
-    def take_step(self, dtau, save_memory=False, calc_Y_2s=False, 
+    def take_step(self, dtau, B=None, save_memory=False, calc_Y_2s=False, 
                   dynexp=False, dD_max=16, sv_tol=1E-14):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -487,6 +489,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
+        B : sequence of ndarray
+            The direction to step in. Not compatible with dynexp or save_memory.
         save_memory : bool
             Whether to save memory by avoiding storing all B[n] at once.
         calc_Y_2s : bool
@@ -501,7 +505,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         eta_tot = 0
         self.eta.fill(0)        
         
-        if self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp:
+        if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
+            and B is None):
             B = [None] * (self.N + 1)
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
@@ -518,30 +523,32 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
              
             assert all(x is None for x in B), "take_step update incomplete!"
         else:
-            B = [None] #There is no site zero
-            l_s = sp.empty((self.N + 1), dtype=sp.ndarray)
-            l_si = sp.empty((self.N + 1), dtype=sp.ndarray)
-            r_s = sp.empty((self.N + 1), dtype=sp.ndarray)
-            r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
-            Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
-            Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
-            for n in xrange(1, self.N + 1):
-                l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
-                                                               zero_tol=self.zero_tol,
-                                                               sanity_checks=self.sanity_checks,
-                                                               sc_data=('site', n))
-            
-            for n in xrange(1, self.N + 1):
-                Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
-            for n in xrange(1, self.N + 1):
-                Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
+            if B is None or dynexp or calc_Y_2s:
+                l_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+                l_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+                r_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+                r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+                Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
+                Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
+                for n in xrange(1, self.N + 1):
+                    l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
+                                                                   zero_tol=self.zero_tol,
+                                                                   sanity_checks=self.sanity_checks,
+                                                                   sc_data=('site', n))
                 
-            for n in xrange(1, self.N + 1):
-                Bn = self.calc_B(n, set_eta=True, l_s_m1=l_s[n-1], 
-                                 l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
-                                 Vlh=Vlh[n], Vrh=Vrh[n])
-                B.append(Bn)
-                eta_tot += self.eta[n]
+                for n in xrange(1, self.N + 1):
+                    Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
+                for n in xrange(1, self.N + 1):
+                    Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
+    
+                if B is None:
+                    B = [None] #There is no site zero
+                    for n in xrange(1, self.N + 1):
+                        Bn = self.calc_B(n, set_eta=True, l_s_m1=l_s[n-1], 
+                                         l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
+                                         Vlh=Vlh[n], Vrh=Vrh[n])
+                        B.append(Bn)
+                        eta_tot += self.eta[n]
             
             if calc_Y_2s or dynexp:
                 Y, self.etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
@@ -648,3 +655,192 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
         return eta_tot
         
+    def find_min_h_brent(self, Bs, dtau_init, tol=5E-2, skipIfLower=False, 
+                         verbose=False, use_tangvec_overlap=False,
+                         max_iter=20):
+        As0 = cp.deepcopy(self.A)
+        Cs0 = cp.deepcopy(self.C)
+        Ks0 = cp.deepcopy(self.K)
+        h_expect_0 = self.H_expect
+        
+        ls0 = cp.deepcopy(self.l)
+        rs0 = cp.deepcopy(self.r)
+        
+        taus=[0]
+        if use_tangvec_overlap:
+            ress = [self.eta.real.sum()]
+        else:
+            ress = [h_expect_0.real]
+        hs = [h_expect_0.real]
+        
+        def f(tau, *args):
+            if tau < 0:
+                if use_tangvec_overlap:
+                    res = tau**2 + self.eta.sum().real
+                else:
+                    res = tau**2 + h_expect_0.real
+                log.debug((tau, res, "punishing negative tau!"))
+                taus.append(tau)
+                ress.append(res)
+                hs.append(h_expect_0.real)
+                return res
+            try:
+                i = taus.index(tau)
+                log.debug((tau, ress[i], "from stored"))
+                return ress[i]
+            except ValueError:
+                for n in xrange(1, self.N + 1):
+                    if not Bs[n] is None:
+                        self.A[n] = As0[n] - tau * Bs[n]
+                    
+                if use_tangvec_overlap:
+                    self.update(restore_CF=False)
+                    Bsg = [None] * (self.N + 1)
+                    for n in xrange(1, self.N + 1):
+                        Bsg[n] = self.calc_B(n, set_eta=False)
+                    res = 0
+                    for n in xrange(1, self.N + 1):
+                        if not Bs[n] is None:
+                            res += abs(m.adot(self.l[n - 1], tm.eps_r_noop(self.r[n], Bsg[n], Bs[n])))
+                    h_exp = self.H_expect.real
+                else:
+                    self.calc_l()
+                    self.calc_r()
+                    self.simple_renorm()
+                    #self.calc_C()
+                    
+                    h_exp = 0
+                    if self.ham_sites == 2:
+                        for n in xrange(1, self.N):
+                            h_exp += self.expect_2s(self.ham[n], n).real
+                    else:
+                        for n in xrange(1, self.N - 1):
+                            h_exp += self.expect_3s(self.ham[n], n).real
+                    res = h_exp
+                
+                log.debug((tau, res, h_exp, h_exp - h_expect_0.real))
+                
+                taus.append(tau)
+                ress.append(res)
+                hs.append(h_exp)
+                
+                return res
+        
+        if skipIfLower:
+            if f(dtau_init) < self.H_expect.real:
+                return dtau_init
+        
+        brack_init = (dtau_init * 0.9, dtau_init * 1.5)
+        
+        attempt = 1
+        while attempt < 3:
+            try:
+                log.debug("CG: Bracketing...")
+                xa, xb, xc, fa, fb, fc, funcalls = opti.bracket(f, xa=brack_init[0], 
+                                                                xb=brack_init[1], 
+                                                                maxiter=5)                                                
+                brack = (xa, xb, xc)
+                log.debug("CG: Using bracket = " + str(brack))
+                break
+            except RuntimeError:
+                log.debug("CG: Bracketing failed, attempt %u." % attempt)
+                brack_init = (brack_init[0] * 0.1, brack_init[1] * 0.1)
+                attempt += 1
+        
+        if attempt == 3:
+            log.debug("CG: Bracketing failed. Aborting!")
+            tau_opt = 0
+            h_min = h_expect_0.real
+        else:
+            try:
+                tau_opt, res_min, itr, calls = opti.brent(f, 
+                                                        brack=brack, 
+                                                        tol=tol,
+                                                        maxiter=max_iter,
+                                                        full_output=True)
+    
+                i = taus.index(tau_opt)
+                h_min = hs[i]
+            except ValueError:
+                log.debug("CG: Bad bracket. Aborting!")
+                tau_opt = 0
+                h_min = h_expect_0.real
+            
+        #Must restore everything needed for take_step
+        self.A = As0
+        self.l = ls0
+        self.r = rs0
+        self.C = Cs0
+        self.K = Ks0
+        self.H_expect = h_expect_0
+        
+        return tau_opt, h_min
+        
+        
+    def calc_B_CG(self, Bs_CG_0, eta_0, dtau_init, reset=False, verbose=False,
+                  switch_threshold_eta=1E-6):
+        """Calculates a tangent vector using the non-linear conjugate gradient method.
+        
+        Parameters:
+            B_CG_0 : ndarray
+                Tangent vector used to make the previous step. Ignored on reset.
+            eta_0 : float
+                Norm of the previous tangent vector.
+            dtau_init : float
+                Initial step-size for the line-search.
+            reset : bool = False
+                Whether to perform a reset, using the gradient as the next search direction.
+            switch_threshold_eta : float
+                Sets the state tolerance (eta) below which the gradient should
+                be used to determine the energetic minimum in a given direction,
+                rather of the value of the energy. The gradient method is
+                more expensive, but is much more robust for small .
+        """
+        self.eta.fill(0)
+        Bs = [None] * (self.N + 1)
+        for n in xrange(1, self.N + 1):
+            Bs[n] = self.calc_B(n)
+            
+        eta = self.eta.real.sum()
+        
+        if reset:
+            beta = 0.
+            log.debug("CG RESET")
+            
+            Bs_CG = Bs
+        else:
+            beta = (eta**2) / eta_0**2
+        
+            log.debug("BetaFR = %s", beta)
+        
+            beta = max(0, beta.real)
+            
+            Bs_CG = [None] * len(Bs)
+            for n in xrange(1, self.N + 1):
+                if not Bs[n] is None:
+                    Bs_CG[n] = Bs[n] + beta * Bs_CG_0[n]
+        
+        h_expect = self.H_expect.real
+        
+        eta_low = eta < switch_threshold_eta #Energy differences become too small here...
+        
+        log.debug("CG low eta: " + str(eta_low))
+        
+        tau, h_min = self.find_min_h_brent(Bs_CG, dtau_init,
+                                           verbose=verbose, 
+                                           use_tangvec_overlap=eta_low)
+        
+        if tau == 0:
+            log.debug("CG RESET!")
+            Bs_CG = Bs
+        elif not eta_low and h_min > h_expect:
+            log.debug("CG RESET due to energy rise!")
+            Bs_CG = Bs
+            tau, h_min = self.find_min_h_brent(Bs_CG, dtau_init * 0.1, 
+                                               use_tangvec_overlap=False)
+        
+            if h_expect < h_min:
+                log.debug("CG RESET FAILED: Setting tau=0!")
+                tau = 0
+        
+        return Bs_CG, Bs, eta, tau
