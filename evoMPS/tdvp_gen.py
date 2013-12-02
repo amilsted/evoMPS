@@ -503,7 +503,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Only use singular values larger than this for dynamical expansion.
         """
         eta_tot = 0
-        self.eta.fill(0)        
+        self.eta.fill(0)    
+        self.etaBB.fill(0)
         
         if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
             and B is None):
@@ -782,7 +783,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
-            B_CG_0 : ndarray
+            Bs_CG_0 : ndarray
                 Tangent vector used to make the previous step. Ignored on reset.
             eta_0 : float
                 Norm of the previous tangent vector.
