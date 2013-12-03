@@ -378,9 +378,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     Y[n], etaBB[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], 
                                            Vrh[n + 1], l_s[n - 1], r_s[n + 1])
                 else:
-                    Y[n], etaBB[n] = tm.calc_BB_Y_2s_ham_3s(self.A[n - 1], 
-                       self.A[n + 2], self.C[n], self.C[n - 1], Vlh[n], 
-                       Vrh[n + 1], self.l[n - 2], self.r[n + 2], l_s[n - 1],
+                    A_m1 = self.A[n - 1] if n - 1 > 0 else None
+                    A_p2 = self.A[n + 2] if n + 2 <= self.N else None
+                    l_m2 = self.l[n - 2] if n - 2 >= 0 else None
+                    r_p2 = self.r[n + 2] if n + 2 <= self.N else None
+                    Y[n], etaBB[n] = tm.calc_BB_Y_2s_ham_3s(A_m1, A_p2, 
+                       self.C[n], self.C[n - 1], Vlh[n], 
+                       Vrh[n + 1], l_m2, r_p2, l_s[n - 1],
                        l_si[n - 1], r_s[n + 1], r_si[n + 1])
                 
         return Y, etaBB
