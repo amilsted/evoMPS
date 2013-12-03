@@ -450,7 +450,6 @@ class EvoMPS_MPS_Generic(object):
                 l = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
                 if not sp.allclose(l, self.l[n], atol=1E-11, rtol=1E-11):
                     log.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
-                    log.warning((l - self.l[n]).diagonal().real)
                     
     
     def auto_truncate(self, update=True, zero_tol=None, return_update_data=False):
