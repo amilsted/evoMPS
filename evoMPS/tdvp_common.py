@@ -820,11 +820,13 @@ def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_
     for s in xrange(liVl.shape[0]):
         liVl[s] = l_si_m1.dot(Vl[s])
 
-    Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=C.dtype)
-    for s in xrange(C.shape[0]):
-        Y += Vlh[s].dot(l_s_m1.dot(eps_r_op_2s_C12(r_p2, C[s], Vrri_p1, A_p2)))
-    for u in xrange(C_m1.shape[2]):
-        Y += eps_l_op_2s_A1_A2_C34(l_m2, A_m1, liVl, C_m1[:, :, u]).dot(r_s_p1.dot(Vrh_p1[u]))
+    Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=Vrh_p1.dtype)
+    if not A_p2 is None:
+        for s in xrange(C.shape[0]):
+            Y += Vlh[s].dot(l_s_m1.dot(eps_r_op_2s_C12(r_p2, C[s], Vrri_p1, A_p2)))
+    if not A_m1 is None:
+        for u in xrange(C_m1.shape[2]):
+            Y += eps_l_op_2s_A1_A2_C34(l_m2, A_m1, liVl, C_m1[:, :, u]).dot(r_s_p1.dot(Vrh_p1[u]))
 
     etaBB = sp.sqrt(mm.adot(Y, Y))
     
@@ -850,8 +852,12 @@ def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, dD_max=16, sv_tol=1E-14):
     
     BB21np1 = sp.zeros((Vrh_p1.shape[0], dDn, Vrh_p1.shape[1]), dtype=Y.dtype)
     
-    for s in xrange(Vrh_p1.shape[0]):
-        BB21np1[s] = r_si_p1.dot_left(Z2.dot(Vrh_p1[s].conj().T))
+    try:
+        for s in xrange(Vrh_p1.shape[0]):
+            BB21np1[s] = r_si_p1.dot_left(Z2.dot(Vrh_p1[s].conj().T))
+    except AttributeError:
+        for s in xrange(Vrh_p1.shape[0]):
+            BB21np1[s] = Z2.dot(Vrh_p1[s].conj().T).dot(r_si_p1)
         
     return BB12n, BB21np1, dDn
 
