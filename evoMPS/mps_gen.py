@@ -82,6 +82,10 @@ class EvoMPS_MPS_Generic(object):
         self.initialize_state()
     
     def _init_arrays(self):
+        self.S_hc = sp.zeros((self.N + 1), dtype=self.typ)
+        """Half-chain entropy for a cut between sites n and n + 1"""
+        self.S_hc.fill(sp.NaN)
+        
         self.A = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         
         self.r = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 0..N
@@ -375,6 +379,10 @@ class EvoMPS_MPS_Generic(object):
 
             #Deal with final, scalar l[N]
             tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
+            
+            self.S_hc.fill(0)
+            for n in xrange(1, self.N):
+                self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
@@ -428,6 +436,10 @@ class EvoMPS_MPS_Generic(object):
 
         #Deal with final, scalar r[0]
         tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
+        
+        self.S_hc.fill(0)
+        for n in xrange(1, self.N):
+            self.S_hc[n] = -sp.sum(self.r[n].diag * sp.log2(self.r[n].diag))
 
         if self.sanity_checks:
             if not sp.allclose(self.r[0], 1, atol=1E-12, rtol=1E-12):
