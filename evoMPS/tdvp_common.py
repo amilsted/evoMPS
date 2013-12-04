@@ -833,7 +833,10 @@ def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_
     return Y, etaBB
     
 def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, dD_max=16, sv_tol=1E-14):
-    U, sv, Vh = la.svd(Y)
+    try:
+        U, sv, Vh = la.svd(Y)
+    except la.LinAlgError:
+        return None, None, 0
     
     dDn = min(sp.count_nonzero(sv > sv_tol), dD_max)
     
