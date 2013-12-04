@@ -399,6 +399,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                                             Vrh[n + 1], 
                                                             l_si[n - 1], r_si[n + 1],
                                                             dD_max=dD_max, sv_tol=sv_tol)
+                if BB12[n] is None:
+                    log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
 
                 
         return BB12, BB21, dD

@@ -45,7 +45,7 @@ class EvoMPS_MPS_Generic(object):
         self.odr = 'C'
         self.typ = sp.complex128
         
-        self.sanity_checks = True
+        self.sanity_checks = False
         """Whether to perform additional (potentially costly) sanity checks."""
         
         self.canonical_form = 'right'
