@@ -510,6 +510,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Whether to increase the bond dimension to capture more of the dynamics.
         dD_max : int
             The maximum amount by which to increase the bond dimension (for any site).
+        D_max : int
+            The maximum bond dimension to allow when expanding.
         sv_tol : float
             Only use singular values larger than this for dynamical expansion.
         """
