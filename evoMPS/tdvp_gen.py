@@ -550,10 +550,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                                                    sanity_checks=self.sanity_checks,
                                                                    sc_data=('site', n))
                 
-                for n in xrange(1, self.N + 1):
-                    Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
-                for n in xrange(1, self.N + 1):
-                    Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
+                if dynexp or calc_Y_2s or self.gauge_fixing == 'left':
+                    for n in xrange(1, self.N + 1):
+                        Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
+                if dynexp or calc_Y_2s or self.gauge_fixing == 'right':
+                    for n in xrange(1, self.N + 1):
+                        Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
     
                 if B is None:
                     B = [None] #There is no site zero
