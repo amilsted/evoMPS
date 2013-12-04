@@ -389,16 +389,21 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
         return Y, etaBB
 
-    def calc_BB_2s(self, Y, Vlh, Vrh, l_si, r_si, sv_tol=1E-10, dD_max=16):
+    def calc_BB_2s(self, Y, Vlh, Vrh, l_si, r_si, sv_tol=1E-10, dD_max=16, D_max=0):
         dD = sp.zeros((self.N + 1), dtype=int)
         BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
         BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
+        
+        dD_maxes = sp.repeat([dD_max], len(self.D))
+        if D_max > 0:
+            dD_maxes[self.D + dD_maxes > D_max] = 0
+        
         for n in xrange(1, self.N):
-            if not Y[n] is None:
+            if not Y[n] is None and dD_maxes[n] > 0:
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
                                                             Vrh[n + 1], 
                                                             l_si[n - 1], r_si[n + 1],
-                                                            dD_max=dD_max, sv_tol=sv_tol)
+                                                            dD_max=dD_maxes[n], sv_tol=sv_tol)
                 if BB12[n] is None:
                     log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
 
@@ -475,7 +480,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
     
     def take_step(self, dtau, B=None, save_memory=False, calc_Y_2s=False, 
-                  dynexp=False, dD_max=16, sv_tol=1E-14):   
+                  dynexp=False, dD_max=16, D_max=0, sv_tol=1E-14):   
         """Performs a complete forward-Euler step of imaginary time dtau.
         
         The operation is A[n] -= dtau * B[n] with B[n] from self.calc_B(n).
@@ -561,29 +566,34 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 Y, self.etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
                 
             if dynexp:
-                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, l_si, r_si, dD_max=dD_max, sv_tol=sv_tol)
-                
-                oldA = self.A
-                oldD = self.D.copy()
-                oldeta = self.eta
-                oldetaBB = self.etaBB
-                
-                self.D += dD
-                self._init_arrays()
-        
+                BB12, BB21, dD = self.calc_BB_2s(Y, Vlh, Vrh, l_si, r_si, 
+                                                 dD_max=dD_max, sv_tol=sv_tol,
+                                                 D_max=D_max)
+                                                 
                 for n in xrange(1, self.N + 1):
                     if not B[n] is None:
-                        oldA[n] += -dtau * B[n]
-                    self.A[n][:, :oldD[n - 1], :oldD[n]] = oldA[n]
+                        self.A[n] += -dtau * B[n]
+                        
+                if sp.any(dD > 0):
+                    oldA = self.A
+                    oldD = self.D.copy()
+                    oldeta = self.eta
+                    oldetaBB = self.etaBB
                     
-                    if not BB12[n] is None:
-                        self.A[n][:, :oldD[n - 1], oldD[n]:] = -1.j * sp.sqrt(dtau) * BB12[n]
-                    if not BB21[n] is None:
-                        self.A[n][:, oldD[n - 1]:, :oldD[n]] = -1.j * sp.sqrt(dtau) * BB21[n]
-                    
-                log.info("Dyn. expanded! New D: %s", self.D)
-                self.eta = oldeta
-                self.etaBB = oldetaBB
+                    self.D += dD
+                    self._init_arrays()
+        
+                    for n in xrange(1, self.N + 1):
+                        self.A[n][:, :oldD[n - 1], :oldD[n]] = oldA[n]
+                        
+                        if not BB12[n] is None:
+                            self.A[n][:, :oldD[n - 1], oldD[n]:] = -1.j * sp.sqrt(dtau) * BB12[n]
+                        if not BB21[n] is None:
+                            self.A[n][:, oldD[n - 1]:, :oldD[n]] = -1.j * sp.sqrt(dtau) * BB21[n]
+                        
+                    log.info("Dyn. expanded! New D: %s", self.D)
+                    self.eta = oldeta
+                    self.etaBB = oldetaBB
             else:
                 for n in xrange(1, self.N + 1):
                     if not B[n] is None:
