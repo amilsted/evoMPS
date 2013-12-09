@@ -351,7 +351,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         return Ys, etaBBs
         
-    def calc_B_2s(self, max_dD=16, sv_tol=1E-14):
+    def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
         Vrhs = self.Vshs
         Vlhs = []
         L = self.L
@@ -365,7 +365,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for k in xrange(L):
             BB1s[k], BB2s[(k + 1) % L], dD = tm.calc_BB_2s(Ys[k], Vlhs[k], Vrhs[(k + 1) % L], 
                                               self.ls_sqrt_i[k - 1], self.rs_sqrt_i[(k + 1) % L],
-                                              max_dD=max_dD, sv_tol=0) #FIXME: Make D variable...
+                                              dD_max=dD_max, sv_tol=0) #FIXME: Make D variable...
         
         return BB1s, BB2s, etaBBs
         
@@ -394,7 +394,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, Bs=None, dynexp=False, maxD=128, max_dD=16, 
+    def take_step(self, dtau, Bs=None, dynexp=False, maxD=128, dD_max=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -414,7 +414,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if dynexp and self.D < maxD:
             if BB is None:
-                BB = self.calc_B_2s(max_dD=max_dD, sv_tol=sv_tol)
+                BB = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
             if not BB is None:
                 BB1s, BB2s, etaBBs = BB
                 oldD = self.D
