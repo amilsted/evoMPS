@@ -136,11 +136,6 @@ class EvoMPS_MPS_Uniform(object):
         """Contains the number of eigenvalue solver iterations needed to find l."""
         self.itr_r = 0
         """Contains the number of eigenvalue solver iterations needed to find r."""
-        
-        self.S_hcs = sp.empty((L), dtype=sp.complex128)
-        self.S_hcs.fill(sp.NaN)
-        """After calling restore_CF() or update(restore_CF=True), this contains
-           the von Neumann entropy of one infinite half of the system."""
                 
         self._init_arrays(D, q, L)
                     
@@ -187,6 +182,11 @@ class EvoMPS_MPS_Uniform(object):
         self.D = D
         self.q = q
         self.L = L
+        
+        self.S_hcs = sp.empty((L), dtype=sp.complex128)
+        """After calling restore_CF() or update(restore_CF=True), this contains
+           the von Neumann entropy of one infinite half of the system."""
+        self.S_hcs.fill(sp.NaN)
         
         self.As = []
         self.AAs = []
