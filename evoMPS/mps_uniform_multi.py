@@ -993,7 +993,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return gs, gis, phi
             
-    def expect_1s(self, op, n):
+    def expect_1s(self, op, n=0):
         """Computes the expectation value of a single-site operator.
         
         The operator should be a self.q x self.q matrix or generating function 
@@ -1005,6 +1005,8 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator.
+        n : int
+            Site offset within block.
             
         Returns
         -------
@@ -1019,7 +1021,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return m.adot(self.ls[n - 1], Or)
         
-    def expect_1s_1s(self, op1, op2, n, d):
+    def expect_1s_1s(self, op1, op2, d, n=0):
         """Computes the expectation value of two single site operators acting 
         on two different sites.
         
@@ -1040,6 +1042,8 @@ class EvoMPS_MPS_Uniform(object):
             The second operator, acting on the second site.
         d : int
             The distance (number of sites) between the two sites acted on non-trivially.
+        n : int
+            Site offset of first site within block.
             
         Returns
         -------
@@ -1066,7 +1070,7 @@ class EvoMPS_MPS_Uniform(object):
          
         return m.adot(self.ls[(n - d - 1) % self.L], r_n)
             
-    def expect_2s(self, op, n):
+    def expect_2s(self, op, n=0):
         """Computes the expectation value of a nearest-neighbour two-site operator.
         
         The operator should be a q x q x q x q array 
@@ -1079,6 +1083,8 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator array or function.
+        n : int
+            Site offset within block.
             
         Returns
         -------
@@ -1094,7 +1100,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return m.adot(self.ls[n - 1], res)
         
-    def expect_3s(self, op, n):
+    def expect_3s(self, op, n=0):
         """Computes the expectation value of a nearest-neighbour three-site operator.
 
         The operator should be a q x q x q x q x q x q 
@@ -1107,6 +1113,8 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator array or function.
+        n : int
+            Site offset within block.
             
         Returns
         -------
@@ -1126,7 +1134,7 @@ class EvoMPS_MPS_Uniform(object):
         res = tm.eps_r_op_3s_C123_AAA456(self.rs[(n + 2) % self.L], C, AAA)
         return m.adot(self.ls[n - 1], res)
         
-    def density_1s(self, n):
+    def density_1s(self, n=0):
         """Returns a reduced density matrix for a single site.
         
         The site number basis is used: rho[s, t] 
@@ -1134,6 +1142,11 @@ class EvoMPS_MPS_Uniform(object):
         
         The state must be up-to-date -- see self.update()!
             
+        Parameters
+        ----------
+        n : int
+            Site offset within block.
+
         Returns
         -------
         rho : ndarray
@@ -1145,7 +1158,7 @@ class EvoMPS_MPS_Uniform(object):
                 rho[s, t] = m.adot(self.ls[n - 1], m.mmul(self.As[n][t], self.rs[n], m.H(self.As[n][s])))
         return rho
                 
-    def apply_op_1s(self, op, n, do_update=True):
+    def apply_op_1s(self, op, n=0, do_update=True):
         """Applies a single-site operator to all sites.
         
         This applies the product (or string) of a single-site operator o_n over 
@@ -1158,6 +1171,8 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The single-site operator. See self.expect_1s().
+        n : int
+            Site offset within block.
         do_update : bool
             Whether to update after applying the operator.
         """

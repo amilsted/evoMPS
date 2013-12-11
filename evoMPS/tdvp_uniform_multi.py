@@ -1069,14 +1069,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         val = abs(oldK0.mean())
         m.randomize_cmplx(self.Ks[0].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
         
-    def expect_2s(self, op, n):
+    def expect_2s(self, op, n=0):
         if op is self.ham and self.ham_sites == 2:
             res = tm.eps_r_op_2s_C12_AA34(self.rs[(n + 1) % self.L], self.Cs[n], self.AAs[n])
             return m.adot(self.ls[(n - 1) % self.L], res)
         else:
             return super(EvoMPS_TDVP_Uniform, self).expect_2s(op, n)
             
-    def expect_3s(self, op, n):
+    def expect_3s(self, op, n=0):
         if op is self.ham and self.ham_sites == 3:
             res = tm.eps_r_op_3s_C123_AAA456(self.rs[(n + 2) % self.L], self.Cs[n], self.AAAs[n])
             return m.adot(self.ls[(n - 1) % self.L], res)
