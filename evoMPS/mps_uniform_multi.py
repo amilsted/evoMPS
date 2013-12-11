@@ -71,7 +71,7 @@ class EOp:
 
 class EvoMPS_MPS_Uniform(object):   
         
-    def __init__(self, D, q, L, dtype=None):
+    def __init__(self, D, q, L=1, dtype=None):
         """Creates a new EvoMPS_MPS_Uniform object.
         
         This class implements basic operations on a uniform 

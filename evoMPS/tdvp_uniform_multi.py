@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
         
 class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
-    def __init__(self, D, q, L, ham, ham_sites=None, dtype=None):
+    def __init__(self, D, q, ham, ham_sites=None, L=1, dtype=None):
         """Implements the TDVP algorithm for uniform MPS.
         
         Parameters
@@ -38,6 +38,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 Local Hamiltonian term (acting on two or three adjacent sites)
             ham_sites : int
                 The number of sites acted on non-trivially by ham. Should be specified for callable ham.
+            L : int
+                The number of sites in a translation invariant block.
             dtype : numpy dtype = None
                 Specifies the array type.
         """
@@ -60,20 +62,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         self.K_solver = las.bicgstab
         
-        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L, dtype=dtype)
+        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L=L, dtype=dtype)
                         
         self.eta = sp.NaN
         """The norm of the TDVP tangent vector (projection of the exact time
            evolution onto the MPS tangent plane. Only available after calling
            take_step()."""
-
-        self.etas = sp.empty((L), dtype=dtype)
-        self.etas.fill(sp.NaN)
-        
-        self.h_expect = sp.empty((L), dtype=dtype)
-        """The energy density expectation value, available only after calling
-           update() or calc_K()."""
-        self.h_expect.fill(sp.NaN)
     
     def _init_arrays(self, D, q, L):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q, L)
@@ -92,6 +86,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.AAAs = [None] * L
             
         self.K_left = None
+        
+        self.etas = sp.empty((L), dtype=self.As[0].dtype)
+        """The site contributions to the norm of the TDVP tangent vector 
+           (projection of the exact time
+           evolution onto the MPS tangent plane. Only available after calling
+           take_step()."""
+        self.etas.fill(sp.NaN)
+        
+        self.h_expect = sp.empty((L), dtype=self.As[0].dtype)
+        """The energy density expectation value, available only after calling
+           update() or calc_K()."""
+        self.h_expect.fill(sp.NaN)
             
     def set_ham_array_from_function(self, ham_func):
         """Generates a Hamiltonian array from a function.
