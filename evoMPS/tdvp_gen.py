@@ -182,13 +182,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n <= self.N - self.ham_sites + 1:
                 if self.ham_sites == 2:
                     self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 1], self.A[n], self.A[n + 1], 
-                                              sanity_checks=self.sanity_checks)
+                                              self.r[n + 1], self.A[n], self.A[n + 1])
                 else:
                     self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
                                               self.r[n + 2], self.A[n], self.A[n + 1], 
-                                              self.A[n + 2],
-                                              sanity_checks=self.sanity_checks)
+                                              self.A[n + 2])
 
                 self.h_expect[n] = ex
             else:

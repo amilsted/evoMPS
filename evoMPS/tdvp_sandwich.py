@@ -417,15 +417,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         for n in xrange(self.N, self.N_centre - 1, -1):
             self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
-                                      self.r[n + 1], self.A[n], self.A[n + 1],
-                                      sanity_checks=self.sanity_checks)
+                                      self.r[n + 1], self.A[n], self.A[n + 1])
                 
             self.h_expect[n] = he
 
         for n in xrange(1, self.N_centre + 1):
             self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
-                                      self.r[n], self.A[n], self.A[n - 1],
-                                      sanity_checks=self.sanity_checks)
+                                      self.r[n], self.A[n], self.A[n - 1])
                 
             self.h_expect[n - 1] = he
 

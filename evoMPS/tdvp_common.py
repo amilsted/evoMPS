@@ -461,7 +461,7 @@ def calc_C_func_op_AA(op, AA):
                         C[s, t] += h_nn_stuv * AAuv
     return C
     
-def calc_K(Kp1, C, lm1, rp1, A, Ap1, sanity_checks=False):
+def calc_K(Kp1, C, lm1, rp1, A, Ap1):
     Dm1 = A.shape[1]
     q = A.shape[0]
     qp1 = Ap1.shape[0]
@@ -483,7 +483,7 @@ def calc_K(Kp1, C, lm1, rp1, A, Ap1, sanity_checks=False):
     
     return K, op_expect
     
-def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
+def calc_K_l(Km1, Cm1, lm2, r, A, Am1):
     """Calculates the K_left using the recursive definition.
     
     This is the "bra-vector" K_left, which means (K_left.dot(r)).trace() = <K_left|r>.
@@ -510,7 +510,7 @@ def calc_K_l(Km1, Cm1, lm2, r, A, Am1, sanity_checks=False):
     
     return K, op_expect
     
-def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
+def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2):
     Dm1 = A.shape[1]
     q = A.shape[0]
     qp1 = Ap1.shape[0]
@@ -532,6 +532,31 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2, sanity_checks=False):
     op_expect = mm.adot(lm1, Hr)
         
     K += Hr
+    
+    return K, op_expect
+    
+def calc_K_3s_l(Km1, Cm1, lm3, r, A, Am1, Am2):
+    D = A.shape[2]
+    q = A.shape[0]
+    qm1 = Am1.shape[0]
+    qm2 = Am2.shape[0]
+    
+    K = sp.zeros((D, D), dtype=A.dtype)
+    
+    Hl = sp.zeros_like(K)
+
+    for s in xrange(qm2):
+        Am2sh = Am2[s].conj().T
+        for t in xrange(qm1):
+            Am1th = Am1[t].conj().T
+            for u in xrange(q):
+                Hl += A[u].conj().T.dot(Am1th).dot(Am2sh).dot(lm3.dot(Cm1[s, t, u]))
+        
+        K += A[s].conj().T.dot(Km1.dot(A[s]))
+        
+    op_expect = mm.adot_noconj(Hl, r)
+        
+    K += Hl
     
     return K, op_expect
                    

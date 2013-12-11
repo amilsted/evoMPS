@@ -85,7 +85,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         self.AAAs = [None] * L
             
-        self.K_left = None
+        self.K_lefts = [None] * L
         
         self.etas = sp.empty((L), dtype=self.As[0].dtype)
         """The site contributions to the norm of the TDVP tangent vector 
@@ -235,13 +235,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.ham_sites == 2:
             for k in sp.arange(L - 1, 0, -1) % L:
                 self.Ks[k], hk = tm.calc_K(self.Ks[(k + 1) % L], self.Cs[k], self.ls[k - 1], self.rs[(k + 1) % L],
-                                           self.As[k], self.As[(k + 1) % L], sanity_checks=self.sanity_checks)
+                                           self.As[k], self.As[(k + 1) % L])
                 self.Ks[k] -= self.rs[(k - 1) % L] * hk
         else:
             for k in sp.arange(L - 1, 0, -1) % L:
                 self.Ks[k], hk = tm.calc_K_3s(self.Ks[(k + 1) % L], self.Cs[k], self.ls[k - 1], self.rs[(k + 2) % L],
                                           self.As[k], self.As[(k + 1) % L],
-                                          self.As[(k + 2) % L], sanity_checks=self.sanity_checks)
+                                          self.As[(k + 2) % L])
                 self.Ks[k] -= self.rs[(k - 1) % L] * hk
         
 #        if self.sanity_checks:
@@ -251,6 +251,77 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 #            if not np.allclose(res, QHr):
 #                log.warning("Sanity check failed: Bad K!")
 #                log.warning("Off by: %s", la.norm(res - QHr))
+        
+    def calc_K_l(self):
+        """Generates the left K matrix.
+        
+        See self.calc_K().
+        
+        K contains the (non-trivial) action of the Hamiltonian on the left 
+        half of the infinite chain.
+        
+        It directly depends on A, l, and C.
+        
+        This calculates the "bra-vector" K_l ~ <K_l| (and K_l.conj().T ~ |K_l>)
+        so that <K_l|r> = trace(K_l.dot(r))
+        
+        Returns
+        -------
+        K_lefts : list of ndarrays
+            The left K matrices.
+        h : complex
+            The energy-density expectation value.
+        """
+        L = self.L
+        if self.ham_sites == 2:
+            lH = tm.eps_l_op_2s_AA12_C34(self.ls[(L - 3) % L], self.AAs[(L - 2) % L], self.Cs[(L - 2) % L])
+            for k in sp.arange(-1, L - 2) % L:
+                lHk = tm.eps_l_op_2s_AA12_C34(self.ls[(k - 1) % L], self.AAs[k], self.Cs[k])
+                for j in xrange((k + 2) % L, L):
+                    lHk = tm.eps_l_noop(lHk, self.As[j], self.As[j])
+                lH += lHk
+        else:
+            lH = tm.eps_l_op_3s_AAA123_C456(self.ls[(L - 4) % L], self.AAAs[(L - 3) % L], self.Cs[(L - 3) % L])
+            for k in sp.arange(-2, L - 3) % L:
+                lHk = tm.eps_l_op_3s_AAA123_C456(self.ls[(k - 1) % L], self.AAAs[k], self.Cs[k])
+                for j in xrange((k + 3) % L, L):
+                    lHk = tm.eps_l_noop(lHk, self.As[j], self.As[j])
+                lH += lHk
+        
+        h = m.adot_noconj(lH, self.rs[-1]) #=tr(lH r)
+        
+        lHQ = lH - self.ls[-1] * h
+        
+        h /= L
+        
+        #Since A1=A2 and p=0, we get the right result without turning lHQ into a ket.
+        #This is the same as...
+        #self.K_left = (self.calc_PPinv(lHQ.conj().T, left=True, out=self.K_left)).conj().T
+        self.K_lefts[-1] = self.calc_PPinv(lHQ, left=True, out=self.K_lefts[-1], solver=self.K_solver)
+                
+        if self.ham_sites == 2:
+            for k in sp.arange(0, L - 1):
+                self.K_lefts[k], hk = tm.calc_K_l(self.Ks[(k - 1) % L], self.Cs[(k - 1) % L], 
+                                             self.ls[(k - 2) % L], self.rs[k],
+                                             self.As[k], self.As[(k - 1) % L])
+                self.K_lefts[k] -= self.ls[k] * hk
+        else:
+            for k in sp.arange(0, L - 1):
+                self.K_lefts[k], hk = tm.calc_K_3s_l(self.Ks[(k - 1) % L], self.Cs[(k - 1) % L], 
+                                                self.ls[(k - 3) % L], self.rs[k],
+                                                self.As[k], self.As[(k - 1) % L],
+                                                self.As[(k - 2) % L])
+                self.K_lefts[k] -= self.ls[k] * hk
+        
+#        if self.sanity_checks:
+#            xE = tm.eps_l_noop(self.K_left, self.A, self.A)
+#            QEQ = xE - self.l * m.adot(self.r, self.K_left)
+#            res = self.K_left - QEQ
+#            if not np.allclose(res, lHQ):
+#                log.warning("Sanity check failed: Bad K_left!")
+#                log.warning("Off by: %s", la.norm(res - lHQ))
+        
+        return self.K_lefts, h
         
     def get_B_from_x(self, x, Vsh, l_sqrt_i, r_sqrt_i, out=None):
         """Calculates a gauge-fixing B-tensor given parameters x.
@@ -586,7 +657,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         r__sqrt_i = donor.r_sqrt_i
         
         K__r = donor.K
-        K_l = self.K_left #this is the 'bra' vector already
+        K_l = self.K_lefts[0] #this is the 'bra' vector already
         
         pseudo = donor is self
         
@@ -828,7 +899,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         r__sqrt_i = donor.r_sqrt_i
         
         K__r = donor.K
-        K_l = self.K_left
+        K_l = self.K_lefts[0]
         
         pseudo = donor is self
         
