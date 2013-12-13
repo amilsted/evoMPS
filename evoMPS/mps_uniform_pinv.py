@@ -16,22 +16,22 @@ import logging
 log = logging.getLogger(__name__)
 
 class PinvOp:    
-    def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
-        assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
+    def __init__(self, p, A1s, A2s, lL=None, rL=None, left=False, pseudo=True):
+        assert not (pseudo and (lL is None or rL is None)), 'For pseudo-inverse l and r must be set!'
         
-        self.A1 = A1
-        self.A2 = A2
-        self.l = l
-        self.r = r
+        self.A1s = A1s
+        self.A2s = A2s
+        self.lL = lL
+        self.rL = rL
         self.p = p
         self.left = left
         self.pseudo = pseudo
         
-        self.D = A1.shape[1]
+        self.D = A1s[0].shape[1]
         
         self.shape = (self.D**2, self.D**2)
         
-        self.dtype = A1.dtype
+        self.dtype = A1s[0].dtype
         
         self.out = np.empty((self.D, self.D), dtype=self.dtype)
     
@@ -39,16 +39,20 @@ class PinvOp:
         x = v.reshape((self.D, self.D))
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = tm.eps_l_noop_inplace(x, self.A1, self.A2, self.out)
+            Ehx = x
+            for k in xrange(len(self.A1s)):
+                Ehx = tm.eps_l_noop(Ehx, self.A1s[k], self.A2s[k])
             if self.pseudo:
-                QEQhx = Ehx - self.l * m.adot(self.r, x)
+                QEQhx = Ehx - self.lL * m.adot(self.rL, x)
                 res = x - sp.exp(-1.j * self.p) * QEQhx
             else:
                 res = x - sp.exp(-1.j * self.p) * Ehx
         else:
-            Ex = tm.eps_r_noop_inplace(x, self.A1, self.A2, self.out)
+            Ex = x
+            for k in xrange(len(self.A1s) - 1, -1, -1):
+                Ex = tm.eps_r_noop(Ex, self.A1s[k], self.A2s[k])
             if self.pseudo:
-                QEQx = Ex - self.r * m.adot(self.l, x)
+                QEQx = Ex - self.rL * m.adot(self.lL, x)
                 res = x - sp.exp(1.j * self.p) * QEQx
             else:
                 res = x - sp.exp(1.j * self.p) * Ex
@@ -88,7 +92,7 @@ def pinv_1mE_brute_LOP(A1, A2, l, r, p=0, pseudo=True, left=False):
     
     return la.inv(bop)
     
-def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
+def pinv_1mE(x, A1s, A2s, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
              out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
@@ -96,12 +100,12 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
     In left mode, x is still taken to be a column vector and OP.conj().T.dot(x) 
     is performed.
     """
-    D = A1.shape[1]
+    D = A1s[0].shape[1]
     
     if out is None:
-        out = np.ones_like(A1[0])
+        out = np.ones_like(A1s[0][0])
     
-    op = PinvOp(p, A1, A2, l, r, left=left, pseudo=pseudo)
+    op = PinvOp(p, A1s, A2s, lL, rL, left=left, pseudo=pseudo)
     
     res = out.ravel()
     x = x.ravel()
@@ -129,7 +133,7 @@ def pinv_1mE(x, A1, A2, l, r, p=0, left=False, pseudo=True, tol=1E-6, maxiter=40
     
     res = res.reshape((D, D))
         
-    if brute_check:
+    if False and brute_check:
         pinvE = pinv_1mE_brute(A1, A2, l, r, p=p, pseudo=pseudo)
         
         if left:

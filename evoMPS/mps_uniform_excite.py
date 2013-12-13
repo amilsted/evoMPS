@@ -11,7 +11,7 @@ import scipy.linalg as la
 import scipy.sparse.linalg as las
 import tdvp_common as tm
 import matmul as m
-from mps_uniform_pinv_multi import pinv_1mE
+from mps_uniform_pinv import pinv_1mE
 import logging
 
 log = logging.getLogger(__name__)
