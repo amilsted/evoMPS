@@ -17,7 +17,7 @@ import logging
 log = logging.getLogger(__name__)
 
 class EOp:
-    def __init__(self, As1, As2, left):
+    def __init__(self, A1, A2, left):
         """Creates a new LinearOperator interface to the superoperator E.
         
         This is a wrapper to be used with SciPy's sparse linear algebra routines.
@@ -31,15 +31,15 @@ class EOp:
         left : bool
             Whether to multiply with a vector to the left (or to the right).
         """
-        self.As1 = As1
-        self.As2 = As2
+        self.A1 = A1
+        self.A2 = A2
         
-        self.D1 = As1[0].shape[1]
-        self.D2 = As2[0].shape[1]
+        self.D1 = A1[0].shape[1]
+        self.D2 = A2[0].shape[1]
         
         self.shape = (self.D1 * self.D2, self.D1 * self.D2)
         
-        self.dtype = np.dtype(As1[0].dtype)
+        self.dtype = np.dtype(A1[0].dtype)
         
         self.calls = 0
         
@@ -57,11 +57,11 @@ class EOp:
         x = v.reshape((self.D1, self.D2))
         
         if self.left:           
-            for n in xrange(len(self.As1)):
-                x = self.eps(x, self.As1[n], self.As2[n])
+            for n in xrange(len(self.A1)):
+                x = self.eps(x, self.A1[n], self.A2[n])
         else:
-            for n in xrange(len(self.As1) - 1, -1, -1):
-                x = self.eps(x, self.As1[n], self.As2[n])
+            for n in xrange(len(self.A1) - 1, -1, -1):
+                x = self.eps(x, self.A1[n], self.A2[n])
             
         Ex = x
         
@@ -149,9 +149,9 @@ class EvoMPS_MPS_Uniform(object):
         do_update : bool (True)
             Whether to perform self.update() after randomizing.
         """
-        for A in self.As:
-            m.randomize_cmplx(A)
-            A /= la.norm(A)
+        for Ak in self.A:
+            m.randomize_cmplx(Ak)
+            Ak /= la.norm(Ak)
         
         if do_update:
             self.update()
@@ -167,13 +167,13 @@ class EvoMPS_MPS_Uniform(object):
         do_update : bool (True)
             Whether to perform self.update() after randomizing.
         """
-        for A in self.As:
-            norm = la.norm(A)
+        for Ak in self.A:
+            norm = la.norm(Ak)
             f = fac * (norm / (self.q * self.D**2))
-            R = np.empty_like(A)
+            R = np.empty_like(Ak)
             m.randomize_cmplx(R, -f / 2.0, f / 2.0)
             
-            A += R
+            Ak += R
         
         if do_update:
             self.update()
@@ -183,73 +183,73 @@ class EvoMPS_MPS_Uniform(object):
         self.q = q
         self.L = L
         
-        self.S_hcs = sp.empty((L), dtype=sp.complex128)
+        self.S_hc = sp.empty((L), dtype=sp.complex128)
         """After calling restore_CF() or update(restore_CF=True), this contains
            the von Neumann entropy of one infinite half of the system."""
-        self.S_hcs.fill(sp.NaN)
+        self.S_hc.fill(sp.NaN)
         
-        self.As = []
-        self.AAs = []
-        self.ls = []
-        self.rs = []
+        self.A = []
+        self.AA = []
+        self.l = []
+        self.r = []
         for m in xrange(L):
-            self.As.append(np.zeros((q, D, D), dtype=self.typ, order=self.odr))
-            self.AAs.append(np.zeros((q, q, D, D), dtype=self.typ, order=self.odr))
-            self.ls.append(np.ones_like(self.As[0][0]))
-            self.rs.append(np.ones_like(self.As[0][0]))
+            self.A.append(np.zeros((q, D, D), dtype=self.typ, order=self.odr))
+            self.AA.append(np.zeros((q, q, D, D), dtype=self.typ, order=self.odr))
+            self.l.append(np.ones_like(self.A[0][0]))
+            self.r.append(np.ones_like(self.A[0][0]))
             
-        self.lL_before_CF = self.ls[-1]
-        self.rL_before_CF = self.rs[-1]
+        self.lL_before_CF = self.l[-1]
+        self.rL_before_CF = self.r[-1]
             
         self.conv_l = True
         self.conv_r = True
         
-        self.tmp = np.zeros_like(self.As[0][0])
+        self.tmp = np.zeros_like(self.A[0][0])
         
     def _calc_lr_brute(self):
-        Es = np.zeros((self.L, self.D**2, self.D**2), dtype=self.typ, order='C')
+        E = np.zeros((self.L, self.D**2, self.D**2), dtype=self.typ, order='C')
         
         for k in xrange(self.L):
             for s in xrange(self.q):
-                Es[k] += sp.kron(self.A[k][s], self.A[k][s].conj())
+                E[k] += sp.kron(self.A[k][s], self.A[k][s].conj())
                 
-        E = Es[0]
+        Eblock = E[0]
         for k in xrange(1, self.L):
-            E = E.dot(Es[1])
+            Eblock = Eblock.dot(E[1])
             
-        ev, eVL, eVR = la.eig(E, left=True, right=True)
+        ev, eVL, eVR = la.eig(Eblock, left=True, right=True)
         
         i = np.argmax(ev)
         
-        self.A *= 1 / sp.sqrt(ev[i])        
+        self.A[0] *= 1 / sp.sqrt(ev[i])        
         
-        self.ls[-1] = eVL[:,i].reshape((self.D, self.D))
-        self.rs[-1] = eVR[:,i].reshape((self.D, self.D))
+        self.l[-1] = eVL[:,i].reshape((self.D, self.D))
+        self.r[-1] = eVR[:,i].reshape((self.D, self.D))
         
-        norm = m.adot(self.l, self.r)
-        self.ls[-1] *= 1 / sp.sqrt(norm)
-        self.rs[-1] *= 1 / sp.sqrt(norm)        
+        norm = m.adot(self.l[-1], self.r[-1])
+        self.l[-1] *= 1 / sp.sqrt(norm)
+        self.r[-1] *= 1 / sp.sqrt(norm)        
     
-    def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1s=None, A2s=None, rescale=True,
+    def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                         tol=1E-14, ncv=None, k=1):
-        if A1s is None:
-            A1s = self.As
-        if A2s is None:
-            A2s = self.As
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
             
         if self.D == 1:
             x.fill(1)
             if calc_l:
-                for k in xrange(len(A1s)):
-                    x = tm.eps_l_noop(x, A1s[k], A2s[k])
+                for k in xrange(len(A1)):
+                    x = tm.eps_l_noop(x, A1[k], A2[k])
             else:
-                for k in xrange(len(A1s) - 1, -1, -1):
-                    x = tm.eps_r_noop(x, A1s[k], A2s[k])
+                for k in xrange(len(A1) - 1, -1, -1):
+                    x = tm.eps_r_noop(x, A1[k], A2[k])
                 
             ev = x[0, 0]
             
             if rescale and not abs(ev - 1) < tol:
-                A1s[0] *= 1 / sp.sqrt(ev)
+                A1[0] *= 1 / sp.sqrt(ev)
             
             return x, True, 1
                         
@@ -260,7 +260,7 @@ class EvoMPS_MPS_Uniform(object):
     
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        opE = EOp(A1s, A2s, calc_l)
+        opE = EOp(A1, A2, calc_l)
         x *= n / norm(x.ravel())
         try:
             ev, eV = las.eigs(opE, which='LM', k=k, v0=x.ravel(), tol=tol, ncv=ncv)
@@ -289,9 +289,9 @@ class EvoMPS_MPS_Uniform(object):
         x[:] = eV
                     
         if rescale and not abs(ev - 1) < tol:
-            A1s[0] *= 1 / sp.sqrt(ev)
+            A1[0] *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
-                if not A1s[0] is A2s[0]:
+                if not A1[0] is A2[0]:
                     log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 tmp = opE.matvec(x.ravel())
                 ev = tmp.mean() / x.mean()
@@ -301,11 +301,11 @@ class EvoMPS_MPS_Uniform(object):
         return x, conv, opE.calls
         
     def _calc_E_largest_eigenvalues(self, tol=1E-6, k=2, ncv=10):
-        opE = EOp(self.As, self.As, False)
+        opE = EOp(self.A, self.A, False)
         
-        r = np.asarray(self.rs[0])
+        r0 = np.asarray(self.r[-1])
         
-        ev = las.eigs(opE, which='LM', k=k, v0=r.ravel(), tol=tol, ncv=ncv,
+        ev = las.eigs(opE, which='LM', k=k, v0=r0.ravel(), tol=tol, ncv=ncv,
                       return_eigenvectors=False)
                           
         return ev
@@ -376,15 +376,15 @@ class EvoMPS_MPS_Uniform(object):
         
         return -self.L / sp.log(ev[-1])
         
-    def _calc_lr(self, x, tmp, calc_l=False, A1s=None, A2s=None, rescale=True,
+    def _calc_lr(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                  max_itr=1000, rtol=1E-14, atol=1E-14):
         """Power iteration to obtain eigenvector corresponding to largest
            eigenvalue.
         """        
-        if A1s is None:
-            A1s = self.As
-        if A2s is None:
-            A2s = self.As
+        if A1 is None:
+            A1 = self.A
+        if A2 is None:
+            A2 = self.A
                         
         try:
             norm = la.get_blas_funcs("nrm2", [x])
@@ -393,7 +393,7 @@ class EvoMPS_MPS_Uniform(object):
 
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        opE = EOp(A1s, A2s, calc_l)
+        opE = EOp(A1, A2, calc_l)
         
         x = x.ravel()
         tmp = tmp.ravel()
@@ -414,9 +414,9 @@ class EvoMPS_MPS_Uniform(object):
         x = x.reshape((self.D, self.D))
                     
         if rescale and not abs(ev - 1) < atol:
-            A1s[0] *= 1 / sp.sqrt(ev)
+            A1[0] *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
-                if not A1s[0] is A2s[0]:
+                if not A1[0] is A2[0]:
                     log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 tmp = opE.matvec(x.ravel())
                 ev = tmp.mean() / x.mean()
@@ -446,114 +446,114 @@ class EvoMPS_MPS_Uniform(object):
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
         if self.ev_use_arpack:
-            self.ls[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
+            self.l[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
                                                    calc_l=True,
                                                    tol=self.itr_rtol,
                                                    k=self.ev_arpack_nev,
                                                    ncv=self.ev_arpack_ncv)
         else:
-            self.ls[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
+            self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
                                                     tmp, 
                                                     calc_l=True,
                                                     max_itr=self.pow_itr_max,
                                                     rtol=self.itr_rtol, 
                                                     atol=self.itr_atol)
                                         
-        self.lL_before_CF = self.ls[-1].copy()
+        self.lL_before_CF = self.l[-1].copy()
         
         if self.ev_use_arpack:
-            self.rs[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
+            self.r[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
                                                    calc_l=False,
                                                    tol=self.itr_rtol,
                                                    k=self.ev_arpack_nev,
                                                    ncv=self.ev_arpack_ncv)
         else:
-            self.rs[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
+            self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
                                                     tmp, 
                                                     calc_l=False,
                                                     max_itr=self.pow_itr_max,
                                                     rtol=self.itr_rtol, 
                                                     atol=self.itr_atol)
             
-        self.rL_before_CF = self.rs[-1].copy()
+        self.rL_before_CF = self.r[-1].copy()
             
         #normalize eigenvectors:
 
         if self.symm_gauge:
-            norm = m.adot(self.ls[-1], self.rs[-1]).real
+            norm = m.adot(self.l[-1], self.r[-1]).real
             itr = 0 
             while not np.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
-                self.ls[-1] *= 1. / ma.sqrt(norm)
-                self.rs[-1] *= 1. / ma.sqrt(norm)
+                self.l[-1] *= 1. / ma.sqrt(norm)
+                self.r[-1] *= 1. / ma.sqrt(norm)
                 
-                norm = m.adot(self.ls[-1], self.rs[-1]).real
+                norm = m.adot(self.l[-1], self.r[-1]).real
                 
                 itr += 1
                 
             if itr == 10:
                 log.warning("Warning: Max. iterations reached during normalization!")
         else:
-            fac = self.D / np.trace(self.rs[-1]).real
-            self.ls[-1] *= 1 / fac
-            self.rs[-1] *= fac
+            fac = self.D / np.trace(self.r[-1]).real
+            self.l[-1] *= 1 / fac
+            self.r[-1] *= fac
 
-            norm = m.adot(self.ls[-1], self.rs[-1]).real
+            norm = m.adot(self.l[-1], self.r[-1]).real
             itr = 0 
             while not np.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
-                self.ls[-1] *= 1. / norm
-                norm = m.adot(self.ls[-1], self.rs[-1]).real
+                self.l[-1] *= 1. / norm
+                norm = m.adot(self.l[-1], self.r[-1]).real
                 itr += 1
                 
             if itr == 10:
                 log.warning("Warning: Max. iterations reached during normalization!")
 
-        for k in xrange(len(self.As) - 1, 0, -1):
-            self.rs[k - 1] = tm.eps_r_noop(self.rs[k], self.As[k], self.As[k])
+        for k in xrange(len(self.A) - 1, 0, -1):
+            self.r[k - 1] = tm.eps_r_noop(self.r[k], self.A[k], self.A[k])
             
-        for k in xrange(0, len(self.As) - 1):
-            self.ls[k] = tm.eps_l_noop(self.ls[k - 1], self.As[k], self.As[k])
+        for k in xrange(0, len(self.A) - 1):
+            self.l[k] = tm.eps_l_noop(self.l[k - 1], self.A[k], self.A[k])
 
         if self.sanity_checks:
             for k in xrange(self.L):
-                l = self.ls[k]
+                l = self.l[k]
                 for j in sp.arange(k + 1, k + self.L + 1) % self.L:
-                    l = tm.eps_l_noop(l, self.As[j], self.As[j])
-                if not np.allclose(l, self.ls[k],
+                    l = tm.eps_l_noop(l, self.A[j], self.A[j])
+                if not np.allclose(l, self.l[k],
                 rtol=self.itr_rtol*self.check_fac, 
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: l%u bad! Off by: %s", k,
-                                la.norm(l - self.ls[k]))
+                                la.norm(l - self.l[k]))
 
-                r = self.rs[k]
+                r = self.r[k]
                 for j in sp.arange(k, k - self.L, -1) % self.L:
-                    r = tm.eps_r_noop(r, self.As[j], self.As[j])
-                if not np.allclose(r, self.rs[k],
+                    r = tm.eps_r_noop(r, self.A[j], self.A[j])
+                if not np.allclose(r, self.r[k],
                 rtol=self.itr_rtol*self.check_fac,
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: r%u bad! Off by: %s", k,
-                                la.norm(r - self.rs[k]))
+                                la.norm(r - self.r[k]))
                 
-                if not np.allclose(self.ls[k], m.H(self.ls[k]),
+                if not np.allclose(self.l[k], m.H(self.l[k]),
                 rtol=self.itr_rtol*self.check_fac, 
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: l%u is not hermitian! Off by: %s",
-                                k, la.norm(self.ls[-k] - m.H(self.ls[k])))
+                                k, la.norm(self.l[-k] - m.H(self.l[k])))
     
-                if not np.allclose(self.rs[k], m.H(self.rs[k]),
+                if not np.allclose(self.r[k], m.H(self.r[k]),
                 rtol=self.itr_rtol*self.check_fac, 
                 atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: r%u is not hermitian! Off by: %s",
-                                k, la.norm(self.rs[k] - m.H(self.rs[k])))
+                                k, la.norm(self.r[k] - m.H(self.r[k])))
                 
-                minev = la.eigvalsh(self.ls[k]).min()
+                minev = la.eigvalsh(self.l[k]).min()
                 if minev <= 0:
                     log.warning("Sanity check failed: l%u is not pos. def.! Min. ev: %s", k, minev)
                     
-                minev = la.eigvalsh(self.rs[k]).min()
+                minev = la.eigvalsh(self.r[k]).min()
                 if minev <= 0:
                     log.warning("Sanity check failed: r%u is not pos. def.! Min. ev: %s", k, minev)
                 
-                norm = m.adot(self.ls[k], self.rs[k])
+                norm = m.adot(self.l[k], self.r[k])
                 if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                     log.warning("Sanity check failed: Bad norm = %s", norm)
     
@@ -578,11 +578,11 @@ class EvoMPS_MPS_Uniform(object):
             zero_tol = self.zero_tol
         
         for k in xrange(self.L):
-            X, Xi = tm.herm_fac_with_inv(self.rs[k], lower=True, zero_tol=zero_tol,
+            X, Xi = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
                                          force_evd=False,
                                          sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r%u' % k)
             
-            Y, Yi = tm.herm_fac_with_inv(self.ls[k], lower=False, zero_tol=zero_tol,
+            Y, Yi = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
                                          force_evd=False,
                                          sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l%u' % k)          
             
@@ -590,7 +590,7 @@ class EvoMPS_MPS_Uniform(object):
             
             #s contains the Schmidt coefficients,
             lam = sv**2
-            self.S_hcs[k] = - np.sum(lam * sp.log2(lam))
+            self.S_hc[k] = - np.sum(lam * sp.log2(lam))
             
             S = m.simple_diag_matrix(sv, dtype=self.typ)
             Srt = S.sqrt()
@@ -601,8 +601,8 @@ class EvoMPS_MPS_Uniform(object):
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
-                self.As[j][s] = g.dot(self.As[j][s])
-                self.As[k][s] = self.As[k][s].dot(g_i)
+                self.A[j][s] = g.dot(self.A[j][s])
+                self.A[k][s] = self.A[k][s].dot(g_i)
                     
             if self.sanity_checks:
                 Sfull = np.asarray(S)
@@ -611,8 +611,8 @@ class EvoMPS_MPS_Uniform(object):
                     log.warning("Sanity check failed! Restore_SCF, bad GT! Off by %s",
                                 la.norm(g.dot(g_i) - np.eye(self.D)))
                 
-                l = m.mmul(m.H(g_i), self.ls[k], g_i)
-                r = m.mmul(g, self.rs[k], m.H(g))
+                l = m.mmul(m.H(g_i), self.l[k], g_i)
+                r = m.mmul(g, self.r[k], m.H(g))
                 
                 if not np.allclose(Sfull, l):
                     log.warning("Sanity check failed: Restore_SCF, left failed! Off by %s",
@@ -624,10 +624,10 @@ class EvoMPS_MPS_Uniform(object):
                 
                 l = Sfull
                 for j in (sp.arange(k + 1, k + self.L + 1) % self.L):
-                    l = tm.eps_l_noop(l, self.As[j], self.As[j])
+                    l = tm.eps_l_noop(l, self.A[j], self.A[j])
                 r = Sfull
                 for j in (sp.arange(k, k - self.L, -1) % self.L):
-                    r = tm.eps_r_noop(r, self.As[j], self.As[j])
+                    r = tm.eps_r_noop(r, self.A[j], self.A[j])
                 
                 if not np.allclose(Sfull, l, rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
@@ -639,8 +639,8 @@ class EvoMPS_MPS_Uniform(object):
                     log.warning("Sanity check failed: Restore_SCF, right %u bad! Off by %s",
                                 k, la.norm(Sfull - r))
     
-            self.ls[k] = S
-            self.rs[k] = S
+            self.l[k] = S
+            self.r[k] = S
     
     def restore_RCF(self, zero_tol=None):
         """Restores right canonical form.
@@ -665,65 +665,65 @@ class EvoMPS_MPS_Uniform(object):
         
         for k in xrange(self.L):
             #First get G such that r = eye
-            G, G_i, rank = tm.herm_fac_with_inv(self.rs[k], lower=True, zero_tol=zero_tol,
+            G, G_i, rank = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
                                                 return_rank=True,
                                                 sanity_checks=self.sanity_checks,
                                                 sc_data='Restore_RCF: r')
     
-            self.ls[k] = G.conj().T.dot(self.ls[k].dot(G))
+            self.l[k] = G.conj().T.dot(self.l[k].dot(G))
             
             #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
-            ev, EV = la.eigh(self.ls[k])
+            ev, EV = la.eigh(self.l[k])
     
             G = G.dot(EV)
             G_i = m.H(EV).dot(G_i)
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
-                self.As[j][s] = G_i.dot(self.As[j][s])
-                self.As[k][s] = self.As[k][s].dot(G)
+                self.A[j][s] = G_i.dot(self.A[j][s])
+                self.A[k][s] = self.A[k][s].dot(G)
                 
             #ev contains the squares of the Schmidt coefficients,
-            self.S_hcs[k] = - np.sum(ev * sp.log2(ev))
+            self.S_hc[k] = - np.sum(ev * sp.log2(ev))
             
-            self.ls[k] = m.simple_diag_matrix(ev, dtype=self.typ)
+            self.l[k] = m.simple_diag_matrix(ev, dtype=self.typ)
             
-            r_old = self.rs[k]
+            r_old = self.r[k]
             
             if rank == self.D:
-                self.rs[k] = m.eyemat(self.D, self.typ)
+                self.r[k] = m.eyemat(self.D, self.typ)
             else:
-                self.rs[k] = sp.zeros((self.D), dtype=self.typ)
-                self.rs[k][-rank:] = 1
-                self.rs[k] = m.simple_diag_matrix(self.rs[k], dtype=self.typ)
+                self.r[k] = sp.zeros((self.D), dtype=self.typ)
+                self.r[k][-rank:] = 1
+                self.r[k] = m.simple_diag_matrix(self.r[k], dtype=self.typ)
     
             if self.sanity_checks:            
                 r_ = G_i.dot(r_old.dot(G_i.conj().T)) 
                 
-                if not np.allclose(self.rs[k], r_, 
+                if not np.allclose(self.r[k], r_, 
                                    rtol=self.itr_rtol*self.check_fac,
                                    atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: Restore_RCF, bad r (bad GT). Off by %s", 
-                                la.norm(r_ - self.rs[k]))
+                                la.norm(r_ - self.r[k]))
                 
-                l = self.ls[k]
+                l = self.l[k]
                 for j in (sp.arange(k + 1, k + self.L + 1) % self.L):
-                    l = tm.eps_l_noop(l, self.As[j], self.As[j])
-                r = self.rs[k]
+                    l = tm.eps_l_noop(l, self.A[j], self.A[j])
+                r = self.r[k]
                 for j in (sp.arange(k, k - self.L, -1) % self.L):
-                    r = tm.eps_r_noop(r, self.As[j], self.As[j])
+                    r = tm.eps_r_noop(r, self.A[j], self.A[j])
                 
-                if not np.allclose(r, self.rs[k],
+                if not np.allclose(r, self.r[k],
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
-                                la.norm(r - self.rs[k]))
+                                la.norm(r - self.r[k]))
     
-                if not np.allclose(l, self.ls[k],
+                if not np.allclose(l, self.l[k],
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
-                                la.norm(l - self.ls[k]))
+                                la.norm(l - self.l[k]))
     
     def restore_CF(self):
         """Restores canonical form.
@@ -742,9 +742,9 @@ class EvoMPS_MPS_Uniform(object):
         
         new_D_l = 1
         for k in xrange(self.L):
-            new_D_l = max(np.count_nonzero(self.ls[k].diag > zero_tol), new_D_l)
+            new_D_l = max(np.count_nonzero(self.l[k].diag > zero_tol), new_D_l)
         
-        if 0 < new_D_l < self.As[0].shape[1]:
+        if 0 < new_D_l < self.A[0].shape[1]:
             self.truncate(new_D_l, update=False)
             
             if update:
@@ -757,24 +757,24 @@ class EvoMPS_MPS_Uniform(object):
     def truncate(self, newD, update=True):
         assert newD < self.D, 'new bond-dimension must be smaller!'
         
-        tmp_As = self.As
-        tmp_ls = map(lambda x: x.diag, self.ls)
+        tmp_As = self.A
+        tmp_ls = map(lambda x: x.diag, self.l)
         
         self._init_arrays(newD, self.q, self.L)
         
         if self.symm_gauge:
             for k in xrange(self.L):
-                self.ls[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
-                self.rs[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
-                self.As[k] = tmp_As[k][:, :self.D, :self.D]
+                self.l[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
+                self.r[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
+                self.A[k] = tmp_As[k][:, :self.D, :self.D]
         else:
             for k in xrange(self.L):
-                self.ls[k] = m.simple_diag_matrix(tmp_ls[k][-self.D:], dtype=self.typ)
-                self.rs[k] = m.eyemat(self.D, dtype=self.typ)
-                self.As[k] = tmp_As[k][:, -self.D:, -self.D:]
+                self.l[k] = m.simple_diag_matrix(tmp_ls[k][-self.D:], dtype=self.typ)
+                self.r[k] = m.eyemat(self.D, dtype=self.typ)
+                self.A[k] = tmp_As[k][:, -self.D:, -self.D:]
             
-        self.lL_before_CF = self.ls[-1].A
-        self.rL_before_CF = self.rs[-1].A
+        self.lL_before_CF = self.l[-1].A
+        self.rL_before_CF = self.r[-1].A
 
         if update:
             self.update()
@@ -783,8 +783,8 @@ class EvoMPS_MPS_Uniform(object):
         """Calculates the products A[s] A[t] for s, t in range(self.q).
         The result is stored in self.AA.
         """
-        for k in xrange(len(self.As)):
-            self.AAs[k] = tm.calc_AA(self.As[k], self.As[(k + 1) % self.L])
+        for k in xrange(len(self.A)):
+            self.AA[k] = tm.calc_AA(self.A[k], self.A[(k + 1) % self.L])
         
         
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
@@ -858,7 +858,7 @@ class EvoMPS_MPS_Uniform(object):
         assert self.q == other.q, "Hilbert spaces must have same dimensions!"
         assert self.L == other.L, "Unit cell sizes must be equal!"
         
-        As = [self.As, other.As]
+        As = [self.A, other.A]
         
         ED = self.D * other.D
         
@@ -923,7 +923,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         d, phi = self.fidelity_per_site(other, full_output=False, left=False)
         
-        self.As[0] *= phi.conj()
+        self.A[0] *= phi.conj()
         
         return phi
 
@@ -962,38 +962,38 @@ class EvoMPS_MPS_Uniform(object):
             return
             
         #Phase-align first
-        self.As[0] *= phi.conj()
+        self.A[0] *= phi.conj()
             
         gRL = gRL.reshape(self.D, self.D)
         
-        gs = [None] * self.L
-        gis = [None] * self.L
+        g = [None] * self.L
+        gi = [None] * self.L
                 
         for k in xrange(self.L - 1, -1, -1):
             if k == self.L - 1:
                 gRk = gRL
             else:
-                gRk = tm.eps_r_noop(other.rs[k + 1], self.As[k + 1], other.As[k + 1])
+                gRk = tm.eps_r_noop(other.rs[k + 1], self.A[k + 1], other.As[k + 1])
                 
             try:
-                gs[k] = other.rs[k].inv().dotleft(gRk)
+                g[k] = other.rs[k].inv().dotleft(gRk)
             except:
-                gs[k] = gRk.dot(m.invmh(other.rs[k]))
+                g[k] = gRk.dot(m.invmh(other.rs[k]))
                 
-            gis[k] = la.inv(gs[k])
+            gi[k] = la.inv(g[k])
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
-                self.As[j][s] = gis[k].dot(self.As[j][s])
-                self.As[k][s] = self.As[k][s].dot(gs[k])
+                self.A[j][s] = gi[k].dot(self.A[j][s])
+                self.A[k][s] = self.A[k][s].dot(g[k])
                 
-            self.ls[k] = m.H(gs[k]).dot(self.ls[k].dot(gs[k]))
+            self.l[k] = m.H(g[k]).dot(self.l[k].dot(g[k]))
             
-            self.rs[k] = gis[k].dot(self.rs[k].dot(m.H(gis[k])))
+            self.r[k] = gi[k].dot(self.r[k].dot(m.H(gi[k])))
         
-        return gs, gis, phi
+        return g, gi, phi
             
-    def expect_1s(self, op, n=0):
+    def expect_1s(self, op, k=0):
         """Computes the expectation value of a single-site operator.
         
         The operator should be a self.q x self.q matrix or generating function 
@@ -1005,7 +1005,7 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator.
-        n : int
+        k : int
             Site offset within block.
             
         Returns
@@ -1017,11 +1017,11 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
             
-        Or = tm.eps_r_op_1s(self.rs[n], self.As[n], self.As[n], op)
+        Or = tm.eps_r_op_1s(self.r[k], self.A[k], self.A[k], op)
         
-        return m.adot(self.ls[n - 1], Or)
+        return m.adot(self.l[k - 1], Or)
         
-    def expect_1s_1s(self, op1, op2, d, n=0):
+    def expect_1s_1s(self, op1, op2, d, k=0):
         """Computes the expectation value of two single site operators acting 
         on two different sites.
         
@@ -1042,7 +1042,7 @@ class EvoMPS_MPS_Uniform(object):
             The second operator, acting on the second site.
         d : int
             The distance (number of sites) between the two sites acted on non-trivially.
-        n : int
+        k : int
             Site offset of first site within block.
             
         Returns
@@ -1061,16 +1061,16 @@ class EvoMPS_MPS_Uniform(object):
             op2 = sp.vectorize(op2, otypes=[sp.complex128])
             op2 = sp.fromfunction(op2, (self.q, self.q)) 
         
-        r_n = tm.eps_r_op_1s(self.rs[n], self.As[n], self.As[n], op2)
+        rj = tm.eps_r_op_1s(self.r[k], self.A[k], self.A[k], op2)
 
-        for k in xrange(1, d):
-            r_n = tm.eps_r_noop(r_n, self.As[(n - k) % self.L], self.As[(n - k) % self.L])
+        for j in xrange(1, d):
+            rj = tm.eps_r_noop(rj, self.A[(k - j) % self.L], self.A[(k - j) % self.L])
 
-        r_n = tm.eps_r_op_1s(r_n, self.As[(n - d) % self.L], self.As[(n - d) % self.L], op1)
+        rj = tm.eps_r_op_1s(rj, self.A[(k - d) % self.L], self.A[(k - d) % self.L], op1)
          
-        return m.adot(self.ls[(n - d - 1) % self.L], r_n)
+        return m.adot(self.l[(k - d - 1) % self.L], rj)
             
-    def expect_2s(self, op, n=0):
+    def expect_2s(self, op, k=0):
         """Computes the expectation value of a nearest-neighbour two-site operator.
         
         The operator should be a q x q x q x q array 
@@ -1083,7 +1083,7 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator array or function.
-        n : int
+        k : int
             Site offset within block.
             
         Returns
@@ -1095,12 +1095,12 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q, self.q, self.q))        
         
-        C = tm.calc_C_mat_op_AA(op, self.AAs[n])
-        res = tm.eps_r_op_2s_C12_AA34(self.rs[n], C, self.AAs[n])
+        Ck = tm.calc_C_mat_op_AA(op, self.AA[k])
+        res = tm.eps_r_op_2s_C12_AA34(self.r[k], Ck, self.AA[k])
         
-        return m.adot(self.ls[n - 1], res)
+        return m.adot(self.l[k - 1], res)
         
-    def expect_3s(self, op, n=0):
+    def expect_3s(self, op, k=0):
         """Computes the expectation value of a nearest-neighbour three-site operator.
 
         The operator should be a q x q x q x q x q x q 
@@ -1113,7 +1113,7 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The operator array or function.
-        n : int
+        k : int
             Site offset within block.
             
         Returns
@@ -1121,9 +1121,8 @@ class EvoMPS_MPS_Uniform(object):
         expval : floating point number
             The expectation value (data type may be complex)
         """
-        A = self.As[n]
-        As = self.As
-        AAA = tm.calc_AAA(As[n], As[(n + 1) % self.L], A[(n + 2) % self.L])
+        A = self.A
+        AAA = tm.calc_AAA(A[k], A[(k + 1) % self.L], A[(k + 2) % self.L])
 
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
@@ -1131,10 +1130,10 @@ class EvoMPS_MPS_Uniform(object):
                                       A.shape[0], A.shape[0], A.shape[0]))
 
         C = tm.calc_C_3s_mat_op_AAA(op, AAA)
-        res = tm.eps_r_op_3s_C123_AAA456(self.rs[(n + 2) % self.L], C, AAA)
-        return m.adot(self.ls[n - 1], res)
+        res = tm.eps_r_op_3s_C123_AAA456(self.r[(k + 2) % self.L], C, AAA)
+        return m.adot(self.l[k - 1], res)
         
-    def density_1s(self, n=0):
+    def density_1s(self, k=0):
         """Returns a reduced density matrix for a single site.
         
         The site number basis is used: rho[s, t] 
@@ -1155,10 +1154,10 @@ class EvoMPS_MPS_Uniform(object):
         rho = np.empty((self.q, self.q), dtype=self.typ)
         for s in xrange(self.q):
             for t in xrange(self.q):                
-                rho[s, t] = m.adot(self.ls[n - 1], m.mmul(self.As[n][t], self.rs[n], m.H(self.As[n][s])))
+                rho[s, t] = m.adot(self.l[n - 1], m.mmul(self.A[n][t], self.r[n], m.H(self.A[n][s])))
         return rho
                 
-    def apply_op_1s(self, op, n=0, do_update=True):
+    def apply_op_1s(self, op, k=0, do_update=True):
         """Applies a single-site operator to all sites.
         
         This applies the product (or string) of a single-site operator o_n over 
@@ -1171,7 +1170,7 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         op : ndarray or callable
             The single-site operator. See self.expect_1s().
-        n : int
+        k : int
             Site offset within block.
         do_update : bool
             Whether to update after applying the operator.
@@ -1180,13 +1179,13 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
             
-        newA = sp.zeros_like(self.As[n])
+        newAk = sp.zeros_like(self.A[k])
         
         for s in xrange(self.q):
             for t in xrange(self.q):
-                newA[s] += self.As[n][t] * op[s, t]
+                newAk[s] += self.A[k][t] * op[s, t]
                 
-        self.As[n] = newA
+        self.A[k] = newAk
         
         if do_update:
             self.update()
@@ -1220,19 +1219,19 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
         
-        Asop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.As)
+        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.A)
         
         if self.D == 1:
             ev = 1
             for k in xrange(self.L):
                 evk = 0
                 for s in xrange(self.q):
-                    evk += Asop[k][s] * self.As[k][s].conj()
+                    evk += Aop[k][s] * self.A[k][s].conj()
                 ev *= evk
             return ev**(1./self.L)
         else:            
-            opE = EOp(Asop, self.As, False)
-            ev = las.eigs(opE, v0=np.asarray(self.rs[-1]), which='LM', k=1, ncv=6)
+            opE = EOp(Aop, self.A, False)
+            ev = las.eigs(opE, v0=np.asarray(self.r[-1]), which='LM', k=1, ncv=6)
             return ev[0]**(1./self.L)
                 
     def set_q(self, newq):
@@ -1246,23 +1245,23 @@ class EvoMPS_MPS_Uniform(object):
             The new dimension.
         """
         oldq = self.q
-        oldAs = self.As
+        oldA = self.A
         
-        oldls = self.ls
-        oldrs = self.rs
+        oldl = self.l
+        oldr = self.r
         
         self._init_arrays(self.D, newq, self.L) 
         
-        self.ls = oldls
-        self.rs = oldrs
+        self.l = oldl
+        self.r = oldr
         
-        for A in self.As:
+        for A in self.A:
             A.fill(0)
         for k in xrange(self.L):
             if self.q > oldq:
-                self.As[k][:oldq, :, :] = oldAs[k]
+                self.A[k][:oldq, :, :] = oldA[k]
             else:
-                self.As[k][:] = oldAs[k][:self.q, :, :]
+                self.A[k][:] = oldA[k][:self.q, :, :]
         
             
     def expand_D(self, newD, refac=100, imfac=0):
@@ -1283,39 +1282,39 @@ class EvoMPS_MPS_Uniform(object):
             return False
         
         oldD = self.D
-        oldAs = self.As
+        oldA = self.A
         
-        oldls = self.ls
-        oldrs = self.rs
-        oldls = map(np.asarray, oldls)
-        oldrs = map(np.asarray, oldrs)
+        oldl = self.l
+        oldr = self.r
+        oldl = map(np.asarray, oldl)
+        oldr = map(np.asarray, oldr)
         
         self._init_arrays(newD, self.q, self.L)
         
         for k in xrange(self.L):
-            realnorm = la.norm(oldAs[k].real.ravel())
-            imagnorm = la.norm(oldAs[k].imag.ravel())
-            realfac = (realnorm / oldAs[k].size) * refac
-            imagfac = (imagnorm / oldAs[k].size) * imfac
+            realnorm = la.norm(oldA[k].real.ravel())
+            imagnorm = la.norm(oldA[k].imag.ravel())
+            realfac = (realnorm / oldA[k].size) * refac
+            imagfac = (imagnorm / oldA[k].size) * imfac
     #        m.randomize_cmplx(newA[:, self.D:, self.D:], a=-fac, b=fac)
-            m.randomize_cmplx(self.As[k][:, :oldD, oldD:], a=0, b=realfac, aj=0, bj=imagfac)
-            m.randomize_cmplx(self.As[k][:, oldD:, :oldD], a=0, b=realfac, aj=0, bj=imagfac)
-            self.As[k][:, oldD:, oldD:] = 0 #for nearest-neighbour hamiltonian
+            m.randomize_cmplx(self.A[k][:, :oldD, oldD:], a=0, b=realfac, aj=0, bj=imagfac)
+            m.randomize_cmplx(self.A[k][:, oldD:, :oldD], a=0, b=realfac, aj=0, bj=imagfac)
+            self.A[k][:, oldD:, oldD:] = 0 #for nearest-neighbour hamiltonian
     
     #        self.A[:, :oldD, oldD:] = oldA[:, :, :(newD - oldD)]
     #        self.A[:, oldD:, :oldD] = oldA[:, :(newD - oldD), :]
-            self.As[k][:, :oldD, :oldD] = oldAs[k]
+            self.A[k][:, :oldD, :oldD] = oldA[k]
     
-            self.ls[k][:oldD, :oldD] = oldls[k]
-            val = abs(oldls[k].mean())
-            m.randomize_cmplx(self.ls[k].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
+            self.l[k][:oldD, :oldD] = oldl[k]
+            val = abs(oldl[k].mean())
+            m.randomize_cmplx(self.l[k].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
             #self.l[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
             #self.l[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
             #self.l[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldl) / oldD**2)
             
-            self.rs[k][:oldD, :oldD] = oldrs[k]
-            val = abs(oldrs[k].mean())
-            m.randomize_cmplx(self.rs[k].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
+            self.r[k][:oldD, :oldD] = oldr[k]
+            val = abs(oldr[k].mean())
+            m.randomize_cmplx(self.r[k].ravel()[oldD**2:], a=0, b=val, aj=0, bj=0)
             #self.r[oldD:, :oldD].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
             #self.r[:oldD, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)
             #self.r[oldD:, oldD:].fill(0 * 1E-3 * la.norm(oldr) / oldD**2)

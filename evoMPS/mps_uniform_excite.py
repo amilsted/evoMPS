@@ -56,17 +56,14 @@ class Excite_H_Op:
         
         self.dtype = np.dtype(tdvp.typ)
         
-        if tdvp.ham_sites == 2:
-            self.prereq = (self.calc_BHB_prereq_2s(tdvp, tdvp2))        
-        else:
-            self.prereq = (self.calc_BHB_prereq_3s(tdvp, tdvp2))
+        self.prereq = (self.calc_BHB_prereq(tdvp, tdvp2))
         
         self.calls = 0
         
         self.M_prev = None
         self.y_pi_prev = None
         
-    def calc_BHB_prereq_2s(self, tdvp, tdvp2):
+    def calc_BHB_prereq(self, tdvp, tdvp2):
         """Calculates prerequisites for the application of the effective Hamiltonian in terms of tangent vectors.
         
         This is called (indirectly) by the self.excite.. functions.
@@ -80,19 +77,21 @@ class Excite_H_Op:
         -------
         A lot of stuff.
         """
-        l = tdvp.ls[0]
-        r_ = tdvp2.rs[0]
-        r__sqrt = tdvp2.rs_sqrt[0]
-        r__sqrt_i = tdvp2.rs_sqrt_i[0]
-        A = tdvp.As[0]
-        A_ = tdvp2.As[0]
-        AA_ = tdvp2.AAs[0]
+        l = tdvp.l[0]
+        r_ = tdvp2.r[0]
+        r__sqrt = tdvp2.r_sqrt[0]
+        r__sqrt_i = tdvp2.r_sqrt_i[0]
+        A = tdvp.A[0]
+        A_ = tdvp2.A[0]
+        AA = tdvp.AA[0]
+        AA_ = tdvp2.AA[0]
+        AAA_ = tdvp2.AAA[0]
         
         eyed = np.eye(self.q**self.ham_sites)
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
         ham_ = self.ham - tdvp.h_expect.real * eyed
             
-        V_ = sp.transpose(tdvp2.Vshs[0], axes=(0, 2, 1)).conj()
+        V_ = sp.transpose(tdvp2.Vsh[0], axes=(0, 2, 1)).conj()
         
         Vri_ = sp.zeros_like(V_)
         try:
@@ -110,146 +109,111 @@ class Excite_H_Op:
             for s in xrange(self.q):
                 Vr_[s] = V_[s].dot(r__sqrt)
                 
-        _C_AhlA = np.empty_like(tdvp.Cs[0])
-        for u in xrange(self.q):
-            for s in xrange(self.q):
-                _C_AhlA[u, s] = A[u].conj().T.dot(l.dot(A[s]))
-        C_AhlA = sp.tensordot(ham_, _C_AhlA, ((0, 2), (0, 1)))
-        
-        _C_A_Vrh_ = tm.calc_AA(A_, sp.transpose(Vr_, axes=(0, 2, 1)).conj())
-        C_A_Vrh_ = sp.tensordot(ham_, _C_A_Vrh_, ((3, 1), (0, 1)))
-                
-        C_Vri_A_conj = tm.calc_C_conj_mat_op_AA(ham_, tm.calc_AA(Vri_, A_))
-
-        C_ = tm.calc_C_mat_op_AA(ham_, AA_)
-        C_conj = tm.calc_C_conj_mat_op_AA(ham_, AA_)
-        
-        rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_conj)
-        
-        return C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
+        if self.ham_sites == 2:
+            _C_AhlA = np.empty_like(tdvp.C[0])
+            for u in xrange(self.q):
+                for s in xrange(self.q):
+                    _C_AhlA[u, s] = A[u].conj().T.dot(l.dot(A[s]))
+            C_AhlA = sp.tensordot(ham_, _C_AhlA, ((0, 2), (0, 1)))
+            
+            _C_A_Vrh_ = tm.calc_AA(A_, sp.transpose(Vr_, axes=(0, 2, 1)).conj())
+            C_A_Vrh_ = sp.tensordot(ham_, _C_A_Vrh_, ((3, 1), (0, 1)))
+                    
+            C_Vri_A_conj = tm.calc_C_conj_mat_op_AA(ham_, tm.calc_AA(Vri_, A_))
     
-    def calc_BHB_prereq_3s(self, tdvp, tdvp2):
-        """As for self.calc_BHB_prereq(), but for Hamiltonian terms acting on three sites.
-        """
-        l = tdvp.ls[0]
-        r_ = tdvp2.rs[0]
-        r__sqrt = tdvp2.rs_sqrt[0]
-        r__sqrt_i = tdvp2.rs_sqrt_i[0]
-        A = tdvp.As[0]
-        AA = tdvp.AAs[0]
-        A_ = tdvp2.As[0]
-        AA_ = tdvp2.AAs[0]
-        AAA_ = tdvp2.AAAs[0]
-        
-        eyed = np.eye(self.q**self.ham_sites)
-        eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
-        ham_ = self.ham - tdvp.h_expect.real * eyed
-        
-        V_ = sp.zeros((tdvp2.Vshs[0].shape[0], tdvp2.Vshs[0].shape[2], tdvp2.Vshs[0].shape[1]), dtype=tdvp.typ)
-        for s in xrange(self.q):
-            V_[s] = m.H(tdvp2.Vshs[0][s])
-        
-        Vri_ = sp.zeros_like(V_)
-        try:
-            for s in xrange(self.q):
-                Vri_[s] = r__sqrt_i.dot_left(V_[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vri_[s] = V_[s].dot(r__sqrt_i)
-
-        Vr_ = sp.zeros_like(V_)            
-        try:
-            for s in xrange(self.q):
-                Vr_[s] = r__sqrt.dot_left(V_[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vr_[s] = V_[s].dot(r__sqrt)
+            C_ = tm.calc_C_mat_op_AA(ham_, AA_)
+            C_conj = tm.calc_C_conj_mat_op_AA(ham_, AA_)
             
-        C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
-        for s in xrange(self.q):
+            rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_conj)
+            
+            return C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
+        elif self.ham_sites == 3:
+            C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
+            for s in xrange(self.q):
+                for t in xrange(self.q):
+                    for u in xrange(self.q):
+                        C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
+            C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2)))
+            
+            C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
+                                        A_.shape[1], Vri_.shape[1]), 
+                                       dtype=tdvp.typ)
+            for s in xrange(self.q):
+                for t in xrange(self.q):
+                    for u in xrange(self.q):
+                        for k in xrange(self.q):
+                            for j in xrange(self.q):
+                                C_AAA_r_Ah_Vrih[s, t, u, k, j] = AAA_[s, t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+            C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4)))
+            
+            C_AhAhlAA = np.empty((self.q, self.q, self.q, self.q,
+                                  A_.shape[2], A.shape[2]), dtype=tdvp.typ)
             for t in xrange(self.q):
-                for u in xrange(self.q):
-                    C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
-        C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2)))
-        
-        C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
-                                    A_.shape[1], Vri_.shape[1]), 
-                                   dtype=tdvp.typ)
-        for s in xrange(self.q):
+                for j in xrange(self.q):
+                    for i in xrange(self.q):
+                        for s in xrange(self.q):
+                            C_AhAhlAA[t, j, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
+            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (0, 1, 2, 3)))
+            
+            C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
+                                        A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
             for t in xrange(self.q):
                 for u in xrange(self.q):
                     for k in xrange(self.q):
                         for j in xrange(self.q):
-                            C_AAA_r_Ah_Vrih[s, t, u, k, j] = AAA_[s, t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-        C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4)))
-        
-        C_AhAhlAA = np.empty((self.q, self.q, self.q, self.q,
-                              A_.shape[2], A.shape[2]), dtype=tdvp.typ)
-        for t in xrange(self.q):
-            for j in xrange(self.q):
-                for i in xrange(self.q):
-                    for s in xrange(self.q):
-                        C_AhAhlAA[t, j, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
-        C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (0, 1, 2, 3)))
-        
-        C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
-                                    A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
-        for t in xrange(self.q):
+                            C_AA_r_Ah_Vrih_[t, u, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (0, 1, 2, 3)))
+            
+            C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
+                                   A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
+            for s in xrange(self.q):
+                for t in xrange(self.q):
+                    for u in xrange(self.q):
+                        for k in xrange(self.q):
+                            C_AAA_Vrh_[s, t, u, k] = AAA_[s, t, u].dot(Vr_[k].conj().T)
+            C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3)))
+            
+            C_A_r_Ah_Vrih = np.empty((self.q, self.q, self.q,
+                                      A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
             for u in xrange(self.q):
                 for k in xrange(self.q):
                     for j in xrange(self.q):
-                        C_AA_r_Ah_Vrih_[t, u, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-        C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (0, 1, 2, 3)))
-        
-        C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
-                               A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
-        for s in xrange(self.q):
+                        C_A_r_Ah_Vrih[u, k, j] = A_[u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+            C_A_r_Ah_Vrih = sp.tensordot(ham_, C_A_r_Ah_Vrih, ((5, 2, 1), (0, 1, 2)))
+            
+            C_AhlAA = np.empty((self.q, self.q, self.q,
+                                      A_.shape[2], A.shape[2]), dtype=tdvp.typ)
+            for s in xrange(self.q):
+                for t in xrange(self.q):
+                    for i in xrange(self.q):
+                        C_AhlAA[s, t, i] = A[i].conj().T.dot(l.dot(AA[s, t]))
+            C_AhlAA = sp.tensordot(ham_, C_AhlAA, ((3, 4, 0), (0, 1, 2)))
+            
+            C_AhAhlA = np.empty((self.q, self.q, self.q,
+                                      A_.shape[2], A.shape[2]), dtype=tdvp.typ)
+            for j in xrange(self.q):
+                for i in xrange(self.q):
+                    for s in xrange(self.q):
+                        C_AhAhlA[j, i, s] = AA[i, j].conj().T.dot(l.dot(A[s]))
+            C_AhAhlA = sp.tensordot(ham_, C_AhAhlA, ((1, 0, 3), (0, 1, 2)))
+            
+            C_AA_Vrh = np.empty((self.q, self.q, self.q,
+                                      A_.shape[2], Vr_.shape[1]), dtype=tdvp.typ)
             for t in xrange(self.q):
                 for u in xrange(self.q):
                     for k in xrange(self.q):
-                        C_AAA_Vrh_[s, t, u, k] = AAA_[s, t, u].dot(Vr_[k].conj().T)
-        C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3)))
-        
-        C_A_r_Ah_Vrih = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
-        for u in xrange(self.q):
-            for k in xrange(self.q):
-                for j in xrange(self.q):
-                    C_A_r_Ah_Vrih[u, k, j] = A_[u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-        C_A_r_Ah_Vrih = sp.tensordot(ham_, C_A_r_Ah_Vrih, ((5, 2, 1), (0, 1, 2)))
-        
-        C_AhlAA = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], A.shape[2]), dtype=tdvp.typ)
-        for s in xrange(self.q):
-            for t in xrange(self.q):
-                for i in xrange(self.q):
-                    C_AhlAA[s, t, i] = A[i].conj().T.dot(l.dot(AA[s, t]))
-        C_AhlAA = sp.tensordot(ham_, C_AhlAA, ((3, 4, 0), (0, 1, 2)))
-        
-        C_AhAhlA = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], A.shape[2]), dtype=tdvp.typ)
-        for j in xrange(self.q):
-            for i in xrange(self.q):
-                for s in xrange(self.q):
-                    C_AhAhlA[j, i, s] = AA[i, j].conj().T.dot(l.dot(A[s]))
-        C_AhAhlA = sp.tensordot(ham_, C_AhAhlA, ((1, 0, 3), (0, 1, 2)))
-        
-        C_AA_Vrh = np.empty((self.q, self.q, self.q,
-                                  A_.shape[2], Vr_.shape[1]), dtype=tdvp.typ)
-        for t in xrange(self.q):
-            for u in xrange(self.q):
-                for k in xrange(self.q):
-                    C_AA_Vrh[t, u, k] = AA_[t, u].dot(Vr_[k].conj().T)
-        C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (0, 1, 2)))
-        
-        C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2)))
-        
-        rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
-        
-        #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
-        #TODO: Make this consistent with the updated 2-site case above.
-        
-        return V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
+                        C_AA_Vrh[t, u, k] = AA_[t, u].dot(Vr_[k].conj().T)
+            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (0, 1, 2)))
+            
+            C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2)))
+            
+            rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
+            
+            #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
+            #TODO: Make this consistent with the updated 2-site case above.
+            
+            return V_, Vr_, Vri_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_A_r_Ah_Vrih, C_AhlAA, C_AhAhlA, C_AA_Vrh, rhs10,
+
     
     def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
                     M_prev=None, y_pi_prev=None, pinv_solver=None):
@@ -265,24 +229,24 @@ class Excite_H_Op:
         else:
             C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10 = prereq
         
-        A = tdvp.As[0]
-        A_ = tdvp2.As[0]
+        A = tdvp.A[0]
+        A_ = tdvp2.A[0]
         
-        l = tdvp.ls[0]
-        r_ = tdvp2.rs[0]
+        l = tdvp.l[0]
+        r_ = tdvp2.r[0]
         
-        l_sqrt = tdvp.ls_sqrt[0]
-        l_sqrt_i = tdvp.ls_sqrt_i[0]
+        l_sqrt = tdvp.l_sqrt[0]
+        l_sqrt_i = tdvp.l_sqrt_i[0]
         
-        r__sqrt = tdvp2.rs_sqrt[0]
-        r__sqrt_i = tdvp2.rs_sqrt_i[0]
+        r__sqrt = tdvp2.r_sqrt[0]
+        r__sqrt_i = tdvp2.r_sqrt_i[0]
         
-        K__r = tdvp2.Ks[0]
-        K_l = tdvp.K_lefts[0]
+        K__r = tdvp2.K[0]
+        K_l = tdvp.K_left[0]
         
         pseudo = tdvp2 is tdvp
         
-        B = tdvp2.get_B_from_x(x, tdvp2.Vshs[0], l_sqrt_i, r__sqrt_i)
+        B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
         
         #Skip zeros due to rank-deficiency
         if la.norm(B) == 0:

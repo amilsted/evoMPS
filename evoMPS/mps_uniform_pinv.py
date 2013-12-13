@@ -16,22 +16,22 @@ import logging
 log = logging.getLogger(__name__)
 
 class PinvOp:    
-    def __init__(self, p, A1s, A2s, lL=None, rL=None, left=False, pseudo=True):
+    def __init__(self, p, A1, A2, lL=None, rL=None, left=False, pseudo=True):
         assert not (pseudo and (lL is None or rL is None)), 'For pseudo-inverse l and r must be set!'
         
-        self.A1s = A1s
-        self.A2s = A2s
+        self.A1 = A1
+        self.A2 = A2
         self.lL = lL
         self.rL = rL
         self.p = p
         self.left = left
         self.pseudo = pseudo
         
-        self.D = A1s[0].shape[1]
+        self.D = A1[0].shape[1]
         
         self.shape = (self.D**2, self.D**2)
         
-        self.dtype = A1s[0].dtype
+        self.dtype = A1[0].dtype
         
         self.out = np.empty((self.D, self.D), dtype=self.dtype)
     
@@ -40,8 +40,8 @@ class PinvOp:
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
             Ehx = x
-            for k in xrange(len(self.A1s)):
-                Ehx = tm.eps_l_noop(Ehx, self.A1s[k], self.A2s[k])
+            for k in xrange(len(self.A1)):
+                Ehx = tm.eps_l_noop(Ehx, self.A1[k], self.A2[k])
             if self.pseudo:
                 QEQhx = Ehx - self.lL * m.adot(self.rL, x)
                 res = x - sp.exp(-1.j * self.p) * QEQhx
@@ -49,8 +49,8 @@ class PinvOp:
                 res = x - sp.exp(-1.j * self.p) * Ehx
         else:
             Ex = x
-            for k in xrange(len(self.A1s) - 1, -1, -1):
-                Ex = tm.eps_r_noop(Ex, self.A1s[k], self.A2s[k])
+            for k in xrange(len(self.A1) - 1, -1, -1):
+                Ex = tm.eps_r_noop(Ex, self.A1[k], self.A2[k])
             if self.pseudo:
                 QEQx = Ex - self.rL * m.adot(self.lL, x)
                 res = x - sp.exp(1.j * self.p) * QEQx
@@ -59,27 +59,32 @@ class PinvOp:
         
         return res.ravel()
         
-def pinv_1mE_brute(A1, A2, l, r, p=0, pseudo=True):
-    D = A1.shape[1]
-    E = np.zeros((D**2, D**2), dtype=A1.dtype)
-
-    for s in xrange(A1.shape[0]):
-        E += np.kron(A1[s], A2[s].conj())
+def pinv_1mE_brute(A1, A2, lL, rL, p=0, pseudo=True):
+    D = A1[0].shape[1]
+    E = np.zeros((len(A1), D**2, D**2), dtype=A1[0].dtype, order='C')
     
-    l = np.asarray(l)
-    r = np.asarray(r)
+    for k in xrange(len(A1)):
+        for s in xrange(A1[0].shape[0]):
+            E[k] += sp.kron(A1[k][s], A1[k][s].conj())
+            
+    Eblock = E[0]
+    for k in xrange(1, len(A1)):
+        Eblock = Eblock.dot(E[1])
+    
+    lL = np.asarray(lL)
+    rL = np.asarray(rL)
     
     if pseudo:
-        QEQ = E - r.reshape((D**2, 1)).dot(l.reshape((1, D**2)).conj())
+        QEQ = Eblock - rL.reshape((D**2, 1)).dot(lL.reshape((1, D**2)).conj())
     else:
-        QEQ = E
+        QEQ = Eblock
     
-    EyemE = np.eye(D**2, dtype=A1.dtype) - sp.exp(1.j * p) * QEQ
+    EyemE = np.eye(D**2, dtype=A1[0].dtype) - sp.exp(1.j * p) * QEQ
     
     return la.inv(EyemE)
     
-def pinv_1mE_brute_LOP(A1, A2, l, r, p=0, pseudo=True, left=False):
-    op = PinvOp(p, A1, A2, l, r, left=left, pseudo=pseudo)
+def pinv_1mE_brute_LOP(A1, A2, lL, rL, p=0, pseudo=True, left=False):
+    op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     
     bop = sp.zeros(op.shape, dtype=op.dtype)
     for i in xrange(op.shape[1]):
@@ -92,7 +97,7 @@ def pinv_1mE_brute_LOP(A1, A2, l, r, p=0, pseudo=True, left=False):
     
     return la.inv(bop)
     
-def pinv_1mE(x, A1s, A2s, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
+def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
              out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
@@ -100,12 +105,12 @@ def pinv_1mE(x, A1s, A2s, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxite
     In left mode, x is still taken to be a column vector and OP.conj().T.dot(x) 
     is performed.
     """
-    D = A1s[0].shape[1]
+    D = A1[0].shape[1]
     
     if out is None:
-        out = np.ones_like(A1s[0][0])
+        out = np.ones_like(A1[0][0])
     
-    op = PinvOp(p, A1s, A2s, lL, rL, left=left, pseudo=pseudo)
+    op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     
     res = out.ravel()
     x = x.ravel()
@@ -133,8 +138,8 @@ def pinv_1mE(x, A1s, A2s, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxite
     
     res = res.reshape((D, D))
         
-    if False and brute_check:
-        pinvE = pinv_1mE_brute(A1, A2, l, r, p=p, pseudo=pseudo)
+    if brute_check:
+        pinvE = pinv_1mE_brute(A1, A2, lL, rL, p=p, pseudo=pseudo)
         
         if left:
             #res_brute = (x.reshape((1, D**2)).conj().dot(pinvE)).ravel().conj().reshape((D, D))
