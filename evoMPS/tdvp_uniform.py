@@ -187,7 +187,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             rL = self.r[-1]
         
         out = pinv_1mE(x, A1, A2, self.l[-1], rL, p=p, left=left, pseudo=pseudo, 
-                       out=out, tol=self.itr_rtol, solver=solver,
+                       out=out, tol=self.itr_rtol, solver=solver, brute_check=brute_check,
                        sanity_checks=self.sanity_checks, sc_data=sc_data)
 
         return out
