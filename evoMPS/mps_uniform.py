@@ -105,6 +105,10 @@ class EvoMPS_MPS_Uniform(object):
         self.pow_itr_max = 2000
         """Maximum number of iterations to use in the power-iteration algorithm 
            for finding l and r."""
+
+        self.ev_brute = False
+        """Use dense methods to find l and r. For debugging. Scales as D**6.
+           Overrides ev_use_arpack."""
            
         self.ev_use_arpack = True
         """Whether to use ARPACK (implicitly restarted Arnoldi iteration) to 
@@ -213,22 +217,24 @@ class EvoMPS_MPS_Uniform(object):
             for s in xrange(self.q):
                 E[k] += sp.kron(self.A[k][s], self.A[k][s].conj())
                 
-        Eblock = E[0]
+        Eblock = E[0].copy()
         for k in xrange(1, self.L):
-            Eblock = Eblock.dot(E[1])
+            Eblock = Eblock.dot(E[k])
             
         ev, eVL, eVR = la.eig(Eblock, left=True, right=True)
         
-        i = np.argmax(ev)
+        i = np.argmax(abs(ev))
         
         self.A[0] *= 1 / sp.sqrt(ev[i])        
         
-        self.l[-1] = eVL[:,i].reshape((self.D, self.D))
-        self.r[-1] = eVR[:,i].reshape((self.D, self.D))
+        lL = eVL[:,i].reshape((self.D, self.D))
+        rL = eVR[:,i].reshape((self.D, self.D))
         
-        norm = m.adot(self.l[-1], self.r[-1])
-        self.l[-1] *= 1 / sp.sqrt(norm)
-        self.r[-1] *= 1 / sp.sqrt(norm)        
+        norm = m.adot(lL, rL)
+        lL *= 1 / sp.sqrt(norm)
+        rL *= 1 / sp.sqrt(norm)
+
+        return lL, rL        
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                         tol=1E-14, ncv=None, k=1):
@@ -270,7 +276,7 @@ class EvoMPS_MPS_Uniform(object):
             ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
             conv = True
             
-        ind = ev.argmax()
+        ind = abs(ev).argmax()
         ev = np.real_if_close(ev[ind])
         ev = np.asscalar(ev)
         eV = eV[:, ind]
@@ -445,36 +451,38 @@ class EvoMPS_MPS_Uniform(object):
         self.lL_before_CF = np.asarray(self.lL_before_CF)
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
-        if self.ev_use_arpack:
-            self.l[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                                   calc_l=True,
-                                                   tol=self.itr_rtol,
-                                                   k=self.ev_arpack_nev,
-                                                   ncv=self.ev_arpack_ncv)
+        if self.ev_brute:
+            self.l[-1], self.r[-1] = self._calc_lr_brute()
         else:
-            self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
-                                                    tmp, 
-                                                    calc_l=True,
-                                                    max_itr=self.pow_itr_max,
-                                                    rtol=self.itr_rtol, 
-                                                    atol=self.itr_atol)
-                                        
-        self.lL_before_CF = self.l[-1].copy()
-        
-        if self.ev_use_arpack:
-            self.r[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
-                                                   calc_l=False,
-                                                   tol=self.itr_rtol,
-                                                   k=self.ev_arpack_nev,
-                                                   ncv=self.ev_arpack_ncv)
-        else:
-            self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
-                                                    tmp, 
-                                                    calc_l=False,
-                                                    max_itr=self.pow_itr_max,
-                                                    rtol=self.itr_rtol, 
-                                                    atol=self.itr_atol)
+            if self.ev_use_arpack:
+                self.l[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
+                                                       calc_l=True,
+                                                       tol=self.itr_rtol,
+                                                       k=self.ev_arpack_nev,
+                                                       ncv=self.ev_arpack_ncv)
+            else:
+                self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
+                                                        tmp, 
+                                                        calc_l=True,
+                                                        max_itr=self.pow_itr_max,
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
             
+            if self.ev_use_arpack:
+                self.r[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
+                                                       calc_l=False,
+                                                       tol=self.itr_rtol,
+                                                       k=self.ev_arpack_nev,
+                                                       ncv=self.ev_arpack_ncv)
+            else:
+                self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
+                                                        tmp, 
+                                                        calc_l=False,
+                                                        max_itr=self.pow_itr_max,
+                                                        rtol=self.itr_rtol, 
+                                                        atol=self.itr_atol)
+            
+        self.lL_before_CF = self.l[-1].copy()
         self.rL_before_CF = self.r[-1].copy()
             
         #normalize eigenvectors:
