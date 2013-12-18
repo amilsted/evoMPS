@@ -65,11 +65,11 @@ def pinv_1mE_brute(A1, A2, lL, rL, p=0, pseudo=True):
     
     for k in xrange(len(A1)):
         for s in xrange(A1[0].shape[0]):
-            E[k] += sp.kron(A1[k][s], A1[k][s].conj())
+            E[k] += sp.kron(A1[k][s], A2[k][s].conj())
             
     Eblock = E[0]
     for k in xrange(1, len(A1)):
-        Eblock = Eblock.dot(E[1])
+        Eblock = Eblock.dot(E[k])
     
     lL = np.asarray(lL)
     rL = np.asarray(rL)
