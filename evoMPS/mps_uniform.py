@@ -838,13 +838,13 @@ class EvoMPS_MPS_Uniform(object):
                 if not np.allclose(r, self.r[k],
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
-                    log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
+                    log.warning("Sanity check failed: Restore_LCF, r not eigenvector! Off by %s", 
                                 la.norm(r - self.r[k]))
     
                 if not np.allclose(l, self.l[k],
                                    rtol=self.itr_rtol*self.check_fac, 
                                    atol=self.itr_atol*self.check_fac):
-                    log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
+                    log.warning("Sanity check failed: Restore_LCF, l not eigenvector! Off by %s", 
                                 la.norm(l - self.l[k]))
         if ret_g:
             return G, G_i
