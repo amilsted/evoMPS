@@ -481,8 +481,8 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             return self.uni_l.l[(n - 1) % self.uni_l.L]
         else:
             l_m1 = self.l[self.N + 1] #this is position 0 in the block
-            for m in sp.arange(1, (n - self.N) % self.uni_r.L):
-                l_m1 = tm.eps_l_noop(l_m1, self.uni_r.A[m], self.A[m])
+            for m in (sp.arange(self.N + 2, n + 1) - 1) % self.uni_r.L:
+                l_m1 = tm.eps_l_noop(l_m1, self.uni_r.A[m], self.uni_r.A[m])
             return l_m1
 
     def get_r(self, n, r_np1=None):
@@ -491,7 +491,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if 0 <= n <= self.N + 1:
             return self.r[n]
         elif n > self.N + 1:
-            return self.uni_r.r[(n - self.N + 1) % self.uni_r.L]
+            return self.uni_r.r[(n - 1) % self.uni_r.L]
         else:
             if r_np1 is None:
                 r_m = self.r[0]
