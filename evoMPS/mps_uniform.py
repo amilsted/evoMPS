@@ -650,7 +650,7 @@ class EvoMPS_MPS_Uniform(object):
             self.l[k] = S
             self.r[k] = S
     
-    def restore_RCF(self, zero_tol=None):
+    def restore_RCF(self, zero_tol=None, diag_l=True, ks=None, ret_g=False):
         """Restores right canonical form.
         
         In this form, self.r = sp.eye(self.D) and self.l is diagonal, with
@@ -659,42 +659,57 @@ class EvoMPS_MPS_Uniform(object):
         
         Parameters
         ----------
+        zero_tol : float
+            Zero-tolerance. Default is the value in self.zero_tol.
+        diag_l : bool
+            Whether to diagonalize l. Not doing so does not fully restore
+            canonical form, but may be useful in certain circumstances.
+        ks : list of ints
+            Which l[k] and r[k] to bring into canonical form. Default is all.
         ret_g : bool
             Whether to return the gauge-transformation matrices used.
             
         Returns
         -------
-        g, g_i : ndarray
-            Gauge transformation matrix g and its inverse g_i.
+        G, G_i : ndarray
+            Gauge transformation matrices g and inverses g_i.
         """
         
         if zero_tol is None:
             zero_tol = self.zero_tol
         
-        for k in xrange(self.L):
+        if ks is None:
+            ks = range(self.L)
+        
+        G = [None] * self.L
+        G_i = [None] * self.L
+        
+        for k in ks:
             #First get G such that r = eye
-            G, G_i, rank = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
+            G[k], G_i[k], rank = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
                                                 return_rank=True,
                                                 sanity_checks=self.sanity_checks,
                                                 sc_data='Restore_RCF: r')
     
-            self.l[k] = G.conj().T.dot(self.l[k].dot(G))
+            self.l[k] = G[k].conj().T.dot(self.l[k].dot(G[k]))
             
-            #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye..?)
-            ev, EV = la.eigh(self.l[k])
-    
-            G = G.dot(EV)
-            G_i = m.H(EV).dot(G_i)
+            if diag_l:
+                #Now bring l into diagonal form, trace = 1 (guaranteed by r = eye and normalization)
+                ev, EV = la.eigh(self.l[k])
+        
+                G[k] = G[k].dot(EV)
+                G_i[k] = m.H(EV).dot(G_i[k])
+                
+                #ev contains the squares of the Schmidt coefficients,
+                self.S_hc[k] = - np.sum(ev * sp.log2(ev))                
+                self.l[k] = m.simple_diag_matrix(ev, dtype=self.typ)
+            else:
+                self.S_hc[k] = sp.NaN
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
-                self.A[j][s] = G_i.dot(self.A[j][s])
-                self.A[k][s] = self.A[k][s].dot(G)
-                
-            #ev contains the squares of the Schmidt coefficients,
-            self.S_hc[k] = - np.sum(ev * sp.log2(ev))
-            
-            self.l[k] = m.simple_diag_matrix(ev, dtype=self.typ)
+                self.A[j][s] = G_i[k].dot(self.A[j][s])
+                self.A[k][s] = self.A[k][s].dot(G[k])
             
             r_old = self.r[k]
             
@@ -706,7 +721,7 @@ class EvoMPS_MPS_Uniform(object):
                 self.r[k] = m.simple_diag_matrix(self.r[k], dtype=self.typ)
     
             if self.sanity_checks:            
-                r_ = G_i.dot(r_old.dot(G_i.conj().T)) 
+                r_ = G_i[k].dot(r_old.dot(G_i[k].conj().T)) 
                 
                 if not np.allclose(self.r[k], r_, 
                                    rtol=self.itr_rtol*self.check_fac,
@@ -732,6 +747,107 @@ class EvoMPS_MPS_Uniform(object):
                                    atol=self.itr_atol*self.check_fac):
                     log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
                                 la.norm(l - self.l[k]))
+                                
+        if ret_g:
+            return G, G_i
+        
+    def restore_LCF(self, zero_tol=None, diag_r=True, ks=None, ret_g=False):
+        """Restores left canonical form.
+        
+        In this form, self.l = sp.eye(self.D) and self.r is diagonal, with
+        the squared Schmidt coefficients corresponding to the half-chain
+        decomposition as eigenvalues.
+        
+        Parameters
+        ----------
+        zero_tol : float
+            Zero-tolerance. Default is the value in self.zero_tol.
+        diag_r : bool
+            Whether to diagonalize r. Not doing so does not fully restore
+            canonical form, but may be useful in certain circumstances.
+        ks : list of ints
+            Which l[k] and r[k] to bring into canonical form. Default is all.
+        ret_g : bool
+            Whether to return the gauge-transformation matrices used.
+            
+        Returns
+        -------
+        G, G_i : ndarray
+            Gauge transformation matrices g and inverses g_i.
+        """
+        
+        if zero_tol is None:
+            zero_tol = self.zero_tol
+        
+        if ks is None:
+            ks = range(self.L)
+        
+        G = [None] * self.L
+        G_i = [None] * self.L
+        
+        for k in ks:
+            G_i[k], G[k], rank = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
+                                                return_rank=True,
+                                                sanity_checks=self.sanity_checks,
+                                                sc_data='Restore_LCF: l')
+    
+            self.r[k] = G_i[k].dot(self.r[k].dot(G_i[k].conj().T))
+            
+            if diag_r:
+                ev, EV = la.eigh(self.r[k])
+        
+                G[k] = EV.dot(G[k])
+                G_i[k] = G_i[k].dot(EV.conj().T)
+                
+                #ev contains the squares of the Schmidt coefficients,
+                self.S_hc[k] = - np.sum(ev * sp.log2(ev))                
+                self.r[k] = m.simple_diag_matrix(ev, dtype=self.typ)
+            else:
+                self.S_hc[k] = sp.NaN
+            
+            j = (k + 1) % self.L
+            for s in xrange(self.q):
+                self.A[j][s] = G_i[k].dot(self.A[j][s])
+                self.A[k][s] = self.A[k][s].dot(G[k])
+            
+            l_old = self.l[k]
+            
+            if rank == self.D:
+                self.l[k] = m.eyemat(self.D, self.typ)
+            else:
+                self.l[k] = sp.zeros((self.D), dtype=self.typ)
+                self.l[k][-rank:] = 1
+                self.l[k] = m.simple_diag_matrix(self.l[k], dtype=self.typ)
+    
+            if self.sanity_checks:            
+                l_ = G[k].conj().T.dot(l_old.dot(G[k])) 
+                
+                if not np.allclose(self.l[k], l_, 
+                                   rtol=self.itr_rtol*self.check_fac,
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_LCF, bad l (bad GT). Off by %s", 
+                                la.norm(l_ - self.l[k]))
+                
+                l = self.l[k]
+                for j in (sp.arange(k + 1, k + self.L + 1) % self.L):
+                    l = tm.eps_l_noop(l, self.A[j], self.A[j])
+                r = self.r[k]
+                for j in (sp.arange(k, k - self.L, -1) % self.L):
+                    r = tm.eps_r_noop(r, self.A[j], self.A[j])
+                
+                if not np.allclose(r, self.r[k],
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_RCF, r not eigenvector! Off by %s", 
+                                la.norm(r - self.r[k]))
+    
+                if not np.allclose(l, self.l[k],
+                                   rtol=self.itr_rtol*self.check_fac, 
+                                   atol=self.itr_atol*self.check_fac):
+                    log.warning("Sanity check failed: Restore_RCF, l not eigenvector! Off by %s", 
+                                la.norm(l - self.l[k]))
+        if ret_g:
+            return G, G_i
     
     def restore_CF(self):
         """Restores canonical form.
