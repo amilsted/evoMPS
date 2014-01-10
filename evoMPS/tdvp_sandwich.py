@@ -297,7 +297,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.uni_l.calc_B()
         self.eta_uni = self.uni_l.eta
-        print self.eta_uni
+        print "Bulk eta: ", self.eta_uni
         
         self.h_nn = None
         """The Hamiltonian for the nonuniform region. 
@@ -384,7 +384,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         if callable(self.h_nn):
             for n in xrange(n_low, n_high):
                 self.C[n] = tm.calc_C_func_op(lambda s,t,u,v: self.h_nn(n,s,t,u,v), 
-                                              self.A[n], self.A[n + 1])
+                                              self.get_A(n), self.get_A(n + 1))
         else:
             for n in xrange(n_low, n_high):                                        
                 if n == self.N_centre - 1:
@@ -392,7 +392,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 elif n == self.N_centre:
                     AA = self.AAc
                 else:
-                    AA = tm.calc_AA(self.A[n], self.A[n + 1])
+                    AA = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
                 
                 self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn[n], AA)
 
@@ -408,22 +408,22 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.uni_r.calc_AA()
         self.uni_r.calc_C()
         self.uni_r.calc_K()
-        self.K[self.N + 1][:] = self.uni_r.K
+        self.K[self.N + 1][:] = self.uni_r.K[0]
 
         self.uni_l.calc_AA()
         self.uni_l.calc_C()
         K_left, h_left_uni = self.uni_l.calc_K_l()
-        self.K_l[0][:] = K_left
+        self.K_l[0][:] = K_left[-1]
 
         for n in xrange(self.N, self.N_centre - 1, -1):
             self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
-                                      self.r[n + 1], self.A[n], self.A[n + 1])
+                                      self.r[n + 1], self.A[n], self.get_A(n + 1))
                 
             self.h_expect[n] = he
 
         for n in xrange(1, self.N_centre + 1):
             self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
-                                      self.r[n], self.A[n], self.A[n - 1])
+                                      self.r[n], self.A[n], self.get_A(n - 1))
                 
             self.h_expect[n - 1] = he
 
@@ -472,11 +472,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         if right:
             x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
-                          lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+                          lm2, self.get_A(n - 1), self.A[n], self.get_A(n + 1),
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
             x = tm.calc_x_l(self.K_l[n - 1], C, self.C[n - 1], self.r[n + 1],
-                          lm2, self.A[n - 1], self.A[n], self.A[n + 1],
+                          lm2, self.get_A(n - 1), self.A[n], self.get_A(n + 1),
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
 
         return x
@@ -736,27 +736,20 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         if not callable(self.h_nn):
             self.h_nn = list(self.h_nn) + [self.uni_r.ham] * m
 
-    def shrink_left(self, m):
-        super(EvoMPS_TDVP_Sandwich, self).shrink_left(m)
-        if not callable(self.h_nn):
-            self.h_nn = self.h_nn[m:]
-        self.N_centre -= m
-
-    def shrink_right(self, m):
-        super(EvoMPS_TDVP_Sandwich, self).shrink_right(m)
-        if not callable(self.h_nn):
-            self.h_nn = self.h_nn[:-m]
-
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
         
-        tosave[0] = self.A
-        tosave[1] = self.l[0]
-        tosave[2] = self.uni_l.r
-        tosave[3] = self.uni_l.K_left
+        Asave = self.A.copy()
+        Asave[0] = self.uni_l.A
+        Asave[self.N + 1] = self.uni_r.A
+        
+        tosave[0] = self.Asave
+        tosave[1] = self.l[0]        
+        tosave[2] = self.uni_l.r[-1]
+        tosave[3] = self.uni_l.K_left[-1]
         tosave[4] = self.r[self.N]
-        tosave[5] = self.uni_r.l
-        tosave[6] = self.uni_r.K
+        tosave[5] = self.uni_r.l[-1]
+        tosave[6] = self.uni_r.K[0]
         tosave[7] = sp.array([[self.grown_left, self.grown_right], 
                              [self.shrunk_left, self.shrunk_right]])
         tosave[8] = userdata
@@ -782,12 +775,12 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             
             self.A = toload[0]
             self.l[0] = toload[1]
-            self.uni_l.r = toload[2]
-            self.uni_l.K_left = toload[3]
+            self.uni_l.r[-1] = toload[2]
+            self.uni_l.K_left[-1] = toload[3]
             self.r[self.N] = toload[4]
             self.r[self.N + 1] = self.r[self.N]
-            self.uni_r.l = toload[5]
-            self.uni_r.K = toload[6]
+            self.uni_r.l[-1] = toload[5]
+            self.uni_r.K[0] = toload[6]
             
             self.grown_left = toload[7][0, 0]
             self.grown_right = toload[7][0, 1]
@@ -795,14 +788,29 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.shrunk_right = toload[7][1, 1]
             
             self.uni_l.A = self.A[0]
-            self.uni_l.l = self.l[0]
-            self.uni_l.l_before_CF = self.uni_l.l
-            self.uni_l.r_before_CF = self.uni_l.r
+            self.uni_l.l[-1] = self.l[0]
+            self.uni_l.l_before_CF = self.uni_l.l[-1]
+            self.uni_l.r_before_CF = self.uni_l.r[-1]
             
             self.uni_r.A = self.A[self.N + 1]
-            self.uni_r.r = self.r[self.N]
-            self.uni_r.l_before_CF = self.uni_r.l
-            self.uni_r.r_before_CF = self.uni_r.r
+            self.uni_r.r[-1] = self.r[self.N]
+            self.uni_r.l_before_CF = self.uni_r.l[-1]
+            self.uni_r.r_before_CF = self.uni_r.r[-1]
+            
+            try:
+                if len(self.uni_l.A.shape) == 3:
+                    self.uni_l.A = [self.uni_l.A]
+            except AttributeError:
+                pass
+            
+            try:
+                if len(self.uni_r.A.shape) == 3:
+                    self.uni_r.A = [self.uni_r.A]
+            except AttributeError:
+                pass
+            
+            self.A[0] = None
+            self.A[self.N + 1] = None
 
             print "loaded."
 
