@@ -177,13 +177,13 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
                 h[n] = self.expect_2s(self.h_nn[n], n)
             h *= 1/norm
     
-            self.uni_l.A = self.A[0] #FIXME: Not sure how to handle this yet...
-            self.uni_l.l = self.l[0]
+            #self.uni_l.A = self.A[0] #FIXME: Not sure how to handle this yet...
+            self.uni_l.l[-1] = self.l[0]
             self.uni_l.calc_AA()
             h_left = self.uni_l.expect_2s(self.uni_l.ham.copy()) / norm_l
     
-            self.uni_r.A = self.A[self.N + 1]
-            self.uni_r.r = self.r[self.N]
+            #self.uni_r.A = self.A[self.N + 1]
+            self.uni_r.r[-1] = self.r[self.N]
             self.uni_r.calc_AA()
             h_right = self.uni_r.expect_2s(self.uni_r.ham.copy()) / norm_r
     
@@ -232,7 +232,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.A[nc][s] = Gm1.dot(self.A[nc][s])
 
 
-    def _restore_CF_diag(self):
+    def _restore_CF_diag(self, dbg=False):
         nc = self.N_centre
 
         self.S_hc = sp.zeros((self.N + 1), dtype=sp.complex128)
@@ -255,8 +255,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.uni_l.r[-1] = U.dot(self.uni_l.r[-1].dot(U.conj().T))
 
         #And now: l[nc <= n <= N] diagonal
-        Um1 = mm.eyemat(self.D[nc - 1], dtype=self.typ) #FIXME: This only works if l[nc - 1] is a special matrix type
-        #Um1 = sp.eye(self.D[nc - 1], dtype=self.typ)
+        if dbg:
+            Um1 = sp.eye(self.D[nc - 1], dtype=self.typ)
+        else:
+            Um1 = mm.eyemat(self.D[nc - 1], dtype=self.typ) #FIXME: This only works if l[nc - 1] is a special matrix type        
         for n in xrange(nc, self.N + 1):
             self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1,
                                                 sanity_checks=self.sanity_checks)
@@ -282,19 +284,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
             print (h_left_before, h_before, h_right_before)
 
-        self.uni_l.A = self.uni_l.A #.copy()
-        #self.uni_l.l = self.uni_l.l.copy()
-        #r_old = self.uni_l.r.copy()
         self.uni_l.calc_lr() #Ensures largest ev of E=1
         if dbg:
             print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
-        #uniform calc_lr() scales for RCF, but we have LCF,
-        #so we have to correct the scaling here
-        fac = self.uni_l.D / self.uni_l.l[-1].trace().real
-        if dbg:
-            print "Scale l[0]: %g" % fac
-        self.uni_l.l[-1] *= fac
-        self.uni_l.r[-1] *= 1/fac
 
 #        if self.sanity_checks:
 #            if not sp.allclose(self.uni_l.l, self.l[0], atol=1E-12, rtol=1E-12):
@@ -306,15 +298,9 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 #            if not sp.allclose(self.uni_l.A, self.A[0], atol=1E-12, rtol=1E-12):
 #                print "Sanity Fail in restore_CF!: A[0] was scaled!", la.norm(self.A[0] - self.uni_l.A)
 
-        #self.uni_l.l = self.l[0]
-        #self.uni_l.r = r_old
-        #self.uni_l.A = self.A[0]
         self.l[0] = self.uni_l.l[-1]
         self.A[0] = None
 
-        self.uni_r.A = self.uni_r.A #.copy()
-        self.uni_r.r = self.uni_r.r #.copy()
-        #l_old = self.uni_r.l.copy()
         self.uni_r.calc_lr() #Ensures largest ev of E=1
         if dbg:
             print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
@@ -345,7 +331,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
             print (h_left_mid, h_mid, h_right_mid)
 
-        self._restore_CF_diag()
+        self._restore_CF_diag(dbg=dbg)
 
         #l[0] is identity, r_L = ?
         self.uni_l.l_before_CF = self.uni_l.l[-1]
