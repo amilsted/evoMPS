@@ -413,6 +413,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.uni_l.calc_AA()
         self.uni_l.calc_C()
         K_left, h_left_uni = self.uni_l.calc_K_l()
+        
         self.K_l[0][:] = K_left[-1]
 
         for n in xrange(self.N, self.N_centre - 1, -1):
@@ -728,13 +729,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
     def grow_left(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
         if not callable(self.h_nn):
-            self.h_nn = [self.uni_l.ham] * m + list(self.h_nn)
+            self.h_nn = [self.uni_l.ham] * m * self.uni_l.L + list(self.h_nn)
         self.N_centre += m
             
     def grow_right(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_right(m)
         if not callable(self.h_nn):
-            self.h_nn = list(self.h_nn) + [self.uni_r.ham] * m
+            self.h_nn = list(self.h_nn) + [self.uni_r.ham] * m * self.uni_r.L
 
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
@@ -743,7 +744,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         Asave[0] = self.uni_l.A
         Asave[self.N + 1] = self.uni_r.A
         
-        tosave[0] = self.Asave
+        tosave[0] = Asave
         tosave[1] = self.l[0]        
         tosave[2] = self.uni_l.r[-1]
         tosave[3] = self.uni_l.K_left[-1]
