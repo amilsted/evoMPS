@@ -19,22 +19,22 @@ class TestOps(unittest.TestCase):
         self.d = 3
         self.D = 8
                 
-        self.A = sp.rand(self.d, self.D, self.D) + 1.j * sp.rand(self.d, self.D, self.D)
-        self.B = sp.rand(self.d, self.D, self.D) + 1.j * sp.rand(self.d, self.D, self.D)
+        self.A = [sp.rand(self.d, self.D, self.D) + 1.j * sp.rand(self.d, self.D, self.D)]
+        self.B = [sp.rand(self.d, self.D, self.D) + 1.j * sp.rand(self.d, self.D, self.D)]
         
         s = uni.EvoMPS_MPS_Uniform(self.D, self.d)
         s.A = self.A
         s.calc_lr()
         self.A = s.A
-        self.Al = s.l
-        self.Ar = s.r
+        self.Al = s.l[-1]
+        self.Ar = s.r[-1]
         
         s = uni.EvoMPS_MPS_Uniform(self.D, self.d)
         s.A = self.B
         s.calc_lr()
         self.B = s.A
-        self.Bl = s.l
-        self.Br = s.r
+        self.Bl = s.l[-1]
+        self.Br = s.r[-1]
         
         self.x = sp.rand(self.D, self.D) + 1.j * sp.rand(self.D, self.D)
         
@@ -136,19 +136,19 @@ class TestOps(unittest.TestCase):
         self.assertLess(la.norm(res_brute - res), self.solver_tol * la.norm(res_brute))
         
     def test_pinv_AA_right_p0_rank_def(self):
-        A = sp.zeros((self.d, self.D + 2, self.D + 2), dtype=self.A.dtype)
-        A[:, :self.D, :self.D] = self.A
-        Al = sp.zeros((self.D + 2, self.D + 2), dtype=self.A.dtype)
+        A0 = sp.zeros((self.d, self.D + 2, self.D + 2), dtype=self.A[0].dtype)
+        A0[:, :self.D, :self.D] = self.A[0]
+        Al = sp.zeros((self.D + 2, self.D + 2), dtype=self.A[0].dtype)
         Al[:self.D, :self.D] = self.Al
-        Ar = sp.zeros((self.D + 2, self.D + 2), dtype=self.A.dtype)
+        Ar = sp.zeros((self.D + 2, self.D + 2), dtype=self.A[0].dtype)
         Ar[:self.D, :self.D] = self.Ar
         
-        x = sp.zeros((self.D + 2, self.D + 2), dtype=self.A.dtype)
+        x = sp.zeros((self.D + 2, self.D + 2), dtype=self.A[0].dtype)
         x[:self.D, :self.D] = self.x
         
-        res = upin.pinv_1mE(x, A, A, Al, Ar, p=0, left=False, pseudo=True, tol=self.solver_tol)
+        res = upin.pinv_1mE(x, [A0], [A0], Al, Ar, p=0, left=False, pseudo=True, tol=self.solver_tol)
         
-        pinvE = upin.pinv_1mE_brute(A, A, Al, Ar, p=0, pseudo=True)
+        pinvE = upin.pinv_1mE_brute([A0], [A0], Al, Ar, p=0, pseudo=True)
         res_brute = pinvE.dot(x.ravel()).reshape(self.D + 2, self.D + 2)
         
         self.assertLess(la.norm(res_brute - res), self.solver_tol * la.norm(res_brute))
