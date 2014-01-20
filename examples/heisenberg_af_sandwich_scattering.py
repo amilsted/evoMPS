@@ -18,7 +18,7 @@ import evoMPS.tdvp_sandwich as sw
 import scipy as sp
 import heisenberg_af_uniform as hu
 
-N = 191                            #Number of sites in the non-uniform region
+N = 192                            #Number of sites in the non-uniform region
 
 dt = 0.01                          #Imaginary time step size
 steps = 1000                       #Maximum number of steps
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     sim.apply_op_1s(Sp, mid + 15 + 5)
 
     op, en, S, OL = sw.go(sim, dt*1.j, steps, RK4=True, op=Sz, op_every=1,
-                          autogrow=True, autogrow_amount=4)
+                          autogrow=True, autogrow_amount=4/hu.s.L)
 
     if plot_results:
         import matplotlib.pyplot as plt
