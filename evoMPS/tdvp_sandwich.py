@@ -124,7 +124,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         
             #Basic dynamic expansion:
             if autogrow and sim.N < autogrow_max_N:
-                if etas[0] > sim.eta_uni * 10:
+                if etas[0] > sim.eta_uni.sum() * 10:
                     rewrite_opf = True
                     print "Growing left by: %u" % autogrow_amount
                     sim.grow_left(autogrow_amount)
@@ -140,7 +140,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                         for row in etadata:
                             row.insert(0, 0)
     
-                if etas[-1] > sim.eta_uni * 10:
+                if etas[-1] > sim.eta_uni.sum() * 10:
                     rewrite_opf = True
                     print "Growing right by: %u" % autogrow_amount
                     sim.grow_right(autogrow_amount)
