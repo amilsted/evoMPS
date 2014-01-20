@@ -199,7 +199,7 @@ class simple_diag_matrix:
             return NotImplemented
         
     def __rmul__(self, other):
-        return self.__mul__(self, other)
+        return self.__mul__(other)
         
     def __add__(self, other):
         try:
