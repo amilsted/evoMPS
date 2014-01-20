@@ -24,8 +24,8 @@ The evoMPS implementation assumes a nearest-neighbour or next-nearest-neighbour
 Hamiltonian and one of the following situations:
 
 * states on a finite chain with open boundary conditions
-* spatially uniform states on an infinite chain
-* otherwise uniform states with a localized nonuniformity on an infinite chain (only nearest-neighbour at present)
+* block translation invariant states on an infinite chain (adjustable block size)
+* otherwise block translation invariant states with a localized nonuniformity on an infinite chain (only nearest-neighbour at present)
 
 It is based on algorithms published by: 
 
