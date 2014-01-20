@@ -16,7 +16,8 @@ import evoMPS.tdvp_uniform as tdvp
 First, we set up some global variables to be used as parameters.
 """
 
-S = 1                         #Spin: Can be 0.5 or 1.
+S = 0.5                       #Spin: Can be 0.5 or 1.
+block_length = 2              #Translation-invariant block length
 bond_dim = 16                 #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
@@ -25,7 +26,7 @@ Jz = 1.00
 
 tol_im = 1E-10                #Ground state tolerance (norm of projected evolution vector)
 
-step = 0.1                    #Imaginary time step size
+step = 0.05                    #Imaginary time step size
 
 load_saved_ground = True      #Whether to load a saved ground state (if it exists)
 
@@ -92,7 +93,7 @@ def get_ham(Jx, Jy, Jz):
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, qn, get_ham(Jx, Jy, Jz))
+s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, qn, get_ham(Jx, Jy, Jz), L=block_length)
 s.zero_tol = zero_tol
 s.sanity_checks = sanity_checks
 
@@ -100,7 +101,7 @@ s.sanity_checks = sanity_checks
 The following loads a ground state from a file.
 The ground state will be saved automatically when it is declared found.
 """
-grnd_fname = "heis_af_uni_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
+grnd_fname = "heis_af_uni_L%d_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (block_length, bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
 
 if load_saved_ground:
     try:
@@ -134,7 +135,7 @@ if __name__ == '__main__':
     print "Bond dimensions: " + str(s.D)
     print
     col_heads = ["Step", "t", "<h>", "d<h>",
-                 "Sx", "Sy", "Sz",
+                 "Sz",
                  "eta"] #These last three are for testing the midpoint method.
     print "\t".join(col_heads)
     print
@@ -162,12 +163,10 @@ if __name__ == '__main__':
         """
         Compute expectation values!
         """
-        exSx = s.expect_1s(Sx)
-        exSy = s.expect_1s(Sy)
-        exSz = s.expect_1s(Sz)
-        row.append("%.3g" % exSx.real)
-        row.append("%.3g" % exSy.real)
-        row.append("%.3g" % exSz.real)
+        exSzs = []
+        for k in xrange(s.L):
+            exSzs.append("%.3g" % s.expect_1s(Sz, k=k).real)
+        row += exSzs
 
         """
         Carry out next step!
@@ -175,8 +174,9 @@ if __name__ == '__main__':
         s.take_step(step)
         t += 1.j * step
 
-        eta = s.eta.real
+        eta = s.eta.real.sum()
         row.append("%.6g" % eta)
+        row.append(str(s.eta.real))
 
         print "\t".join(row)
 
