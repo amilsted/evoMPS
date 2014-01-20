@@ -41,7 +41,7 @@ class eyemat(object):
         return self.toarray() * other
         
     def __rmul__(self, other):
-        return self.__mul__(self, other)
+        return self.__mul__(other)
         
     def __add__(self, other):
         try:
