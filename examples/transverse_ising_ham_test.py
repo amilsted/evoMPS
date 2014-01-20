@@ -137,7 +137,7 @@ prevH = 0
 while (eta > tol):    
     row = [str(t)]
     
-    trunc = s.update(restore_RCF_after_trunc=False)
+    trunc = s.update(restore_CF_after_trunc=False)
     if trunc:
         print "Truncated: ", s.D        
     
