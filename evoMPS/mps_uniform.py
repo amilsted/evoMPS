@@ -1314,6 +1314,71 @@ class EvoMPS_MPS_Uniform(object):
         if do_update:
             self.update()
             
+    def expect_string_1s_density_hc(self, op, k=0, ncv=6, full_r=False):
+        """Returns the expectation values of a string operator acting on the
+           Schmidt vectors for the half-chain decomposition.
+           
+        The string operator must be a string of single site operators.
+        
+        For block lengths other than 1, the cut is *before* the kth site in a 
+        block (counting from zero).
+        
+        The operator should be a self.q x self.q matrix or generating function 
+        such that op[s, t] or op(s, t) equals <s|op|t>.
+        
+        The state must be up-to-date and in canonical form -- see self.update()!
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator.
+        alpha : int
+            Which Schmidt vector to choose.
+        k : int
+            Site offset within block.
+            
+        Returns
+        -------
+        expval : ndarray
+            The expectation values for each Schmidt vector (data type may be complex)
+        fid_per_site : float
+            Fidelity per site of state with transformed state.
+        """
+        assert self.symm_gauge, "This only works in symm gauge right now!"
+        
+        if callable(op):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+            
+        Ashift = self.A[k:] + self.A[:k]
+            
+        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), Ashift)
+        
+        if self.D == 1:
+            ev = 1
+            for j in xrange(self.L):
+                evk = 0
+                for s in xrange(self.q):
+                    evk += Aop[j][s] * Ashift[j][s].conj()
+                ev *= evk
+            eV = sp.ones((1), dtype=sp.complex128)
+        else:            
+            opE = EOp(Aop, Ashift, False)
+            ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
+        
+        print "eigenvalue = ", ev
+            
+        r = eV.reshape((self.D, self.D))
+            
+        Or = r.diagonal().copy()
+
+        Or /= self.l[(k - 1) % self.L].diag
+        
+        if full_r:
+            return Or, abs(ev)**(1./self.L), r
+        else:
+            return Or, abs(ev)**(1./self.L)
+            
     def expect_string_per_site_1s(self, op):
         """Calculates the per-site factor of a string expectation value.
         
