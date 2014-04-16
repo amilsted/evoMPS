@@ -1378,8 +1378,8 @@ class EvoMPS_MPS_Uniform(object):
             return Or, abs(ev)**(1./self.L), r
         else:
             return Or, abs(ev)**(1./self.L)
-            
-    def expect_string_per_site_1s(self, op):
+
+    def expect_string_per_site_1s(self, op, ncv=6):
         """Calculates the per-site factor of a string expectation value.
         
         The string operator is the product over all sites of a single-site
@@ -1420,7 +1420,7 @@ class EvoMPS_MPS_Uniform(object):
             return ev**(1./self.L)
         else:            
             opE = EOp(Aop, self.A, False)
-            ev = las.eigs(opE, v0=np.asarray(self.r[-1]), which='LM', k=1, ncv=6)
+            ev = las.eigs(opE, v0=np.asarray(self.r[-1]), which='LM', k=1, ncv=ncv)
             return ev[0]**(1./self.L)
                 
     def set_q(self, newq):
