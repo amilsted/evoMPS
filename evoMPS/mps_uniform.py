@@ -1267,7 +1267,7 @@ class EvoMPS_MPS_Uniform(object):
             
         Parameters
         ----------
-        n : int
+        k : int
             Site offset within block.
 
         Returns
@@ -1278,7 +1278,7 @@ class EvoMPS_MPS_Uniform(object):
         rho = np.empty((self.q, self.q), dtype=self.typ)
         for s in xrange(self.q):
             for t in xrange(self.q):                
-                rho[s, t] = m.adot(self.l[n - 1], m.mmul(self.A[n][t], self.r[n], m.H(self.A[n][s])))
+                rho[s, t] = m.adot(self.l[k - 1], m.mmul(self.A[k][t], self.r[k], m.H(self.A[k][s])))
         return rho
                 
     def apply_op_1s(self, op, k=0, do_update=True):
