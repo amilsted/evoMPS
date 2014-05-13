@@ -14,6 +14,30 @@ import logging
 
 log = logging.getLogger(__name__)
 
+def correct_bond_dim_open_chain(D, q):
+    N = len(D) - 1
+    
+    D[0] = 1
+    D[N] = 1
+
+    qacc = 1
+    for n in xrange(N - 1, -1, -1):
+        if qacc < D.max(): #Avoid overflow!
+            qacc *= q[n + 1]
+
+        if D[n] > qacc:
+            D[n] = qacc
+            
+    qacc = 1
+    for n in xrange(1, N + 1):
+        if qacc < D.max(): #Avoid overflow!
+            qacc *= q[n]
+
+        if D[n] > qacc:
+            D[n] = qacc
+            
+    return D
+
 class EvoMPS_MPS_Generic(object):
     
     def __init__(self, N, D, q):
@@ -175,25 +199,9 @@ class EvoMPS_MPS_Generic(object):
         Schmidt ranks). The maximum value for D[n] is the minimum of the 
         dimensions of the two partial Hilbert spaces corresponding to a cut 
         between sites n and n + 1.
-        """
-        self.D[0] = 1
-        self.D[self.N] = 1
-
-        qacc = 1
-        for n in xrange(self.N - 1, -1, -1):
-            if qacc < self.D.max(): #Avoid overflow!
-                qacc *= self.q[n + 1]
-
-            if self.D[n] > qacc:
-                self.D[n] = qacc
-                
-        qacc = 1
-        for n in xrange(1, self.N + 1):
-            if qacc < self.D.max(): #Avoid overflow!
-                qacc *= self.q[n]
-
-            if self.D[n] > qacc:
-                self.D[n] = qacc
+        """                
+        
+        self.D = correct_bond_dim_open_chain(self.D, self.q)
                 
     
     def update(self, restore_CF=True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
