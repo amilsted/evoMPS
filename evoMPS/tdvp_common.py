@@ -423,6 +423,21 @@ def calc_AAA(A, Ap1, Ap2):
                 AAA[u, v, w] = A[u].dot(Ap1[v]).dot(Ap2[w])
     
     return AAA
+    
+def calc_AAA_AA(AAp1, Ap2):
+    Dp2 = Ap2.shape[2]
+    Dm1 = AAp1.shape[2]
+    q = AAp1.shape[0]
+    qp1 = AAp1.shape[1]
+    qp2 = Ap2.shape[0]
+    
+    AAA = sp.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AAp1.dtype)
+    for u in xrange(q):
+        for v in xrange(qp1):
+            for w in xrange(qp2):
+                AAA[u, v, w] = AAp1[u, v].dot(Ap2[w])
+    
+    return AAA
 
 def calc_C_mat_op_AA(op, AA):
     return sp.tensordot(op, AA, ((2, 3), (0, 1)))
@@ -461,73 +476,37 @@ def calc_C_func_op_AA(op, AA):
                         C[s, t] += h_nn_stuv * AAuv
     return C
     
-def calc_K(Kp1, C, lm1, rp1, A, Ap1):
-    Dm1 = A.shape[1]
-    q = A.shape[0]
-    qp1 = Ap1.shape[0]
+def calc_K(Kp1, C, lm1, rp1, A, AAp1):    
+    K = eps_r_noop(Kp1, A, A)
     
-    K = sp.zeros((Dm1, Dm1), dtype=A.dtype)
-    
-    Hr = sp.zeros_like(K)
+    Hr = eps_r_op_2s_C12_AA34(rp1, C, AAp1)
 
-    for s in xrange(q):
-        Ash = A[s].conj().T
-        for t in xrange(qp1):
-            Hr += C[s, t].dot(rp1.dot(mm.H(Ap1[t]).dot(Ash)))
-
-        K += A[s].dot(Kp1.dot(Ash))
-        
     op_expect = mm.adot(lm1, Hr)
         
     K += Hr
     
     return K, op_expect
     
-def calc_K_l(Km1, Cm1, lm2, r, A, Am1):
+def calc_K_l(Km1, Cm1, lm2, r, A, Am1A):
     """Calculates the K_left using the recursive definition.
     
     This is the "bra-vector" K_left, which means (K_left.dot(r)).trace() = <K_left|r>.
     In other words, K_left ~ <K_left| and K_left.conj().T ~ |K_left>.
-    """
-    D = A.shape[2]
-    q = A.shape[0]
-    qm1 = Am1.shape[0]
+    """    
+    K = eps_l_noop(Km1, A, A)
     
-    K = sp.zeros((D, D), dtype=A.dtype)
-    
-    Hl = sp.zeros_like(K)
+    Hl = eps_l_op_2s_AA12_C34(lm2, Am1A, Cm1)
 
-    for s in xrange(qm1):
-        Am1sh = Am1[s].conj().T
-        for t in xrange(q):
-            Hl += A[t].conj().T.dot(Am1sh).dot(lm2.dot(Cm1[s, t]))
-        
-        K += A[s].conj().T.dot(Km1.dot(A[s]))
-        
     op_expect = mm.adot_noconj(Hl, r)
         
     K += Hl
     
     return K, op_expect
     
-def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2):
-    Dm1 = A.shape[1]
-    q = A.shape[0]
-    qp1 = Ap1.shape[0]
-    qp2 = Ap2.shape[0]
+def calc_K_3s(Kp1, C, lm1, rp2, A, AAp1Ap2):    
+    K = eps_r_noop(Kp1, A, A)
     
-    K = sp.zeros((Dm1, Dm1), dtype=A.dtype)
-    
-    Hr = sp.zeros_like(K)
-
-    for s in xrange(q):
-        Ash = A[s].conj().T
-        for t in xrange(qp1):
-            Ath = Ap1[t].conj().T
-            for u in xrange(qp2):
-                Hr += C[s, t, u].dot(rp2.dot(mm.H(Ap2[u]).dot(Ath).dot(Ash)))
-
-        K += A[s].dot(Kp1.dot(Ash))
+    Hr = eps_r_op_3s_C123_AAA456(rp2, C, AAp1Ap2)
         
     op_expect = mm.adot(lm1, Hr)
         
@@ -535,25 +514,11 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, Ap1, Ap2):
     
     return K, op_expect
     
-def calc_K_3s_l(Km1, Cm1, lm3, r, A, Am1, Am2):
-    D = A.shape[2]
-    q = A.shape[0]
-    qm1 = Am1.shape[0]
-    qm2 = Am2.shape[0]
+def calc_K_3s_l(Km1, Cm1, lm3, r, A, Am2Am1A):
+    K = eps_l_noop(Km1, A, A)
     
-    K = sp.zeros((D, D), dtype=A.dtype)
+    Hl = eps_l_op_3s_AAA123_C456(lm3, Am2Am1A, Cm1)  
     
-    Hl = sp.zeros_like(K)
-
-    for s in xrange(qm2):
-        Am2sh = Am2[s].conj().T
-        for t in xrange(qm1):
-            Am1th = Am1[t].conj().T
-            for u in xrange(q):
-                Hl += A[u].conj().T.dot(Am1th).dot(Am2sh).dot(lm3.dot(Cm1[s, t, u]))
-        
-        K += A[s].conj().T.dot(Km1.dot(A[s]))
-        
     op_expect = mm.adot_noconj(Hl, r)
         
     K += Hl
@@ -733,7 +698,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
 
     return x
     
-def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2, 
+def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2, 
               lm1_s, lm1_si, r_s, r_si, Vsh):
     D = A.shape[2]
     Dm1 = A.shape[1]
@@ -741,15 +706,12 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
     
     x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = np.empty_like(x)
-    x_subpart = np.empty_like(A[0])
-    
-    H = mm.H
     
     assert not (C is None and not Kp1 is None)
     if not C is None:
         x_part.fill(0)
         for s in xrange(q):            
-            x_subpart = eps_r_op_2s_C12(rp2, C[s], Ap1, Ap2) #~1st line
+            x_subpart = eps_r_op_2s_C12_AA34(rp2, C[s], Ap1Ap2) #~1st line
             
             if not Kp1 is None:
                 x_subpart += A[s].dot(Kp1) #~3rd line
@@ -759,21 +721,22 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2, Am1, A, Ap1, Ap2,
         x += lm1_s.dot(x_part)
 
     if not lm2 is None and not Cm1 is None:
+        x_subpart = np.empty((Am1.shape[2], D), dtype=A.dtype)
+        x_subsubpart = np.empty((Cm1[0, 0].shape[1], D), dtype=A.dtype)
         qm1 = Am1.shape[0]
-        qp1 = Ap1.shape[0]
         x_part.fill(0)
         for t in xrange(q):     #~2nd line
             x_subpart.fill(0)
             for s in xrange(qm1):
-                for u in xrange(qp1):
-                    x_subpart += H(Am1[s]).dot(lm2.dot(Cm1[s, t, u])).dot(rp1.dot(H(Ap1[u])))
+                eps_r_noop_inplace(rp1, Cm1[s, t], Ap1, x_subsubpart)
+                x_subpart += (lm2.dot(Am1[s])).conj().T.dot(x_subsubpart)
             x_part += x_subpart.dot(r_si.dot(Vsh[t]))
         x += lm1_si.dot(x_part)
 
     if not lm3 is None:
         x_part.fill(0)
         for u in xrange(q):     #~2nd line
-            x_subpart = eps_l_op_2s_A1_A2_C34(lm3, Am2, Am1, Cm2[:, :, u])
+            x_subpart = eps_l_op_2s_AA12_C34(lm3, Am2Am1, Cm2[:, :, u])
             x_part += x_subpart.dot(r_s.dot(Vsh[u]))
         x += lm1_si.dot(x_part)
 

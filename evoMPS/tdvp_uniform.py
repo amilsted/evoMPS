@@ -142,8 +142,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             if self.ham_sites == 2:
                 self.C[k][:] = tm.calc_C_mat_op_AA(ham, self.AA[k])
             else:
-                self.AAA[k] = tm.calc_AAA(self.A[k], self.A[(k + 1) % self.L], 
-                                           self.A[(k + 2) % self.L])
+                self.AAA[k] = tm.calc_AAA_AA(self.AA[k], self.A[(k + 2) % self.L])
                 self.C[k][:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA[k])
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, rL=None, 
@@ -232,13 +231,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.ham_sites == 2:
             for k in sp.arange(L - 1, 0, -1) % L:
                 self.K[k], hk = tm.calc_K(self.K[(k + 1) % L], self.C[k], self.l[k - 1], self.r[(k + 1) % L],
-                                           self.A[k], self.A[(k + 1) % L])
+                                          self.A[k], self.AA[k])
                 self.K[k] -= self.r[(k - 1) % L] * hk
         else:
             for k in sp.arange(L - 1, 0, -1) % L:
                 self.K[k], hk = tm.calc_K_3s(self.K[(k + 1) % L], self.C[k], self.l[k - 1], self.r[(k + 2) % L],
-                                          self.A[k], self.A[(k + 1) % L],
-                                          self.A[(k + 2) % L])
+                                             self.A[k], self.AAA[k])
                 self.K[k] -= self.r[(k - 1) % L] * hk
         
 #        if self.sanity_checks:
@@ -300,14 +298,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for k in sp.arange(0, L - 1):
                 self.K_left[k], hk = tm.calc_K_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
                                              self.l[(k - 2) % L], self.r[k],
-                                             self.A[k], self.A[(k - 1) % L])
+                                             self.A[k], self.AA[(k - 1) % L])
                 self.K_left[k] -= self.l[k] * hk
         else:
             for k in sp.arange(0, L - 1):
                 self.K_left[k], hk = tm.calc_K_3s_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
                                                 self.l[(k - 3) % L], self.r[k],
-                                                self.A[k], self.A[(k - 1) % L],
-                                                self.A[(k - 2) % L])
+                                                self.A[k],
+                                                self.AAA[(k - 2) % L])
                 self.K_left[k] -= self.l[k] * hk
         
 #        if self.sanity_checks:
@@ -385,8 +383,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 x = tm.calc_x_3s(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
                                  self.C[(k-2)%L], self.r[(k+1)%L], self.r[(k+2)%L], 
                                  self.l[(k-2)%L], self.l[(k-3)%L], 
-                                 self.A[(k-2)%L], self.A[(k-1)%L], self.A[k], 
-                                 self.A[(k+1)%L], self.A[(k+2)%L], 
+                                 self.AA[(k-2)%L], self.A[(k-1)%L], self.A[k], 
+                                 self.A[(k+1)%L], self.AA[(k+1)%L], 
                                  self.l_sqrt[(k-1)%L], self.l_sqrt_i[(k-1)%L],
                                  self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
             

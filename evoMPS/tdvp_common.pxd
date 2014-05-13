@@ -68,43 +68,26 @@ cpdef np.ndarray calc_AA(np.ndarray A, np.ndarray Ap1)
 @cython.locals(Dp2 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int, u = cython.int, v = cython.int, w = cython.int, AAA = np.ndarray)
 cpdef np.ndarray calc_AAA(np.ndarray A, np.ndarray Ap1, np.ndarray Ap2)
 
+@cython.locals(Dp2 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int, u = cython.int, v = cython.int, w = cython.int, AAA = np.ndarray)
+cpdef np.ndarray calc_AAA_AA(np.ndarray AAp1, np.ndarray Ap2)
+
 @cython.locals(q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, u = cython.int, v = cython.int, h_nn_stuv = npcmp, AAuv = np.ndarray, C = np.ndarray)
 cpdef np.ndarray calc_C_func_op(op, np.ndarray A, np.ndarray Ap1)
 
 @cython.locals(q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, u = cython.int, v = cython.int, h_nn_stuv = npcmp, AAuv = np.ndarray, C = np.ndarray)
 cpdef np.ndarray calc_C_func_op_AA(op, np.ndarray AA)
 
-@cython.locals(Dm1 = cython.int, q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, Ash = np.ndarray, K = np.ndarray, Hr = np.ndarray, op_expect = npcmp)
-cpdef calc_K(np.ndarray Kp1, np.ndarray C, lm1, rp1, np.ndarray A, np.ndarray Ap1)
-
-@cython.locals(Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int,
-               s = cython.int, t = cython.int, u = cython.int, 
-               Ash = np.ndarray, Ath = np.ndarray,
-               K = np.ndarray, Hr = np.ndarray, op_expect = npcmp)
-cpdef calc_K_3s(np.ndarray Kp1, np.ndarray C, lm1, rp2, np.ndarray A, np.ndarray Ap1, np.ndarray Ap2)
-
-@cython.locals(D = cython.int, q = cython.int, qm1 = cython.int, s = cython.int, 
-               t = cython.int, Am1sh = np.ndarray, K = np.ndarray, 
-               Hl = np.ndarray, op_expect = npcmp)
-cpdef calc_K_l(np.ndarray Km1, np.ndarray Cm1, lm2, r, np.ndarray A, np.ndarray Am1)
-
-@cython.locals(D = cython.int, q = cython.int, qm1 = cython.int, qm2 = cython.int,
-               s = cython.int, t = cython.int, u = cython.int,
-               Am2sh = np.ndarray, Am1th = np.ndarray, K = np.ndarray, 
-               Hl = np.ndarray, op_expect = npcmp)
-cpdef calc_K_3s_l(np.ndarray Km1, np.ndarray Cm1, lm3, r, np.ndarray A, np.ndarray Am1, np.ndarray Am2)
-
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, s = cython.int, 
                x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray)
 cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
-@cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, s = cython.int,
+@cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qm1 = cython.int, s = cython.int,
                t = cython.int, u = cython.int, x = np.ndarray, 
-               x_part = np.ndarray, x_subpart = np.ndarray)
+               x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
 cpdef np.ndarray calc_x_3s(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, 
-                           np.ndarray Cm2, rp1, rp2, lm2, lm3, np.ndarray Am2, 
+                           np.ndarray Cm2, rp1, rp2, lm2, lm3, np.ndarray Am2Am1, 
                            np.ndarray Am1, np.ndarray A, np.ndarray Ap1, 
-                           np.ndarray Ap2, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
+                           np.ndarray Ap1Ap2, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qm1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray)
 cpdef np.ndarray calc_x_l(np.ndarray Km1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)

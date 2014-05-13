@@ -316,7 +316,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
     def _init_arrays(self):
         super(EvoMPS_TDVP_Sandwich, self)._init_arrays()
-
+        
+        self.AA = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
+        
         #Make indicies correspond to the thesis
         #Deliberately add a None to the end to catch [-1] indexing!
         self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
@@ -349,15 +351,14 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """The energy-difference (compared to the uniform bulk state) 
            expectation value, available after calling update()
            or calc_K()."""
-    
-    def _calc_AAc_AAcm1(self):
-        for n in [self.N_centre - 1, self.N_centre]:
-            AA = tm.calc_AA(self.A[n], self.A[n + 1])
-                    
-            if n == self.N_centre - 1:
-                self.AAcm1 = AA
-            elif n == self.N_centre:
-                self.AAc = AA        
+
+    def get_AA(self, n):
+        if n < 0:
+            return self.uni_l.AA[(n - 1) % self.uni_l.L]
+        elif n > self.N:
+            return self.uni_r.AA[(n - self.N - 1) % self.uni_r.L]
+        else:
+            return self.AA[n]
 
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -386,15 +387,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 self.C[n] = tm.calc_C_func_op(lambda s,t,u,v: self.h_nn(n,s,t,u,v), 
                                               self.get_A(n), self.get_A(n + 1))
         else:
-            for n in xrange(n_low, n_high):                                        
-                if n == self.N_centre - 1:
-                    AA = self.AAcm1
-                elif n == self.N_centre:
-                    AA = self.AAc
-                else:
-                    AA = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
+            for n in xrange(n_low, n_high):                   
+                self.AA[n] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
                 
-                self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn[n], AA)
+                self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn[n], self.AA[n])
 
     def calc_K(self):
         """Generates the right K matrices used to calculate the B's
@@ -418,13 +414,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         for n in xrange(self.N, self.N_centre - 1, -1):
             self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
-                                      self.r[n + 1], self.A[n], self.get_A(n + 1))
+                                      self.r[n + 1], self.A[n], self.get_AA(n))
                 
             self.h_expect[n] = he
 
         for n in xrange(1, self.N_centre + 1):
             self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
-                                      self.r[n], self.A[n], self.get_A(n - 1))
+                                          self.r[n], self.A[n], self.get_AA(n - 1))
                 
             self.h_expect[n - 1] = he
 
@@ -519,8 +515,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         Kcp1 = self.K[Nc + 1] - rc * mm.adot(self.l[Nc], self.K[Nc + 1])
         
-        Cc = self.C[Nc] - self.h_expect[Nc] * self.AAc
-        Ccm1 = self.C[Nc - 1] - self.h_expect[Nc - 1] * self.AAcm1
+        Cc = self.C[Nc] - self.h_expect[Nc] * self.AA[Nc]
+        Ccm1 = self.C[Nc - 1] - self.h_expect[Nc - 1] * self.AA[Nc - 1]
         
         for s in xrange(self.q[1]):
             try: #3
@@ -621,7 +617,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
         super(EvoMPS_TDVP_Sandwich, self).update(restore_CF=restore_CF, normalize=normalize)
         
-        self._calc_AAc_AAcm1()
         self.calc_C()
         self.calc_K()
         

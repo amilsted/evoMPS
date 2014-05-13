@@ -80,6 +80,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         super(EvoMPS_TDVP_Generic, self)._init_arrays()
         
         #Make indicies correspond to the thesis
+        self.AA = sp.empty((self.N), dtype=sp.ndarray)
+        self.AAA = sp.empty((self.N - 1), dtype=sp.ndarray)
+        
         self.K = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         self.C = sp.empty((self.N), dtype=sp.ndarray) #Elements 1..N-1 
 
@@ -137,6 +140,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.ham is None:
             return 0
         
+        for n in xrange(1, self.N):
+            self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+            
+        for n in xrange(1, self.N - 1):
+            self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+        
         if n_low < 1:
             n_low = 1
         if n_high < 1:
@@ -149,13 +158,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 ham_n = sp.fromfunction(ham_n, tuple(self.C[n].shape[:-2] * 2))
             else:
                 ham_n = self.ham[n]
-                
+            
             if self.ham_sites == 2:
-                AA = tm.calc_AA(self.A[n], self.A[n + 1])
-                self.C[n] = tm.calc_C_mat_op_AA(ham_n, AA)
+                self.C[n] = tm.calc_C_mat_op_AA(ham_n, self.AA[n])
             else:
-                AAA = tm.calc_AAA(self.A[n], self.A[n + 1], self.A[n + 2])
-                self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, AAA)                
+                self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, self.AAA[n])                
     
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's.
@@ -182,11 +189,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n <= self.N - self.ham_sites + 1:
                 if self.ham_sites == 2:
                     self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 1], self.A[n], self.A[n + 1])
+                                              self.r[n + 1], self.A[n], self.AA[n])
                 else:
                     self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 2], self.A[n], self.A[n + 1], 
-                                              self.A[n + 2])
+                                              self.r[n + 2], self.A[n], self.AAA[n])
 
                 self.h_expect[n] = ex
             else:
@@ -211,8 +217,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             #if n <= self.N - self.ham_sites + 1:
             if self.ham_sites == 2:
                 self.K[n], ex = tm.calc_K_l(self.K[n - 1], self.C[n - 1], self.l[n - 2], 
-                                          self.r[n], self.A[n], self.A[n - 1], 
-                                          sanity_checks=self.sanity_checks)
+                                            self.r[n], self.A[n], self.AA[n - 1])
             else:
                 assert False, 'left gauge fixing not yet supported for three-site Hamiltonians'
 
@@ -293,11 +298,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n > 2:
             lm3 = self.l[n - 3]
             Cm2 = self.C[n - 2]
-            Am2 = self.A[n - 2]
+            Am2Am1 = self.AA[n - 2]
         else:
             lm3 = None
             Cm2 = None
-            Am2 = None
+            Am2Am1 = None
             
         if n <= self.N - self.ham_sites + 1:
             C = self.C[n]            
@@ -310,10 +315,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Kp1 = None
             
         if n < self.N - 1:
-            Ap2 = self.A[n + 2]
+            Ap1Ap2 = self.AA[n + 1]
             rp2 = self.r[n + 2]
         else:
-            Ap2 = None
+            Ap1Ap2 = None
             rp2 = None
             
         if n < self.N:
@@ -329,7 +334,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
             x = tm.calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, 
-                             lm3, Am2, Am1, self.A[n], Ap1, Ap2,
+                             lm3, Am2Am1, Am1, self.A[n], Ap1, Ap1Ap2,
                              sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
                 
         return x
