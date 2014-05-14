@@ -1328,19 +1328,23 @@ class EvoMPS_MPS_Uniform(object):
         
         The state must be up-to-date and in canonical form -- see self.update()!
         
+        The results only make sense if the string is a symmetry of the state,
+        such that it consitutes and MPS gauge transformation. In this case,
+        the fidelity per site will be equal to 1.
+        
         Parameters
         ----------
         op : ndarray or callable
             The operator.
-        alpha : int
-            Which Schmidt vector to choose.
         k : int
             Site offset within block.
+        ncv : int
+            Parameter for ARNOLDI iteration. See scipy.sparse.linalg.eigs().
             
         Returns
         -------
         expval : ndarray
-            The expectation values for each Schmidt vector (data type may be complex)
+            The expectation values for each Schmidt vector (data type may be complex).
         fid_per_site : float
             Fidelity per site of state with transformed state.
         """
@@ -1363,6 +1367,7 @@ class EvoMPS_MPS_Uniform(object):
         else:            
             opE = EOp(Aop, Ashift, False)
             ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
+            ev = ev[0]
             #Note: eigs normalizes the eigenvector so that norm(eV) = 1.
             
         r = eV.reshape((self.D, self.D))
@@ -1376,9 +1381,9 @@ class EvoMPS_MPS_Uniform(object):
             Or /= self.r[(k - 1) % self.L].diag #r = self.r[k] * g
         
         if full_r:
-            return Or, abs(ev[0])**(1./self.L), r
+            return Or, abs(ev)**(1./self.L), r
         else:
-            return Or, abs(ev[0])**(1./self.L)
+            return Or, abs(ev)**(1./self.L)
 
     def expect_string_per_site_1s(self, op, ncv=6):
         """Calculates the per-site factor of a string expectation value.
