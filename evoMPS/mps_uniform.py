@@ -1313,7 +1313,7 @@ class EvoMPS_MPS_Uniform(object):
         
         if do_update:
             self.update()
-            
+
     def expect_string_1s_density_hc(self, op, k=0, ncv=6, full_r=False):
         """Returns the expectation values of a string operator acting on the
            Schmidt vectors for the half-chain decomposition.
@@ -1344,8 +1344,6 @@ class EvoMPS_MPS_Uniform(object):
         fid_per_site : float
             Fidelity per site of state with transformed state.
         """
-        assert self.symm_gauge, "This only works in symm gauge right now!"
-        
         if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
@@ -1365,19 +1363,22 @@ class EvoMPS_MPS_Uniform(object):
         else:            
             opE = EOp(Aop, Ashift, False)
             ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
-        
-        print "eigenvalue = ", ev
+            #Note: eigs normalizes the eigenvector so that norm(eV) = 1.
             
         r = eV.reshape((self.D, self.D))
+        
+        if not self.symm_gauge:
+            r *= sp.sqrt(self.D) #Must restore normalization.
             
         Or = r.diagonal().copy()
-
-        Or /= self.l[(k - 1) % self.L].diag
+        
+        if self.symm_gauge:
+            Or /= self.r[(k - 1) % self.L].diag #r = self.r[k] * g
         
         if full_r:
-            return Or, abs(ev)**(1./self.L), r
+            return Or, abs(ev[0])**(1./self.L), r
         else:
-            return Or, abs(ev)**(1./self.L)
+            return Or, abs(ev[0])**(1./self.L)
 
     def expect_string_per_site_1s(self, op, ncv=6):
         """Calculates the per-site factor of a string expectation value.
