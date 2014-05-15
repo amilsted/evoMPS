@@ -1314,7 +1314,7 @@ class EvoMPS_MPS_Uniform(object):
         if do_update:
             self.update()
 
-    def expect_string_1s_density_hc(self, op, k=0, ncv=6, full_r=False):
+    def expect_string_1s_density_hc(self, op, k=0, ncv=6, return_g=False):
         """Returns the expectation values of a string operator acting on the
            Schmidt vectors for the half-chain decomposition.
            
@@ -1340,6 +1340,8 @@ class EvoMPS_MPS_Uniform(object):
             Site offset within block.
         ncv : int
             Parameter for ARNOLDI iteration. See scipy.sparse.linalg.eigs().
+        return_g : bool
+            Return the representation of "op" on the virtual indices.
             
         Returns
         -------
@@ -1372,16 +1374,15 @@ class EvoMPS_MPS_Uniform(object):
             
         r = eV.reshape((self.D, self.D))
         
-        if not self.symm_gauge:
-            r *= sp.sqrt(self.D) #Must restore normalization.
+        if self.symm_gauge:
+            g = r.dot(self.r[(k - 1) % self.L].inv()) #r = self.r[k] * g
+        else:
+            g = r * sp.sqrt(self.D) #Must restore normalization.
             
         Or = r.diagonal().copy()
         
-        if self.symm_gauge:
-            Or /= self.r[(k - 1) % self.L].diag #r = self.r[k] * g
-        
-        if full_r:
-            return Or, abs(ev)**(1./self.L), r
+        if return_g:
+            return Or, abs(ev)**(1./self.L), g
         else:
             return Or, abs(ev)**(1./self.L)
 
