@@ -134,7 +134,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         if callable(self.ham):
             ham = np.vectorize(self.ham, otypes=[sp.complex128])
-            ham = np.fromfunction(ham, tuple(self.C.shape[:-2] * 2))
+            ham = np.fromfunction(ham, tuple(self.C[0].shape[:-2] * 2))
         else:
             ham = self.ham
         
