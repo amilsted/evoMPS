@@ -766,8 +766,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     h_exp = self.h_expect.real
                 else:
                     self.calc_lr()
-                    if self.ham_sites == 2:
-                        self.calc_AA()
+                    self.calc_AA()
                     self.calc_C()
                     
                     h_exp = 0
