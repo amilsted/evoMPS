@@ -655,7 +655,7 @@ class EvoMPS_MPS_Generic(object):
         res = tm.eps_r_op_1s(self.r[n], self.A[n], self.A[n], op)
         return  m.adot(self.l[n - 1], res)
         
-    def expect_2s(self, op, n):
+    def expect_2s(self, op, n, AA=None):
         """Computes the expectation value of a nearest-neighbour two-site operator.
         
         The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array 
@@ -678,7 +678,8 @@ class EvoMPS_MPS_Generic(object):
         """
         A = self.A[n]
         Ap1 = self.A[n + 1]
-        AA = tm.calc_AA(A, Ap1)
+        if AA is None:
+            AA = tm.calc_AA(A, Ap1)
         
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
@@ -688,7 +689,7 @@ class EvoMPS_MPS_Generic(object):
         res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], C, AA)
         return m.adot(self.l[n - 1], res)
 
-    def expect_3s(self, op, n):
+    def expect_3s(self, op, n, AAA=None):
         """Computes the expectation value of a nearest-neighbour three-site operator.
 
         The operator should be a q[n] x q[n + 1] x q[n + 2] x q[n] x
@@ -713,7 +714,8 @@ class EvoMPS_MPS_Generic(object):
         A = self.A[n]
         Ap1 = self.A[n + 1]
         Ap2 = self.A[n + 2]
-        AAA = tm.calc_AAA(A, Ap1, Ap2)
+        if AAA is None:
+            AAA = tm.calc_AAA(A, Ap1, Ap2)
 
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
