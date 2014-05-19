@@ -12,12 +12,83 @@ import copy as cp
 import scipy as sp
 import scipy.linalg as la
 import scipy.optimize as opti
+import scipy.sparse.linalg as las
 import matmul as m
 import tdvp_common as tm
 from mps_gen import EvoMPS_MPS_Generic
 import logging
 
 log = logging.getLogger(__name__)
+
+class Vari_Opt_Single_Site_Op:
+    def __init__(self, tdvp, n, KLnm1, sanity_checks=False):
+        """
+        """
+        self.D = tdvp.D
+        self.q = tdvp.q
+        self.tdvp = tdvp
+        self.n = n
+        self.KLnm1 = KLnm1
+        
+        self.sanity_checks = sanity_checks
+        self.sanity_tol = 1E-12
+        
+        d = self.D[n - 1] * self.D[n] * self.q[n]
+        self.shape = (d, d)
+        
+        self.dtype = sp.dtype(tdvp.typ)
+        
+        self.calls = 0
+        
+        if n > 1:
+            try:
+                self.lm1_i = tdvp.l[n - 1].inv()
+            except AttributeError:
+                self.lm1_i = m.invmh(tdvp.l[n - 1])
+        else:
+            self.lm1_i = tdvp.l[n - 1]
+        
+    def matvec(self, x):
+        self.calls += 1
+        #print self.calls
+        
+        t = self.tdvp
+        n = self.n
+        
+        An = x.reshape((self.q[n], self.D[n - 1], self.D[n]))
+        
+        if n > 1:
+            AAnm1 = tm.calc_AA(t.A[n - 1], An)
+            Cnm1 = tm.calc_C_mat_op_AA(t.ham[n - 1], AAnm1)
+        else:
+            AAnm1 = None
+            Cnm1 = None
+            
+        if n < t.N:
+            AAn = tm.calc_AA(An, t.A[n + 1])
+            Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
+        else:
+            AAn = None
+            Cn = None
+        
+        res = sp.zeros_like(An)
+        
+        #Assuming RCF        
+        if not Cnm1 is None:
+            for s in xrange(t.q[n]):
+                res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[:, s])
+                res[s] += self.KLnm1.dot(An[s])
+            res[s] = self.lm1_i.dot(res[s])
+                
+        if not Cn is None:
+            for s in xrange(t.q[n]):                
+                res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
+                res[s] += An[s].dot(t.K[n + 1])
+                
+        #print "en = ", (sp.inner(An.conj().ravel(), res.ravel())
+        #                / sp.inner(An.conj().ravel(), An.ravel()))
+        
+        return res.reshape(x.shape)
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
@@ -140,16 +211,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if self.ham is None:
             return 0
         
-        for n in xrange(1, self.N):
-            self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-            
-        for n in xrange(1, self.N - 1):
-            self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
-        
         if n_low < 1:
             n_low = 1
         if n_high < 1:
             n_high = self.N - self.ham_sites + 1
+            
+        for n in xrange(1, self.N):
+            self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+        
+        if self.ham_sites == 3:
+            for n in xrange(1, self.N - 1):
+                self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+        else:
+            self.AAA.fill(None)
         
         for n in xrange(n_low, n_high + 1):
             if callable(self.ham):
@@ -868,3 +942,169 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 tau = 0
         
         return Bs_CG, Bs, eta, tau
+        
+    def vari_opt_ss_sweep(self, ncv=None):
+        KL = [None] * (self.N + 1)
+        KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
+        for n in xrange(1, self.N + 1):
+            if n > 2:
+                #self.AA[n - 2] = tm.calc_AA(self.A[n - 2], self.A[n - 1])
+                #self.C[n - 2] = tm.calc_C_mat_op_AA(self.ham[n - 2], self.AA[n - 2])
+                #KLnm1 = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
+                #for k in xrange(2, n):
+                k = n - 1
+                KL[k], ex = tm.calc_K_l(KL[k - 1], self.C[k - 1], self.l[k - 2], 
+                                        self.r[k], self.A[k], self.AA[k - 1])
+
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
+            #lop.matvec(self.A[n].ravel())
+            evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
+            
+            self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
+#            self.calc_r(n - 1, n - 1)
+#            norm = m.adot(self.l[n - 1], self.r[n - 1])
+            print n, "ev:", evs[0]
+#            print n, "norm: ", norm
+#            self.A[n] *= 1 / sp.sqrt(norm)
+#            self.r[n - 1] *= 1 / norm
+            
+            #shift centre matrix right
+            if n < self.N:
+                Gm1 = sp.eye(self.D[n - 1], dtype=self.typ)
+                self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
+                                    zero_tol=self.zero_tol,
+                                    sanity_checks=self.sanity_checks)
+            
+            if n < self.N:
+                for s in xrange(self.q[n + 1]):
+                    self.A[n + 1][s] = G.dot(self.A[n + 1][s])
+            
+            #All needed l and r should now be up to date
+            #All needed KR should be valid still
+            #AA and C must be updated
+            if n > 1:
+                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+            if n < self.N:
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
+            
+            norm = m.adot(self.l[n - 1], self.r[n - 1])
+            print n, "norm: ", norm
+            
+        tm.eps_l_noop_inplace(self.l[self.N - 1], self.A[self.N], self.A[self.N], out=self.l[self.N])
+        GN = 1. / sp.sqrt(self.l[self.N].squeeze().real)
+        self.A[self.N] *= GN
+        self.l[self.N][:] = 1         
+            
+        for n in xrange(self.N, 0, -1):
+            if n < self.N:
+                self.calc_K(n_low=n + 1, n_high=n + 1)
+
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
+            #lop.matvec(self.A[n].ravel())
+            evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
+            
+            self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
+#            self.calc_r(n - 1, n - 1)
+#            norm = m.adot(self.l[n - 1], self.r[n - 1])
+            print n, "ev:", evs[0]
+#            print n, "norm: ", norm
+#            self.A[n] *= 1 / sp.sqrt(norm)
+#            self.r[n - 1] *= 1 / norm
+            
+            #shift centre matrix left
+            if n > 1:
+                Gi = sp.eye(self.D[n], dtype=self.typ)
+                self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
+                                                 Gi, zero_tol=self.zero_tol,
+                                                 sanity_checks=self.sanity_checks)
+            
+            if n > 1:
+                for s in xrange(self.q[n - 1]):
+                    self.A[n - 1][s] = self.A[n - 1][s].dot(Gm1_i)
+            
+            #All needed l and r should now be up to date
+            #All needed KL should be valid still
+            #AA and C must be updated
+            if n > 1:
+                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+            if n < self.N:
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
+            
+            norm = m.adot(self.l[n - 1], self.r[n - 1])
+            print n, "norm: ", norm
+        
+        tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
+        G0 = 1. / sp.sqrt(self.r[0].squeeze().real)
+        self.A[1] *= G0
+        self.r[0][:] = 1
+            
+
+        
+    def expect_2s(self, op, n, AA=None):
+        """Computes the expectation value of a nearest-neighbour two-site operator.
+        
+        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array 
+        such that op[s, t, u, v] = <st|op|uv> or a function of the form 
+        op(s, t, u, v) = <st|op|uv>.
+        
+        The state must be up-to-date -- see self.update()!
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator array or function.
+        n : int
+            The leftmost site number (operator acts on n, n + 1).
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
+        """
+        if AA is None:
+            AA = self.AA[n]
+        
+        if op is self.ham[n] and self.ham_sites == 2:
+            res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
+            return m.adot(self.l[n - 1], res)
+        else:
+            return super(EvoMPS_MPS_Generic).expect_2s(op, n, AA=AA)
+
+    def expect_3s(self, op, n, AAA=None):
+        """Computes the expectation value of a nearest-neighbour three-site operator.
+
+        The operator should be a q[n] x q[n + 1] x q[n + 2] x q[n] x
+        q[n + 1] x q[n + 2] array such that op[s, t, u, v, w, x] =
+        <stu|op|vwx> or a function of the form op(s, t, u, v, w, x) =
+        <stu|op|vwx>.
+
+        The state must be up-to-date -- see self.update()!
+
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator array or function.
+        n : int
+            The leftmost site number (operator acts on n, n + 1, n + 2).
+
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
+        """
+        if AAA is None:
+            if not self.AAA[n] is None:
+                AAA = self.AAA[n]
+            else:
+                AAA = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+                
+        if op is self.ham[n] and self.ham_sites == 3:
+            res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], self.C[n], AAA)
+            return m.adot(self.l[n - 1], res)
+        else:
+            return super(EvoMPS_MPS_Generic).expect_3s(op, n, AAA=AAA)
+        
