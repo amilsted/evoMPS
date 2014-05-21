@@ -805,7 +805,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     self.calc_l()
                     self.calc_r()
                     self.simple_renorm()
-                    #self.calc_C()
+                    self.calc_C()
                     
                     h_exp = 0
                     if self.ham_sites == 2:
@@ -961,12 +961,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
-#            self.calc_r(n - 1, n - 1)
-#            norm = m.adot(self.l[n - 1], self.r[n - 1])
-            print n, "ev:", evs[0]
-#            print n, "norm: ", norm
-#            self.A[n] *= 1 / sp.sqrt(norm)
-#            self.r[n - 1] *= 1 / norm
             
             #shift centre matrix right
             if n < self.N:
@@ -974,8 +968,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
                                     zero_tol=self.zero_tol,
                                     sanity_checks=self.sanity_checks)
-            
-            if n < self.N:
+                
+                #This is not strictly necessary, since r[n] is not used again,
+                self.r[n] = G.dot(self.r[n].dot(G.conj().T))
+                #self.K[n + 1] = G.dot(self.K[n + 1].dot(G.conj().T))
+
                 for s in xrange(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])
             
@@ -988,9 +985,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
-            
-            norm = m.adot(self.l[n - 1], self.r[n - 1])
-            print n, "norm: ", norm
             
         tm.eps_l_noop_inplace(self.l[self.N - 1], self.A[self.N], self.A[self.N], out=self.l[self.N])
         GN = 1. / sp.sqrt(self.l[self.N].squeeze().real)
@@ -1006,12 +1000,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
-#            self.calc_r(n - 1, n - 1)
-#            norm = m.adot(self.l[n - 1], self.r[n - 1])
-            print n, "ev:", evs[0]
-#            print n, "norm: ", norm
-#            self.A[n] *= 1 / sp.sqrt(norm)
-#            self.r[n - 1] *= 1 / norm
             
             #shift centre matrix left
             if n > 1:
@@ -1019,8 +1007,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
                                                  Gi, zero_tol=self.zero_tol,
                                                  sanity_checks=self.sanity_checks)
-            
-            if n > 1:
+                
+                #This is not strictly necessary, since l[n - 1] is not used again
+                self.l[n - 1] = Gm1_i.conj().T.dot(self.l[n - 1].dot(Gm1_i))
+                #KL[n - 1] = Gm1_i.conj().T.dot(KL[n - 1].dot(Gm1_i))
+
                 for s in xrange(self.q[n - 1]):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gm1_i)
             
@@ -1033,9 +1024,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
-            
-            norm = m.adot(self.l[n - 1], self.r[n - 1])
-            print n, "norm: ", norm
         
         tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
         G0 = 1. / sp.sqrt(self.r[0].squeeze().real)
