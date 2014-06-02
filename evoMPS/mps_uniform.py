@@ -1375,7 +1375,7 @@ class EvoMPS_MPS_Uniform(object):
         r = eV.reshape((self.D, self.D))
         
         if self.symm_gauge:
-            g = r.dot(self.r[(k - 1) % self.L].inv()) #r = self.r[k] * g
+            g = self.r[(k - 1) % self.L].inv().dot(r) #r = self.r[k] * g
         else:
             g = r * sp.sqrt(self.D) #Must restore normalization.
             
