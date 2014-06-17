@@ -1429,6 +1429,25 @@ class EvoMPS_MPS_Uniform(object):
             opE = EOp(Aop, self.A, False)
             ev = las.eigs(opE, v0=np.asarray(self.r[-1]), which='LM', k=1, ncv=ncv)
             return ev[0]**(1./self.L)
+            
+    def expect_string_1s(self, op, k, d):
+        """Calculates the expectation values of finite strings
+        with lengths 1 to d, starting at position k.
+        """
+        if callable(op):
+            op = np.vectorize(op, otypes=[np.complex128])
+            op = np.fromfunction(op, (self.q, self.q))
+        
+        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.A)
+        
+        res = sp.zeros((d), dtype=self.A[0].dtype)
+        x = self.l[(k - 1) % self.L]
+        for n in xrange(k, k + d + 1):
+            nm = n % self.L
+            x = tm.eps_l_noop(x, self.A[nm], Aop[nm])
+            res[n - k - 1] = m.adot(x, self.r[nm])
+        
+        return res
                 
     def set_q(self, newq):
         """Alter the single-site Hilbert-space dimension q.
