@@ -944,6 +944,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         return Bs_CG, Bs, eta, tau
         
     def vari_opt_ss_sweep(self, ncv=None):
+        #Assumes RCF
+    
         KL = [None] * (self.N + 1)
         KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
         for n in xrange(1, self.N + 1):
@@ -962,7 +964,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
-            #shift centre matrix right
+            #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             if n < self.N:
                 Gm1 = sp.eye(self.D[n - 1], dtype=self.typ)
                 self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
@@ -1001,7 +1003,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
-            #shift centre matrix left
+            #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             if n > 1:
                 Gi = sp.eye(self.D[n], dtype=self.typ)
                 self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
