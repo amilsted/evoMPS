@@ -11,6 +11,7 @@ for the Heisenberg model.
 import math as ma
 import scipy as sp
 import evoMPS.tdvp_uniform as tdvp
+import evoMPS.dynamics as dy
 
 """
 First, we set up some global variables to be used as parameters.
@@ -18,13 +19,13 @@ First, we set up some global variables to be used as parameters.
 
 S = 0.5                       #Spin: Can be 0.5 or 1.
 block_length = 2              #Translation-invariant block length
-bond_dim = 16                 #The maximum bond dimension
+bond_dim = 8                 #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
 Jy = 1.00
 Jz = 1.00
 
-tol_im = 1E-10                #Ground state tolerance (norm of projected evolution vector)
+tol = 1E-10                #Ground state tolerance (norm of projected evolution vector)
 
 step = 0.05                    #Imaginary time step size
 
@@ -101,7 +102,7 @@ s.sanity_checks = sanity_checks
 The following loads a ground state from a file.
 The ground state will be saved automatically when it is declared found.
 """
-grnd_fname = "heis_af_uni_L%d_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (block_length, bond_dim, qn, S, Jx, Jy, Jz, tol_im, step)
+grnd_fname = "heis_af_uni_L%d_D%d_q%d_S%g_Jx%g_Jy%g_Jz%g_s%g_dtau%g_ground.npy" % (block_length, bond_dim, qn, S, Jx, Jy, Jz, tol, step)
 
 if load_saved_ground:
     try:
@@ -136,21 +137,15 @@ if __name__ == '__main__':
     print
     col_heads = ["Step", "t", "<h>", "d<h>",
                  "Sz",
-                 "eta"] #These last three are for testing the midpoint method.
+                 "eta"]
     print "\t".join(col_heads)
     print
 
-    eta = 1
-    i = 0
-    while True:
-        T.append(t)
-
-        s.update(auto_truncate=auto_truncate)
-
+    def cbf(i, s):
         H.append(s.h_expect.real)
 
         row = [str(i)]
-        row.append(str(t))
+
         row.append("%.15g" % H[-1])
 
         if len(H) > 1:
@@ -167,35 +162,28 @@ if __name__ == '__main__':
         for k in xrange(s.L):
             exSzs.append("%.3g" % s.expect_1s(Sz, k=k).real)
         row += exSzs
-
-        """
-        Carry out next step!
-        """
-        s.take_step(step)
-        t += 1.j * step
-
-        eta = s.eta.real.sum()
-        row.append("%.6g" % eta)
-        row.append(str(s.eta.real))
+        
+        row.append("%.6g" % s.eta.real.sum())
 
         print "\t".join(row)
 
-        i += 1
 
-        """
-        Find excitations if we have the ground state.
-        """
-        if eta < tol_im or loaded:
-            s.save_state(grnd_fname)
-            print 'Finding excitations!'
+    if not loaded:
+        s, steps = dy.find_ground(s, tol=tol, dtau=step, cb_func=cbf)
+        s.save_state(grnd_fname)
 
-            ex_ev = []
-            ex_p = []
-            for p in sp.linspace(0, sp.pi, num=num_momenta):
-                print "p = ", p
-                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
-                ex_p.append([p] * num_excitations)
-            break
+    """
+    Find excitations if we have the ground state.
+    """
+    print 'Finding excitations!'
+
+    ex_ev = []
+    ex_p = []
+    for p in sp.linspace(0, sp.pi, num=num_momenta):
+        print "p = ", p
+        ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
+        ex_p.append([p] * num_excitations)
+
     """
     Simple plots of the results.
     """
