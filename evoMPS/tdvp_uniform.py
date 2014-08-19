@@ -89,12 +89,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         self.K_left = [None] * L
         
-        self.eta = sp.empty((L), dtype=self.A[0].dtype)
-        """The site contributions to the norm of the TDVP tangent vector 
+        self.eta_sq = sp.empty((L), dtype=self.A[0].dtype)
+        """The site contributions to the norm squared of the TDVP tangent vector 
            (projection of the exact time
            evolution onto the MPS tangent plane. Only available after calling
            take_step()."""
-        self.eta.fill(sp.NaN)
+        self.eta_sq.fill(sp.NaN)
+        
+        self.eta = sp.NaN
+        """The norm of the TDVP tangent vector (square root of the sum of eta_sq)."""
             
     def set_ham_array_from_function(self, ham_func):
         """Generates a Hamiltonian array from a function.
@@ -389,7 +392,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
             
             if set_eta:
-                self.eta[k] = sp.sqrt(m.adot(x, x))
+                self.eta_sq[k] = m.adot(x, x)
             
             B.append(self.get_B_from_x(x, Vshk, self.l_sqrt_i[(k-1)%L], self.r_sqrt_i[k]))
         
@@ -400,6 +403,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     log.warning("Sanity check failed: Gauge-fixing violation! %s", la.norm(tst))
             
         self.Vsh = Vsh
+        self.eta = sp.sqrt(self.eta_sq.real.sum())
             
         return B
         
