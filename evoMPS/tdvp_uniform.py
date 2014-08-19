@@ -508,7 +508,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for k in xrange(self.L):
                 self.A[k] += -dtau * B[k]
             
-    def take_step_RK4(self, dtau, B_i=None):
+    def take_step_RK4(self, dtau, B_i=None, dynexp=False, maxD=128, dD_max=16, 
+                      sv_tol=1E-14, BB=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
         This requires more memory than a simple forward Euler step. 
@@ -535,8 +536,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             B = self.calc_B() #k1
         B_fin = B
-        for k in xrange(self.L):
-            self.A[k] = A0[k] - dtau/2 * B[k]
+        self.take_step(dtau / 2., B=B, dynexp=dynexp, maxD=maxD, dD_max=dD_max, sv_tol=sv_tol, BB=BB)
+
+        dD = self.A[0].shape[1] - A0[0].shape[1]
+        if dD > 0:
+            [A0k.resize(self.A[0].shape) for A0k in A0] #pads with zeros
+            #B part doesn't work due to different scaling with dtau :(
+            assert False
         
         update()
         
@@ -559,7 +565,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B_fin[k] += B[k]
             self.A[k] = A0[k] - dtau/6 * B_fin[k]
              
-    
+
+    def find_ground(use_CG=True, max_steps=None, tol=1E-6):
+        pass
+
+    def evolve_state():
+        pass
+            
     def _prepare_excite_op_top_triv(self, p):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
@@ -693,174 +705,33 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
+    def _B_to_x(self, B):
+        L = self.L
+        x = [None] * self.L
         
-    def find_min_h_brent(self, B, dtau_init, tol=5E-2, skipIfLower=False, 
-                         verbose=False, use_tangvec_overlap=False,
-                         max_iter=20):
-        A0 = cp.deepcopy(self.A)
-        AA0 = cp.deepcopy(self.AA)
-        try:
-            AAA0 = cp.deepcopy(self.AAA)
-        except:
-            AAA0 = None
-        C0 = cp.deepcopy(self.C)
-        K0 = cp.deepcopy(self.K)
-        h_expect_0 = self.h_expect.copy()
+        B_ = []
         
-        l0 = cp.deepcopy(self.l)
-        r0 = cp.deepcopy(self.r)
         for k in xrange(self.L):
-            try:
-                self.l[k] = self.l[k].A
-            except AttributeError:
-                pass
+            x[k] = sp.zeros((self.D, self.D * (self.q - 1)), dtype=self.typ)
+            for s in xrange(self.q):
+                x[k] += self.l_sqrt[(k - 1) % L].dot(B[k][s]).dot(self.r_sqrt[k].dot(self.Vsh[k][s]))
+                
+            B_.append(self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[(k-1)%L], self.r_sqrt_i[k]))
+                        
+        return x, B_
+        
+    def _B_overlap(self, B1, B2):
+        """Note: Both Bs must satisfy the GFC!
+        """
+        res = 0
+        for k in xrange(self.L):
+            res += m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], B1[k], B2[k]))
             
-            try:
-                self.r[k] = self.r[k].A
-            except AttributeError:
-                pass        
+        return res
         
-        taus=[0]
-        if use_tangvec_overlap:
-            ress=[self.eta.real.sum()]
-        else:
-            ress=[h_expect_0.real]
-        hs=[h_expect_0.real]
-        lLs = [self.lL_before_CF.copy()]
-        rLs = [self.rL_before_CF.copy()]
-        K0s = [K0[0]]
-        
-        def f(tau, *args):
-            if tau < 0:
-                if use_tangvec_overlap:
-                    res = tau**2 + self.eta.real.sum()
-                else:
-                    res = tau**2 + h_expect_0.real
-                log.debug((tau, res, "punishing negative tau!"))
-                taus.append(tau)
-                ress.append(res)
-                hs.append(h_expect_0.real)
-                lLs.append(l0[-1])
-                rLs.append(r0[-1])
-                K0s.append(K0[0])
-                return res
-            try:
-                i = taus.index(tau)
-                log.debug((tau, ress[i], "from stored"))
-                return ress[i]
-            except ValueError:
-                for k in xrange(self.L):
-                    self.A[k] = A0[k] - tau * B[k]
-                
-                if len(taus) > 0:
-                    nearest_tau_ind = abs(np.array(taus) - tau).argmin()
-                    self.lL_before_CF = lLs[nearest_tau_ind] #needn't copy these
-                    self.rL_before_CF = rLs[nearest_tau_ind]
-                    #self.l_before_CF = l0
-                    #self.r_before_CF = r0
-                    if use_tangvec_overlap:
-                        self.K[0] = K0s[nearest_tau_ind].copy()
-
-                if use_tangvec_overlap:
-                    self.update(restore_CF=False)
-                    Bg = self.calc_B(set_eta=False)
-                    res = 0
-                    for k in xrange(self.L):
-                        res += abs(m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], Bg[k], B[k])))
-                    h_exp = self.h_expect.real
-                else:
-                    self.calc_lr()
-                    self.calc_AA()
-                    self.calc_C()
-                    
-                    h_exp = 0
-                    if self.ham_sites == 2:
-                        for k in xrange(self.L):
-                            h_exp += self.expect_2s(self.ham, k).real
-                    else:
-                        for k in xrange(self.L):
-                            h_exp += self.expect_3s(self.ham, k).real
-                    h_exp /= self.L
-                    res = h_exp
-                
-                log.debug((tau, res, h_exp, h_exp - h_expect_0.real, self.itr_l, self.itr_r))
-                
-                taus.append(tau)
-                ress.append(res)
-                hs.append(h_exp)
-                lLs.append(self.l[-1].copy())
-                rLs.append(self.r[-1].copy())
-                if use_tangvec_overlap:
-                    K0s.append(self.K[0].copy())
-                else:
-                    K0s.append(None)
-                
-                return res
-        
-        if skipIfLower:
-            if f(dtau_init) < self.h_expect.real:
-                return dtau_init
-        
-        brack_init = (dtau_init * 0.9, dtau_init * 1.5)
-        
-        attempt = 1
-        while attempt < 3:
-            try:
-                log.debug("CG: Bracketing...")
-                xa, xb, xc, fa, fb, fc, funcalls = opti.bracket(f, xa=brack_init[0], 
-                                                                xb=brack_init[1], 
-                                                                maxiter=5)                                                
-                brack = (xa, xb, xc)
-                log.debug("CG: Using bracket = " + str(brack))
-                break
-            except RuntimeError:
-                log.debug("CG: Bracketing failed, attempt %u." % attempt)
-                brack_init = (brack_init[0] * 0.1, brack_init[1] * 0.1)
-                attempt += 1
-        
-        if attempt == 3:
-            log.debug("CG: Bracketing failed. Aborting!")
-            tau_opt = 0
-            h_min = h_expect_0.real
-            self.lL_before_CF = l0[-1]
-            self.rL_before_CF = r0[-1]
-        else:
-            try:
-                tau_opt, res_min, itr, calls = opti.brent(f, 
-                                                        brack=brack, 
-                                                        tol=tol,
-                                                        maxiter=max_iter,
-                                                        full_output=True)
-    
-                #hopefully optimize next calc_lr
-                nearest_tau_ind = abs(np.array(taus) - tau_opt).argmin()
-                self.lL_before_CF = lLs[nearest_tau_ind]
-                self.rL_before_CF = rLs[nearest_tau_ind]
-                
-                i = taus.index(tau_opt)
-                h_min = hs[i]
-            except ValueError:
-                log.debug("CG: Bad bracket. Aborting!")
-                tau_opt = 0
-                h_min = h_expect_0.real
-                self.lL_before_CF = l0[-1]
-                self.rL_before_CF = r0[-1]
-            
-        #Must restore everything needed for take_step
-        self.A = A0
-        self.l = l0
-        self.r = r0
-        self.AA = AA0
-        self.AAA = AAA0
-        self.C = C0
-        self.K = K0
-        self.h_expect = h_expect_0
-        
-        return tau_opt, h_min
-        
-        
-    def calc_B_CG(self, B_CG_0, eta_0, dtau_init, reset=False, verbose=False,
-                  switch_threshold_eta=1E-6):
+    def calc_B_CG(self, B_CG_0, BpdotBp, dtau_init, dtau_prev=0, g0_prev=0, 
+                  reset=False, verbose=False,
+                  switch_threshold_eta=1E-5, B_prev=None, use_PR=False):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
@@ -876,26 +747,37 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 Sets the state tolerance (eta) below which the gradient should
                 be used to determine the energetic minimum in a given direction,
                 rather of the value of the energy. The gradient method is
-                more expensive, but is much more robust for small .
+                more expensive, but is much more robust for small eta.
         """
         B = self.calc_B()
-        eta = self.eta.real.sum()
-        
+        BdotB = (self.eta.real**2).sum()
+        eta = sp.sqrt(BdotB)
+    
         if reset:
             beta = 0.
             log.debug("CG RESET")
             
             B_CG = B
         else:
-            beta = (eta**2) / eta_0**2
+            if use_PR and not B_prev is None:
+                x_prev, B_prev_ = self._B_to_x(B_prev)
+                BdotBp = self._B_overlap(B, B_prev_)
+                print "BdotBp", BdotBp
+                beta = (BdotB - BdotBp) / BpdotBp
+            else:
+                beta = BdotB / BpdotBp #FR
         
-            log.debug("BetaFR = %s", beta)
-        
+            log.debug("Beta = %s", beta)
+
+            print "CG: beta =", beta
+            
             beta = max(0, beta.real)
             
             B_CG = [None] * self.L 
             for k in xrange(self.L):
                 B_CG[k] = B[k] + beta * B_CG_0[k]
+                
+            x_, B_CG = self._B_to_x(B_CG)
 
         
         lLb0 = self.lL_before_CF.copy()
@@ -907,28 +789,52 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         log.debug("CG low eta: " + str(eta_low))
         
-        tau, h_min = self.find_min_h_brent(B_CG, dtau_init,
-                                           verbose=verbose, 
-                                           use_tangvec_overlap=eta_low)
-        
-        if tau == 0:
-            log.debug("CG RESET!")
+        ls = EvoMPS_line_search(self, B_CG, B, use_tangvec_overlap=eta_low)
+        g0 = ls.gs[0].real
+        if g0 > 0:
+            print "CG: Bad search direction! Resetting!", g0, g0_prev
             B_CG = B
+            ls = EvoMPS_line_search(self, B_CG, B, use_tangvec_overlap=eta_low)
+            g0 = ls.gs[0].real
+#        elif g0_prev != 0 and g0 < 0:
+#            dtau_prev *= abs(g0_prev / g0)
+#            print "tau adjustment:", g0_prev / g0, dtau_prev
+        
+        if True or eta_low:
+            tau, h_min = ls.brent(max(dtau_prev, dtau_init * 0.01))
+        else:
+            tau, h_min = ls.linesearch(max(dtau_prev, dtau_init * 0.01))
+        #tau, h_min = self.find_min_h_brent(B_CG, B, max(dtau_prev, dtau_init * 0.01),
+        #                                   verbose=verbose, 
+        #                                   use_tangvec_overlap=eta_low)
+
+        if tau == 0:
+            log.warning("CG RESET due to failed line search!")
+            reset_retry = True
         elif not eta_low and h_min > h_expect:
-            log.debug("CG RESET due to energy rise!")
+            log.warning("CG RESET due to energy rise!")
+            reset_retry = True
+        else:
+            reset_retry = False
+
+        if reset_retry:
             B_CG = B
             self.lL_before_CF = lLb0
             self.rL_before_CF = rLb0
-            tau, h_min = self.find_min_h_brent(B_CG, dtau_init * 0.1, 
-                                               use_tangvec_overlap=False)
+            #tau, h_min = self.find_min_h_brent(B_CG, B, dtau_init, 
+            #                                   use_tangvec_overlap=eta_low)
+            if True or eta_low:
+                tau, h_min = ls.brent(dtau_init)
+            else:
+                tau, h_min = ls.linesearch(dtau_init)
         
-            if h_expect < h_min:
-                log.debug("CG RESET FAILED: Setting tau=0!")
+            if not eta_low and h_expect < h_min:
+                log.error("CG RESET FAILED: Energy rose. Setting tau=0!")
                 self.lL_before_CF = lLb0
                 self.rL_before_CF = rLb0
                 tau = 0
         
-        return B_CG, B, eta, tau
+        return B_CG, B, BdotB, tau, g0
         
             
     def export_state(self, userdata=None):
@@ -1075,3 +981,262 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             return m.adot(self.l[(k - 1) % self.L], res)
         else:
             return super(EvoMPS_TDVP_Uniform, self).expect_3s(op, k=k)
+
+
+class line_search_wolfe(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+class EvoMPS_line_search():
+    def __init__(self, tdvp, B, Bg, use_tangvec_overlap=False, calc_gradient=True):
+        self.B = B
+        self.Bg0 = Bg
+        self.use_tangvec_overlap = use_tangvec_overlap
+        self.calc_gradient = calc_gradient
+        self.penalise_neg = True
+        self.in_search = False
+        
+        self.tdvp0 = tdvp
+        self.tdvp = cp.deepcopy(tdvp)
+        
+        #Bring all l and r into dense form
+        for k in xrange(tdvp.L):
+            try:
+                tdvp.l[k] = tdvp.l[k].A
+            except AttributeError:
+                pass
+            
+            try:
+                tdvp.r[k] = tdvp.r[k].A
+            except AttributeError:
+                pass        
+        
+        self.taus = [0]            
+        self.hs = [tdvp.h_expect.real]
+        self.gs = [-tdvp._B_overlap(B, Bg)]
+        self.lLs = [tdvp.lL_before_CF.copy()]
+        self.rLs = [tdvp.rL_before_CF.copy()]
+        self.K0s = [tdvp.K[0]]
+        self.Ws = [False]
+        
+        if use_tangvec_overlap:
+            self.ress = [self.gs[0].real]
+        else:
+            self.ress = [self.hs[0]]
+        
+    def f(self, tau, *args):
+        if self.penalise_neg and tau < 0:
+            res = tau**2 + self.ress[0]
+            log.debug((tau, res, "punishing negative tau!"))
+            self.taus.append(tau)
+            self.ress.append(res)
+            self.hs.append(self.hs[0])
+            self.gs.append(self.gs[0])
+            self.lLs.append(self.lLs[0])
+            self.rLs.append(self.rLs[0])
+            self.K0s.append(self.K0s[0])
+            self.Ws.append(False)
+            return res
+        try:
+            i = self.taus.index(tau)
+            log.debug((tau, self.ress[i], "from stored"))
+            return self.ress[i]
+        except ValueError:
+            for k in xrange(self.tdvp.L):
+                self.tdvp.A[k] = self.tdvp0.A[k] - tau * self.B[k]
+            
+            nearest_tau_ind = abs(sp.array(self.taus) - tau).argmin()
+            self.lL_before_CF = self.lLs[nearest_tau_ind] #needn't copy these
+            self.rL_before_CF = self.rLs[nearest_tau_ind]
+
+            if self.use_tangvec_overlap or self.calc_gradient:
+                self.tdvp.K[0] = self.K0s[nearest_tau_ind].copy()
+                
+                self.tdvp.update(restore_CF=False)
+                Bg = self.tdvp.calc_B(set_eta=False)
+                x_, B_ = self.tdvp._B_to_x(self.B)
+                g = -self.tdvp._B_overlap(Bg, B_)
+                h_exp = self.tdvp.h_expect.real
+                wol = self.wolfe(g, h_exp, tau)
+                K0 = self.tdvp.K[0].copy()
+            else:
+                self.tdvp.calc_lr()
+                self.tdvp.calc_AA()
+                self.tdvp.calc_C()
+                h_exp = 0
+                if self.tdvp.ham_sites == 2:
+                    for k in xrange(self.tdvp.L):
+                        h_exp += self.tdvp.expect_2s(self.tdvp.ham, k).real
+                else:
+                    for k in xrange(self.tdvp.L):
+                        h_exp += self.tdvp.expect_3s(self.tdvp.ham, k).real
+                h_exp /= self.tdvp.L
+                wol = False
+                g = sp.NaN
+                K0 = None
+            
+            if self.use_tangvec_overlap:
+                res = abs(g)
+            else:
+                res = h_exp
+            
+            log.debug((tau, res, h_exp, h_exp - self.hs[0], wol,
+                       self.tdvp.itr_l, self.tdvp.itr_r))
+            print tau, g.real, wol
+            
+            self.taus.append(tau)
+            self.hs.append(h_exp)
+            self.gs.append(g)
+            self.lLs.append(self.tdvp.l[-1].copy())
+            self.rLs.append(self.tdvp.r[-1].copy())
+            self.Ws.append(wol)
+            self.ress.append(res)
+            self.K0s.append(K0)
+
+            if wol and self.in_search:
+                raise line_search_wolfe(tau)
+            
+            return res
+            
+    def g(self, tau, *args):
+        try:
+            i = self.taus.index(tau)
+            g = self.gs[i]
+        except ValueError:
+            self.f(tau)
+            g = self.gs[-1]
+            
+        assert not sp.isnan(g), 'Gradient not available.' #FIXME: Force it in this case!
+            
+        return 2 * g.real
+            
+    def wolfe(self, g, h, tau, strong=False):
+        #x_, B_ = self.tdvp._B_to_x(self.B)
+        #BdotBg = self.tdvp._B_overlap(B_, Bg)
+
+        w1 = h <= self.hs[0] + 1E-4 * tau * self.gs[0].real
+        if strong:
+            w2 = abs(g.real) <= 0.1 * abs(self.gs[0].real)
+        else:
+            w2 = g.real >= 0.1 * self.gs[0].real
+        
+        return w1 and w2
+        
+    def linesearch(self, dtau_init):
+        tau_opt, fc, gc, phi_star, old_fval, derphi_star = opti.line_search(self.f, self.g, dtau_init, 1., c1=1E-4, c2=0.1)
+        
+        if tau_opt is None:
+            log.error("CG: Lost precision!")
+            tau_opt = 0
+            h_min = self.hs[0]
+        else:
+            try:
+                i = self.taus.index(tau_opt)
+            except ValueError:
+                print tau_opt
+                self.f(tau_opt)
+                i = -1
+            h_min = self.hs[i]
+            self.tdvp0.lL_before_CF = self.lLs[i]
+            self.tdvp0.rL_before_CF = self.rLs[i]
+        
+        return tau_opt, h_min
+        
+    def linesearch2(self, dtau_init, tol=1E-3):
+        #err = opti.check_grad(self.f, self.g, sp.array([dtau_init]))
+        #print "error on grad", err
+        tau_opt, fc, gc, res_min, old_tau, g = opti.linesearch.line_search_wolfe1(self.f, self.g, dtau_init, 1., c1=1E-4, c2=0.1, xtol=tol)
+        
+        if tau_opt is None:
+            log.error("CG: Lost precision!")
+            tau_opt = 0
+            h_min = self.hs[0]
+        else:
+            try:
+                i = self.taus.index(tau_opt)
+            except ValueError:
+                print tau_opt
+                self.f(tau_opt)
+                i = -1
+            h_min = self.hs[i]
+            self.tdvp0.lL_before_CF = self.lLs[i]
+            self.tdvp0.rL_before_CF = self.rLs[i]
+        
+        return tau_opt, h_min
+        
+    def brent(self, dtau_init, tol=5E-2, max_iter=20):
+                  
+        g = self.g(dtau_init)
+        i = self.taus.index(dtau_init)
+                  
+        if self.wolfe(g, self.hs[i], dtau_init):
+            log.debug("CG: Using initial step, since Wolfe satisfied!")
+            tau_opt = dtau_init
+            h_min = self.hs[i]
+        else:
+            brack_init = (dtau_init * 0.1, dtau_init)
+            self.in_search = True
+
+            attempt = 1
+            while attempt < 3:
+                try:
+                    log.debug("CG: Bracketing...")
+                    xa, xb, xc, fa, fb, fc, funcalls = opti.bracket(self.f, xa=brack_init[0], 
+                                                                    xb=brack_init[1], 
+                                                                    maxiter=5)
+                    brack = (xa, xb, xc)
+                    log.debug("CG: Using bracket = " + str(brack))
+                    break
+                except line_search_wolfe as e:
+                    log.debug("CG: Aborting bracket due to Wolfe")
+                    break
+                except RuntimeError:
+                    log.warning("CG: Bracketing failed, attempt %u." % attempt)
+                    brack_init = (brack_init[0] * 0.1, brack_init[1] * 0.1)
+                    attempt += 1
+
+            if attempt == 3:
+                log.error("CG: Bracketing failed. Aborting!")
+                tau_opt = 0
+                h_min = self.hs[0]
+            else:
+                if True in self.Ws:
+                    print "CG: selecting from bracket"
+                    taus_ = sp.array(self.taus)
+                    Ws_ = sp.array(self.Ws)
+                    hs_ = sp.array(self.hs)
+                    i = taus_[Ws_].argmax()
+                    tau_opt = taus_[Ws_][i]
+                    h_min = hs_[Ws_][i]
+                else:
+                    try:
+                        self.in_search = True
+                        tau_opt, res_min, itr, calls = opti.brent(self.f, 
+                                                                brack=brack, 
+                                                                tol=tol,
+                                                                maxiter=max_iter,
+                                                                full_output=True)
+
+                        #hopefully optimize next calc_lr
+                        nearest_tau_ind = abs(np.array(self.taus) - tau_opt).argmin()
+                        self.tdvp0.lL_before_CF = self.lLs[nearest_tau_ind]
+                        self.tdvp0.rL_before_CF = self.rLs[nearest_tau_ind]
+
+                        i = self.taus.index(tau_opt)
+                        h_min = self.hs[i]
+                    except line_search_wolfe as e:
+                        print "CG: Aborting early due to Wolfe", e.value
+                        tau_opt = e.value
+                        i = self.taus.index(tau_opt)
+                        h_min = self.hs[i]
+                        self.tdvp0.lL_before_CF = self.lLs[i]
+                        self.tdvp0.rL_before_CF = self.rLs[i]
+                    except ValueError:
+                        log.error("CG: Bad bracket. Aborting!")
+                        tau_opt = 0
+                        h_min = self.hs[0]
+                        
+        self.in_search = False
+        return tau_opt, h_min
