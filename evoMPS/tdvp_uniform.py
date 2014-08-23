@@ -800,10 +800,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 #            dtau_prev *= abs(g0_prev / g0)
 #            print "tau adjustment:", g0_prev / g0, dtau_prev
         
-        if True or eta_low:
-            tau, h_min = ls.brent(max(dtau_prev, dtau_init * 0.01))
+        if eta_low:
+            tau, h_min = ls.brentq(max(dtau_prev, dtau_init * 0.01))
         else:
-            tau, h_min = ls.linesearch(max(dtau_prev, dtau_init * 0.01))
+            tau, h_min = ls.brent(max(dtau_prev, dtau_init * 0.01))
         #tau, h_min = self.find_min_h_brent(B_CG, B, max(dtau_prev, dtau_init * 0.01),
         #                                   verbose=verbose, 
         #                                   use_tangvec_overlap=eta_low)
@@ -823,10 +823,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.rL_before_CF = rLb0
             #tau, h_min = self.find_min_h_brent(B_CG, B, dtau_init, 
             #                                   use_tangvec_overlap=eta_low)
-            if True or eta_low:
-                tau, h_min = ls.brent(dtau_init)
+            if eta_low:
+                tau, h_min = ls.brentq(dtau_init)
             else:
-                tau, h_min = ls.linesearch(dtau_init)
+                tau, h_min = ls.brent(dtau_init)
         
             if not eta_low and h_expect < h_min:
                 log.error("CG RESET FAILED: Energy rose. Setting tau=0!")
@@ -1015,14 +1015,14 @@ class EvoMPS_line_search():
         
         self.taus = [0]            
         self.hs = [tdvp.h_expect.real]
-        self.gs = [-tdvp._B_overlap(B, Bg)]
+        self.gs = [-2 * tdvp._B_overlap(B, Bg)]
         self.lLs = [tdvp.lL_before_CF.copy()]
         self.rLs = [tdvp.rL_before_CF.copy()]
         self.K0s = [tdvp.K[0]]
         self.Ws = [False]
         
         if use_tangvec_overlap:
-            self.ress = [self.gs[0].real]
+            self.ress = [abs(self.gs[0].real)]
         else:
             self.ress = [self.hs[0]]
         
@@ -1057,7 +1057,7 @@ class EvoMPS_line_search():
                 self.tdvp.update(restore_CF=False)
                 Bg = self.tdvp.calc_B(set_eta=False)
                 x_, B_ = self.tdvp._B_to_x(self.B)
-                g = -self.tdvp._B_overlap(Bg, B_)
+                g = -2 * self.tdvp._B_overlap(Bg, B_)
                 h_exp = self.tdvp.h_expect.real
                 wol = self.wolfe(g, h_exp, tau)
                 K0 = self.tdvp.K[0].copy()
@@ -1078,7 +1078,7 @@ class EvoMPS_line_search():
                 K0 = None
             
             if self.use_tangvec_overlap:
-                res = abs(g)
+                res = g.real**2
             else:
                 res = h_exp
             
@@ -1110,12 +1110,10 @@ class EvoMPS_line_search():
             
         assert not sp.isnan(g), 'Gradient not available.' #FIXME: Force it in this case!
             
-        return 2 * g.real
+        return g.real
             
     def wolfe(self, g, h, tau, strong=False):
-        #x_, B_ = self.tdvp._B_to_x(self.B)
-        #BdotBg = self.tdvp._B_overlap(B_, Bg)
-
+        #I wonder how badly this breaks if the energy is innaccurate
         w1 = h <= self.hs[0] + 1E-4 * tau * self.gs[0].real
         if strong:
             w2 = abs(g.real) <= 0.1 * abs(self.gs[0].real)
@@ -1166,6 +1164,27 @@ class EvoMPS_line_search():
         
         return tau_opt, h_min
         
+    def try_bracket(self, brack_init):
+        attempt = 1
+        while attempt < 3:
+            try:
+                log.debug("CG: Bracketing...")
+                xa, xb, xc, fa, fb, fc, funcalls = opti.bracket(self.f, xa=brack_init[0], 
+                                                                xb=brack_init[1], 
+                                                                maxiter=5)
+                brack = (xa, xb, xc)
+                log.debug("CG: Using bracket = " + str(brack))
+                break
+            except RuntimeError:
+                log.warning("CG: Bracketing failed, attempt %u." % attempt)
+                brack_init = (brack_init[0] * 0.1, brack_init[1] * 0.1)
+                attempt += 1
+        
+        if attempt < 3:
+            return brack
+        else:
+            return None
+        
     def brent(self, dtau_init, tol=5E-2, max_iter=20):
                   
         g = self.g(dtau_init)
@@ -1178,26 +1197,13 @@ class EvoMPS_line_search():
         else:
             brack_init = (dtau_init * 0.1, dtau_init)
             self.in_search = True
+            try:
+                brack = self.try_bracket(brack_init)
+            except line_search_wolfe:
+                log.debug("CG: Aborting bracket due to Wolfe")
+                brack = brack_init #ignored
 
-            attempt = 1
-            while attempt < 3:
-                try:
-                    log.debug("CG: Bracketing...")
-                    xa, xb, xc, fa, fb, fc, funcalls = opti.bracket(self.f, xa=brack_init[0], 
-                                                                    xb=brack_init[1], 
-                                                                    maxiter=5)
-                    brack = (xa, xb, xc)
-                    log.debug("CG: Using bracket = " + str(brack))
-                    break
-                except line_search_wolfe as e:
-                    log.debug("CG: Aborting bracket due to Wolfe")
-                    break
-                except RuntimeError:
-                    log.warning("CG: Bracketing failed, attempt %u." % attempt)
-                    brack_init = (brack_init[0] * 0.1, brack_init[1] * 0.1)
-                    attempt += 1
-
-            if attempt == 3:
+            if brack is None:
                 log.error("CG: Bracketing failed. Aborting!")
                 tau_opt = 0
                 h_min = self.hs[0]
@@ -1240,3 +1246,133 @@ class EvoMPS_line_search():
                         
         self.in_search = False
         return tau_opt, h_min
+        
+    def brentq(self, dtau_init, tol=1E-3, max_iter=20):
+        g = self.g(dtau_init)
+        i = self.taus.index(dtau_init)
+                  
+        if self.wolfe(g, self.hs[i], dtau_init):
+            log.debug("CG: Using initial step, since Wolfe satisfied!")
+            tau_opt = dtau_init
+            h_min = self.hs[i]
+        else:
+            self.in_search = True
+            
+            try:
+                taus = None
+                if g > 0: #We already have g0 < 0 - enough to bracket
+                    taus = [0, dtau_init]
+                #else:
+                #    taus = self.try_bracket([0, dtau_init])
+                
+                if taus is None:
+                    for i in xrange(3):
+                        taus = self.bracket_interp(dtau_init / (i + 1.))
+                    
+                        if not taus is None:
+                            break
+                    
+                if taus is None:
+                    return 0, self.hs[0] #fail
+                
+                try:
+                    tau_opt = opti.brentq(self.g, taus[0], taus[-1], xtol=tol, maxiter=max_iter)
+                except ValueError:
+                    log.warning("CG: Failed to find a valid bracket.")
+                    return 0, self.hs[0] #fail
+                
+                nearest_tau_ind = abs(np.array(self.taus) - tau_opt).argmin()
+                self.tdvp0.lL_before_CF = self.lLs[nearest_tau_ind]
+                self.tdvp0.rL_before_CF = self.rLs[nearest_tau_ind]
+
+                i = self.taus.index(tau_opt)
+                h_min = self.hs[i]
+            except line_search_wolfe as e:
+                print "CG: Aborting early due to Wolfe", e.value
+                tau_opt = e.value
+                i = self.taus.index(tau_opt)
+                h_min = self.hs[i]
+                self.tdvp0.lL_before_CF = self.lLs[i]
+                self.tdvp0.rL_before_CF = self.rLs[i]
+        
+        self.in_search = False
+        return tau_opt, h_min
+        
+    def bracket_interp(self, dtau_init, fac_red=0.9, fac_inc=1.1, max_itr=10):
+        g0 = self.g(dtau_init)
+
+        tau1 = dtau_init
+        g1 = g0
+
+        i = 0
+        while g1 * g0 > 0 and i < max_itr:
+            po = sp.polyfit(self.taus, self.gs, max(3, len(self.gs) - 1))
+            por = sp.roots(po)
+            tau1 = por.max().real
+        
+            if g1 < 0:
+                tau1 *= fac_inc
+            else:
+                tau1 *= fac_red
+        
+            g1 = self.g(tau1)
+            
+            i += 1
+            
+        if i == max_itr:
+            return None
+        else:
+            return sorted([dtau_init, tau1])
+
+#
+#        g2 = self.g(tau2)
+#        
+#        if g * g2 < 0:
+#            taus = [tau2, dtau_init]
+#        else:
+#            po = sp.polyfit([tau2, dtau_init], [g2, g], 1)
+#            tau3 = sp.roots(po)[0]
+#            
+#            if g > 0:
+#                tau3 *= 0.5
+#            else:
+#                tau3 *= 1.5
+#            
+#            g3 = self.g(tau3)
+#            print "taus:", [tau2, dtau_init, tau3], "grads:", g2, g, g3, "poly", sp.polyval(po, [dtau_init * 0.5, dtau_init, tau3])
+#            taus = [tau3, dtau_init]
+#            
+#            if g * g3 > 0:
+#                po = sp.polyfit([tau2, dtau_init, tau3], [g2, g, g3], 2)
+#                por = sp.roots(po)
+#                tau4 = por.max().real
+#                if g > 0:
+#                    tau4 *= 0.5
+#                else:
+#                    tau4 *= 1.5
+#                g4 = self.g(tau4)
+#                taus = [tau4, dtau_init]
+#                print "taus:", [tau2, dtau_init, tau3, tau4], "grads:", g2, g, g3, g4, "poly", sp.polyval(po, [dtau_init * 0.5, dtau_init, tau3, tau4])
+#        taus.sort()
+#        
+#        return taus
+        
+    def bracket_step(self, dtau_init, fac_red=0.1, fac_inc=2.5, max_itr=10):
+        g0 = self.g(dtau_init)
+        tau1 = dtau_init
+        g1 = g0
+        i = 0
+        while g1 * g0 > 0 and i < max_itr:
+            if g1 < 0:
+                tau1 *= fac_inc
+            else:
+                tau1 *= fac_red
+            
+            g1 = self.g(tau1)
+            
+            i += 1
+            
+        if i == max_itr:
+            return None
+        else:
+            return sorted([dtau_init, tau1])
