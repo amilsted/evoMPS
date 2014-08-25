@@ -156,8 +156,7 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=10, max_
         
         B, B_grad, BgdotBg, h, g0 = sys.calc_B_CG(B, BgdotBg, h_init, dtau_prev=h, g0_prev=g0,
                                           reset=i % reset_every == 0, 
-                                          B_prev=B_grad, use_PR=True,
-                                          switch_threshold_eta=1000)#1E-5)
+                                          B_prev=B_grad, use_PR=True)
 
         if not cb_func is None:
             cb_func(sys, i, h=h)
