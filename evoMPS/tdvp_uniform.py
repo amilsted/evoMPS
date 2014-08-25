@@ -1195,12 +1195,11 @@ class EvoMPS_line_search():
         tau_prev = tau1
         g1 = g0
         
-        dofit = True
         i = 0
         while g1 * g0 > 0 and i < max_itr:
             tau_prev = tau1
             #Use only tau=0 and points we have visited.
-            if len(self.gs) > 1 and dofit:
+            if len(self.gs) > 1:
                 gs = sp.array(self.gs)
                 pts = min(max_points, len(gs))
                 res = sp.polyfit(self.taus[-pts:], gs[-pts:], max(max_deg, pts - 1), full=True)
@@ -1218,19 +1217,7 @@ class EvoMPS_line_search():
                 tau1 *= fac_red
         
             g1 = self.g(tau1)
-            
-            ind = self.taus.index(tau1)
-            h1 = self.hs[ind]
-            if h1 - self.hs[0] > 5E-13 and g1 < 0:
-                print "CG: stepped too far!"
-                return self.bracket_step(tau_prev, fac_red=0.8, fac_inc=1.2, max_itr=max_itr)
-                #self.delete(ind)
-                #g1 = g0
-                #tau1 = tau_prev
-                dofit = False
-            else:
-                dofit = True
-            
+                    
             i += 1
             
         if i == max_itr:

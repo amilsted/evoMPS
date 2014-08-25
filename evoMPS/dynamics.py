@@ -150,10 +150,6 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=10, max_
     for i in xrange(max_itr):
         sys.update(restore_CF=i == 0)
         
-        #if e != 0 and not sp.isnan(sys.eta) and sys.eta > 1E-5:
-        #    h = 2 * (sys.h_expect.real - e) / g0
-        #e = sys.h_expect.real
-        
         B, B_grad, BgdotBg, h, g0 = sys.calc_B_CG(B, BgdotBg, h_init, dtau_prev=h, g0_prev=g0,
                                           reset=i % reset_every == 0, 
                                           B_prev=B_grad, use_PR=True)
