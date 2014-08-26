@@ -57,9 +57,6 @@ def find_ground(sys, tol=1E-6, dtau=0.04, use_CG=True, CG_gap=5, CG_max=5,
                                              cb_func=cb_wrap, auto_trunc=True)
         j += dj
         
-        if sys.eta < tol: #Check convergence after im_time steps.
-            break                    #FIXME: In case tol not reached, this value is out of date.
-
         if use_CG:
 #            if j / (CG_gap + CG_max) % 4 == 0:
 #                h0 = None
@@ -71,6 +68,9 @@ def find_ground(sys, tol=1E-6, dtau=0.04, use_CG=True, CG_gap=5, CG_max=5,
                                         max_itr=CG_max_itr, 
                                         reset_every=CG_max, cb_func=cb_wrap)
             j += dj
+            
+        if sys.eta < tol: #Note: In case tol not reached, this value is out of date, but that's okay.
+            break         
             
     return sys, j
 
