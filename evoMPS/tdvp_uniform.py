@@ -729,84 +729,90 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         return res
         
-    def calc_B_CG(self, B_CG_0, BdotB_0, dtau_init, dtau_prev=0, g0_prev=0, 
-                  reset=False, verbose=False, B_prev=None, use_PR=True):
+    def calc_B_CG(self, BCG0, BG0, BG0dotBG0, tau0, tau_init=0.05,
+                  reset=False, use_PR=True):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
-            B_CG_0 : ndarray
+            BCG0 : ndarray
                 Tangent vector used to make the previous step. Ignored on reset.
+            BG0 : ndarray
+                Gradient tangent vector from previous step. Ignored on reset.
             BdotB_0 : float
-                Norm of the previous tangent vector.
-            dtau_init : float
-                Initial step-size for the line-search.
+                Norm of the previous tangent vector. Ignored on reset.
+            tau0 : float
+                Step length from the previous iteration. ignored on reset.
+            tau_init : float = 0.05
+                A base step size for initialising line searches. Should usually decrease the energy.
             reset : bool = False
-                Whether to perform a reset, using the gradient as the next search direction.
-            switch_threshold_eta : float
-                Sets the state tolerance (eta) below which the gradient should
-                be used to determine the energetic minimum in a given direction,
-                rather of the value of the energy. The gradient method is
-                more expensive, but is much more robust for small eta.
+                Whether to perform a manual reset, using the gradient as the next search direction.
+            use_PR : bool = True
+                Whether to use the Polak-Ribière formula for beta (rather than Fletcher-Reeves).
         """
-        B = self.calc_B()
-        BdotB = self.eta.real**2
+        BG = self.calc_B()
+        BGdotBG = self.eta.real**2
     
         if reset:
             beta = 0.
             log.debug("CG RESET")
             
-            B_CG = B
+            BCG = BG
         else:
-            if use_PR and not B_prev is None:
-                x_prev, B_prev_ = self._B_to_x(B_prev)
-                BdotBp = self._B_overlap(B, B_prev_)
-                beta = (BdotB - BdotBp) / BdotB_0 #Note: Overall factors/signs on the gradients do not affect beta
+            if use_PR:
+                x_prev, BG0_ = self._B_to_x(BG0)
+                BGdotBG0 = self._B_overlap(BG, BG0_)
+                beta = (BGdotBG - BGdotBG0) / BG0dotBG0 #Note: Overall factors/signs on the gradients do not affect beta
             else:
-                beta = BdotB / BdotB_0 #FR
+                beta = BGdotBG / BG0dotBG0 #FR
         
             log.debug("Beta = %s", beta)
             
             beta = max(0, beta.real)
             
             if beta > 100:
-                log.warning("CG: Large beta - resetting!")
-                B_CG = B
+                log.warning("CG: RESET due to large beta!")
+                BCG = BG
             else:
-                B_CG = [None] * self.L 
+                BCG = [None] * self.L 
                 for k in xrange(self.L):
-                    B_CG[k] = B[k] + beta * B_CG_0[k]
+                    BCG[k] = BG[k] + beta * BCG0[k]
                     
-                x_, B_CG = self._B_to_x(B_CG)
+                x_, BCG = self._B_to_x(BCG)
         
-        ls = EvoMPS_line_search(self, B_CG, B)
+        ls = EvoMPS_line_search(self, BCG, BG)
         g0 = ls.gs[0].real
         if g0 > 0:
-            log.warning("CG: Bad search direction! Resetting!")
-            B_CG = B
-            ls = EvoMPS_line_search(self, B_CG, B)
+            log.warning("CG: RESET due to bad search direction!")
+            BCG = BG
+            ls = EvoMPS_line_search(self, BCG, BG)
             g0 = ls.gs[0].real
         
-        tau, h_min, ind = ls.brentq(max(dtau_prev, dtau_init * 0.5))
+        tau, h_min, ind = ls.brentq(max(tau0, tau_init * 0.5))
 
         if tau == 0:
-            log.warning("CG retry with dtau_init due to failed line search!")
+            log.warning("CG RESET with dtau_init due to failed line search!")
             retry = True
-        elif h_min - ls.hs[0] > 1E-12: #much below this there isn't enough precision
-            log.warning("CG retry with dtau_init due to energy increase!")
+        elif h_min - ls.hs[0] > max(self.itr_rtol * 10, 1E-14):
+            log.warning("CG RESET with dtau_init due to energy increase!")
             retry = True
         else:
             retry = False
 
         if retry:
-            #No need to reinitialise, since direction remains the same
-            tau, h_min, ind = ls.brentq(dtau_init)
+            if not BG is BCG: #Always reset when retrying
+                BCG = BG
+                ls = EvoMPS_line_search(self, BCG, BG)
+            tau, h_min, ind = ls.brentq(tau_init)
             
         if tau > 0:
             self.lL_before_CF = ls.lLs[ind]
             self.rL_before_CF = ls.rLs[ind]
             self.K[0] = ls.K0s[ind]
+        else:
+            log.warning("CG retries failed. Taking a small GD step.")
+            tau = tau_init #If all else fails, take a blind imtime step
         
-        return B_CG, B, BdotB, tau, g0
+        return BCG, BG, BGdotBG, tau
         
             
     def export_state(self, userdata=None):
@@ -1061,13 +1067,13 @@ class EvoMPS_line_search():
             
             return g.real
             
-    def wolfe(self, g, h, tau, strong=False):
+    def wolfe(self, g, h, tau, strong=False, c1=1E-4, c2=0.1):
         #I wonder how badly this breaks if the energy is innaccurate
-        w1 = h <= self.hs[0] + 1E-4 * tau * self.gs[0].real
+        w1 = h <= self.hs[0] + c1 * tau * self.gs[0].real
         if strong:
-            w2 = abs(g.real) <= 0.1 * abs(self.gs[0].real)
+            w2 = abs(g.real) <= c2 * abs(self.gs[0].real)
         else:
-            w2 = g.real >= 0.1 * self.gs[0].real
+            w2 = g.real >= c2 * self.gs[0].real
         
         return w1 and w2
             

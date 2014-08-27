@@ -102,7 +102,7 @@ def _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred):
     elif 0.2 < fac < 2:
         dtau = min(dtau * (1 + 0.001 * sp.sqrt(2 - fac)), dtau_base * 2)
 
-    print "fac = %g" % fac, "dtau =", dtau
+    #print "fac = %g" % fac, "dtau =", dtau
 
     return dtau, dh_pred_next
 
@@ -137,7 +137,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=0.04, max_itr=10000, cb_fun
 
 def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20, 
                   max_itr=10000, cb_func=None):
-    B = None
+    B_CG = None
     B_grad = None
     if not h0_prev is None:
         h = min(max(h0_prev, h_init * 5), h_init * 15)
@@ -145,17 +145,15 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
         h = h_init * 15
     h0 = h
     BgdotBg = 0
-    g0 = 0
-    #e = 0
+
     i = -1
     for i in xrange(max_itr):
         reset = i % reset_every == 0
         sys.update(restore_CF=reset) #This simple CG works much better without restore_CF within a run.
                                      #With restore_CF, one would have to transform B_prev to match.
         
-        B, B_grad, BgdotBg, h, g0 = sys.calc_B_CG(B, BgdotBg, h_init, dtau_prev=h, 
-                                                  g0_prev=g0, reset=reset, 
-                                                  B_prev=B_grad, use_PR=True)
+        B_CG, B_grad, BgdotBg, h = sys.calc_B_CG(B_CG, B_grad, BgdotBg, h, 
+                                                 tau_init=h_init, reset=reset)
 
         if not cb_func is None:
             cb_func(sys, i, h=h)
@@ -163,7 +161,7 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
         if sys.eta < tol:
             break
 
-        sys.take_step(h, B=B)
+        sys.take_step(h, B=B_CG)
 
         if i == 0:
             h0 = h #Store the first (steepest descent) step
