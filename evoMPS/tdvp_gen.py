@@ -945,33 +945,34 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         return Bs_CG, Bs, eta, tau
         
     def vari_opt_ss_sweep(self, ncv=None):
-        #Assumes RCF
+        """Perform a DMRG-style optimizing sweep to reduce the energy.
+        
+        This carries out the MPS version of the one-site DMRG algorithm.
+        Combined with imaginary time evolution, this can dramatically improve
+        convergence speed.
+        """
+        assert self.canonical_form == 'right', 'vari_opt_ss_sweep only implemented for right canonical form'
     
         KL = [None] * (self.N + 1)
         KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
         for n in xrange(1, self.N + 1):
             if n > 2:
-                #self.AA[n - 2] = tm.calc_AA(self.A[n - 2], self.A[n - 1])
-                #self.C[n - 2] = tm.calc_C_mat_op_AA(self.ham[n - 2], self.AA[n - 2])
-                #KLnm1 = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
-                #for k in xrange(2, n):
                 k = n - 1
                 KL[k], ex = tm.calc_K_l(KL[k - 1], self.C[k - 1], self.l[k - 2], 
                                         self.r[k], self.A[k], self.AA[k - 1])
 
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
-            #lop.matvec(self.A[n].ravel())
             evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
-                                sanity_checks=self.sanity_checks)
+                                     sanity_checks=self.sanity_checks)
             
             #This is not strictly necessary, since r[n] is not used again,
             self.r[n] = G.dot(self.r[n].dot(G.conj().T))
-            #self.K[n + 1] = G.dot(self.K[n + 1].dot(G.conj().T))
+
             if n < self.N:
                 for s in xrange(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])
@@ -992,18 +993,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.calc_K(n_low=n + 1, n_high=n + 1)
 
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
-            #lop.matvec(self.A[n].ravel())
             evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
             
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
-                                             sanity_checks=self.sanity_checks)
+                                      sanity_checks=self.sanity_checks)
             
             #This is not strictly necessary, since l[n - 1] is not used again
             self.l[n - 1] = Gi.conj().T.dot(self.l[n - 1].dot(Gi))
-            #KL[n - 1] = Gm1_i.conj().T.dot(KL[n - 1].dot(Gm1_i))
+
             if n > 1:
                 for s in xrange(self.q[n - 1]):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
