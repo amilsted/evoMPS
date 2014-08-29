@@ -954,6 +954,86 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         return x, xi, nonzeros
     else:
         return x, xi
+        
+def restore_RCF_r_seq(A, r, GN=None, sanity_checks=False, sc_data=''):
+    """Transforms a sequence of A[n]'s to obtain r[n - 1] = eye(D).
+    
+    Implements the condition for right-orthonormalization from sub-section
+    3.1, theorem 1 of arXiv:quant-ph/0608197v2.
+    
+    Uses a reduced QR decomposition to avoid inverting anything explicity.
+    
+    Parameters
+    ----------
+    A : sequence of ndarray
+        The parameter tensors for a sequence of sites [None, A1, A2,..., AN].
+        The first entry is ignored so that the indices match up with r.
+    r : sequence of ndarray or objects with array interface
+        The matrices [r0, r1, r2,..., rN], where rN will not be changed, but is 
+        used for sanity checks.
+    GN : ndarray or scalar
+        Initial right gauge transformation matrix for site N. Only needed when used
+        as part of a larger transformation.
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    sc_data : string
+        A string to be appended to sanity check log messages.
+    """
+    assert len(A) == len(r), 'A and r must have the same length!'
+    if GN is None:
+        Gh = mm.eyemat(A[-1].shape[2], dtype=A[-1].dtype)
+    else:
+        Gh = GN.conj().T
+    for n in xrange(len(A) - 1, 0, -1):
+        q, Dm1, D = A[n].shape
+        AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * D, Dm1))
+        Q, R = la.qr(AG, mode='economic')
+        A[n] = sp.transpose(Q.conj().reshape((q, D, Dm1)), axes=(0, 2, 1))
+        Gh = R
+        
+        r[n - 1] = mm.eyemat(Dm1, dtype=A[n].dtype)
+        
+        if sanity_checks:
+            r_nm1_ = eps_r_noop(r[n], A[n], A[n])
+            if not sp.allclose(r_nm1_, r[n - 1].A, atol=1E-13, rtol=1E-13):
+                log.warning("Sanity Fail in restore_RCF_r!: r is bad! %s %s",
+                            la.norm(r_nm1_ - r[n - 1]), sc_data)
+        
+    return Gh.conj().T
+    
+def restore_RCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
+    """Transforms a sequence of A to obtain diagonal l.
+    
+    See restore_RCF_l.
+    
+    Parameters
+    ----------
+    A : sequence of ndarray
+        The parameter tensors for a sequence of sites [None, A1, A2,..., AN].
+        The first entry is ignored so that the indices match up with l.
+    l : sequence of ndarray or objects with array interface
+        The matrices [l0, l1, l2,..., lN], where l0 will not be changed, but is 
+        used for sanity checks.
+    G0 : ndarray
+        Initial left gauge transformation matrix for site 1. Only needed when used
+        as part of a larger transformation.
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    sc_data : string
+        A string to be appended to sanity check log messages.
+    """
+    assert len(A) == len(l), 'A and l must have the same length!'
+    
+    if G0 is None:
+        G = sp.eye(A[1].shape[1], dtype=A[1].dtype)
+    else:
+        G = G0
+        
+    for n in xrange(1, len(A)):
+        l[n], G, Gi = restore_RCF_l(A[n], l[n - 1], G, sanity_checks)
+    
+    return G
+    
 
 def restore_RCF_r(A, r, G_n_i, zero_tol=1E-15, sanity_checks=False, sc_data=''):
     """Transforms a single A[n] to obtain r[n - 1] = eye(D).
@@ -1106,13 +1186,82 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
 
     G = EV.conj().T
 
-    if sanity_checks:
-        eye = sp.eye(A.shape[2])
-        if not sp.allclose(sp.dot(G, G_i), eye,
-                           atol=1E-12, rtol=1E-12):
-            log.warning("Sanity Fail in restore_RCF_l!: Bad GT! (off by %g)", la.norm(sp.dot(G, G_i) - eye))
-            
     return l, G, G_i
+
+def restore_LCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
+    """Transforms a sequence of A[n]'s to obtain l[n] = eye(D).
+    
+    Implements the condition for left-orthonormalization.
+    
+    Uses a reduced QR (RQ) decomposition to avoid inverting anything explicity.
+    
+    Parameters
+    ----------
+    A : sequence of ndarray
+        The parameter tensors for a sequence of sites [None, A1, A2,..., AN].
+        The first entry is ignored so that the indices match up with l.
+    l : sequence of ndarray or objects with array interface
+        The matrices [l0, l1, l2,..., lN], where l0 will not be changed, but is 
+        used for sanity checks.
+    G0 : ndarray or scalar
+        Initial left gauge transformation matrix for site 0. Only needed when used
+        as part of a larger transformation.
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    sc_data : string
+        A string to be appended to sanity check log messages.
+    """
+    if G0 is None:
+        G = mm.eyemat(A[1].shape[1], dtype=A[1].dtype)
+    else:
+        G = G0
+
+    for n in xrange(1, len(A)):
+        q, Dm1, D = A[n].shape
+        GA = sp.array([G.dot(As) for As in A[n]])
+        GA = GA.reshape((q * Dm1, D))
+        Q, G = la.qr(GA, mode='economic')
+        A[n] = Q.reshape((q, Dm1, D))
+        
+        l[n] = mm.eyemat(D, dtype=A[n].dtype)
+        
+        l_ = eps_l_noop(l[n - 1], A[n], A[n])
+        if not sp.allclose(l_, l[n].A, atol=1E-13, rtol=1E-13):
+            log.warning("Sanity Fail in restore_LCF_l_seq!: l is bad")
+            log.warning(la.norm(l_ - l[n].A))
+        
+    return G
+        
+def restore_LCF_r_seq(A, r, GiN=None, sanity_checks=False, sc_data=''):
+    """
+    Transforms a sequence of A to obtain diagonal r.
+    
+    See restore_LCF_r.
+    
+    Parameters
+    ----------
+    A : sequence of ndarray
+        The parameter tensors for a sequence of sites [None, A1, A2,..., AN].
+        The first entry is ignored so that the indices match up with r.
+    r : sequence of ndarray or objects with array interface
+        The matrices [r0, r1, r2,..., rN], where rN will not be changed, but is 
+        used for sanity checks.
+    GiN : ndarray or scalar
+        Initial right gauge transformation matrix for site N. Only needed when used
+        as part of a larger transformation.
+    sanity_checks : bool (False)
+        Whether to perform additional sanity checks.
+    sc_data : string
+        A string to be appended to sanity check log messages.
+    """
+    if GiN is None:
+        Gi = sp.eye(A[-1].shape[2], dtype=A[-1].dtype)
+    else:
+        Gi = GiN
+    for n in xrange(len(A) - 1, 0, -1):
+        r[n - 1], G, Gi = restore_LCF_r(A[n], r[n], Gi, sanity_checks)
+
+    return Gi
 
 def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
     if Gm1 is None:
@@ -1186,10 +1335,4 @@ def restore_LCF_r(A, r, Gi, sanity_checks=False):
 
     Gm1_i = EV
 
-    if sanity_checks:
-        eye = sp.eye(A.shape[1])
-        if not sp.allclose(sp.dot(Gm1, Gm1_i), eye,
-                           atol=1E-12, rtol=1E-12):
-            log.warning("Sanity Fail in restore_LCF_r!: Bad GT! (off by %g)", la.norm(sp.dot(Gm1, Gm1_i) - eye))
-            
     return rm1, Gm1, Gm1_i
