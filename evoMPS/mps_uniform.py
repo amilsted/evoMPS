@@ -571,27 +571,17 @@ class EvoMPS_MPS_Uniform(object):
         In this canonical form, self.l == self.r and are diagonal matrices
         with the Schmidt coefficients corresponding to the half-chain
         decomposition form the diagonal entries.
-        
-        Parameters
-        ----------
-        ret_g : bool
-            Whether to return the gauge-transformation matrices used.
-            
-        Returns
-        -------
-        g, g_i : ndarray
-            Gauge transformation matrix g and its inverse g_i.
         """
         if zero_tol is None:
             zero_tol = self.zero_tol
         
         for k in xrange(self.L):
-            X, Xi = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
-                                         force_evd=False,
+            X = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
+                                         force_evd=False, calc_inv=False,
                                          sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r%u' % k)
             
-            Y, Yi = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
-                                         force_evd=False,
+            Y = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
+                                         force_evd=False, calc_inv=False,
                                          sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l%u' % k)          
             
             U, sv, Vh = la.svd(Y.dot(X))
@@ -603,9 +593,13 @@ class EvoMPS_MPS_Uniform(object):
             S = m.simple_diag_matrix(sv, dtype=self.typ)
             Srt = S.sqrt()
             
-            g = m.mmul(Srt, Vh, Xi)
+            nonzeros = np.count_nonzero(S.diag > zero_tol)
+            Srti = sp.zeros_like(S.diag, dtype=S.dtype)
+            Srti[-nonzeros:] = 1. / Srt.diag[-nonzeros:]
+            Srti = m.simple_diag_matrix(Srti, dtype=S.dtype)  
             
-            g_i = m.mmul(Yi, U, Srt)
+            g = Srti.dot(U.conj().T).dot(Y)
+            g_i = Srti.dot_left(X.dot(Vh.conj().T))
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
