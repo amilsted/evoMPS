@@ -853,7 +853,8 @@ def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, dD_max=16, sv_tol=1E-14):
     return BB12n, BB21np1, dDn
 
 def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False, 
-                      force_evd=False, sanity_checks=False, sc_data=''):
+                      calc_inv=True, force_evd=False, 
+                      sanity_checks=False, sc_data=''):
     """Factorizes a Hermitian matrix using either Cholesky or eigenvalue decomposition.
     
     Decomposes a Hermitian A as A = X*X or, if lower == True, A = XX*.
@@ -873,6 +874,8 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         Tolerance for detection of zeros in EVD case.
     return_rank : bool
         Whether to return the rank of A. The detected rank is affected by zero_tol.
+    calc_inv : bool
+        Whether to calculate (and return) the inverse of the factor.
     force_evd : bool
         Whether to force eigenvalue instead of Cholesky decomposition.
     sanity_checks : bool
@@ -881,7 +884,10 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
     if not force_evd:
         try:
             x = la.cholesky(A, lower=lower)
-            xi = mm.invtr(x, lower=lower)
+            if calc_inv:
+                xi = mm.invtr(x, lower=lower)
+            else:
+                xi = None
             
             nonzeros = A.shape[0]
         except sp.linalg.LinAlgError: #this usually means a is not pos. def.
@@ -901,20 +907,24 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
 
         ev_sq = sp.zeros_like(ev, dtype=A.dtype)
         ev_sq[-nonzeros:] = sp.sqrt(ev[-nonzeros:])
-        
-        #Replace almost-zero values with zero and perform a pseudo-inverse
-        ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
-        ev_sq_i[-nonzeros:] = 1. / ev_sq[-nonzeros:]
-        
-        ev_sq_i = mm.simple_diag_matrix(ev_sq_i, dtype=A.dtype)
         ev_sq = mm.simple_diag_matrix(ev_sq, dtype=A.dtype)
+        
+        if calc_inv:
+            #Replace almost-zero values with zero and perform a pseudo-inverse
+            ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
+            ev_sq_i[-nonzeros:] = 1. / ev_sq[-nonzeros:]
+            
+            ev_sq_i = mm.simple_diag_matrix(ev_sq_i, dtype=A.dtype)        
                    
+        xi = None
         if lower:
             x = ev_sq.dot_left(EV)
-            xi = ev_sq_i.dot(EV.conj().T)
+            if calc_inv:
+                xi = ev_sq_i.dot(EV.conj().T)
         else:
             x = ev_sq.dot(EV.conj().T)
-            xi = ev_sq_i.dot_left(EV)
+            if calc_inv:
+                xi = ev_sq_i.dot_left(EV)
             
     if sanity_checks:
         if not sp.allclose(A, A.conj().T, atol=1E-13, rtol=1E-13):
@@ -926,34 +936,42 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         eye = mm.simple_diag_matrix(eye)
         
         if lower:
-            if not sp.allclose(xi.dot(x), eye, atol=1E-13, rtol=1E-13):
-                log.warning("Sanity fail in herm_fac_with_inv(): Bad left inverse! %s %s",
-                            la.norm(xi.dot(x) - eye), sc_data)
+            if calc_inv:
+                if not sp.allclose(xi.dot(x), eye, atol=1E-13, rtol=1E-13):
+                    log.warning("Sanity fail in herm_fac_with_inv(): Bad left inverse! %s %s",
+                                la.norm(xi.dot(x) - eye), sc_data)
+                                
+                if not sp.allclose(xi.dot(A).dot(xi.conj().T), eye, atol=1E-13, rtol=1E-13):
+                    log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
+                                la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
     
             if not sp.allclose(x.dot(x.conj().T), A, atol=1E-13, rtol=1E-13):
                 log.warning("Sanity fail in herm_fac_with_inv(): Bad decomp! %s %s",
                             la.norm(x.dot(x.conj().T) - A), sc_data)
-                
-            if not sp.allclose(xi.dot(A).dot(xi.conj().T), eye, atol=1E-13, rtol=1E-13):
-                log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
-                            la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
         else:
-            if not sp.allclose(x.dot(xi), eye, atol=1E-13, rtol=1E-13):
-                log.warning("Sanity fail in herm_fac_with_inv(): Bad right inverse! %s %s",
-                            la.norm(x.dot(xi) - eye), sc_data)
+            if calc_inv:
+                if not sp.allclose(x.dot(xi), eye, atol=1E-13, rtol=1E-13):
+                    log.warning("Sanity fail in herm_fac_with_inv(): Bad right inverse! %s %s",
+                                la.norm(x.dot(xi) - eye), sc_data)
+                if not sp.allclose(xi.conj().T.dot(A).dot(xi), eye, atol=1E-13, rtol=1E-13):
+                    log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
+                                la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
+
     
             if not sp.allclose(x.conj().T.dot(x), A, atol=1E-13, rtol=1E-13):
                 log.warning("Sanity fail in herm_fac_with_inv(): Bad decomp! %s %s",
                             la.norm(x.conj().T.dot(x) - A), sc_data)
-                
-            if not sp.allclose(xi.conj().T.dot(A).dot(xi), eye, atol=1E-13, rtol=1E-13):
-                log.warning("Sanity fail in herm_fac_with_inv(): Bad A inverse! %s %s",
-                            la.norm(xi.conj().T.dot(A).dot(xi) - eye), sc_data)
-                        
-    if return_rank:
-        return x, xi, nonzeros
+                    
+    if calc_inv:
+        if return_rank:
+            return x, xi, nonzeros
+        else:
+            return x, xi
     else:
-        return x, xi
+        if return_rank:
+            return x, nonzeros
+        else:
+            return x
         
 def restore_RCF_r_seq(A, r, GN=None, sanity_checks=False, sc_data=''):
     """Transforms a sequence of A[n]'s to obtain r[n - 1] = eye(D).
