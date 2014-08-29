@@ -966,16 +966,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
+            G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
+                                sanity_checks=self.sanity_checks)
+            
+            #This is not strictly necessary, since r[n] is not used again,
+            self.r[n] = G.dot(self.r[n].dot(G.conj().T))
+            #self.K[n + 1] = G.dot(self.K[n + 1].dot(G.conj().T))
             if n < self.N:
-                Gm1 = sp.eye(self.D[n - 1], dtype=self.typ)
-                self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
-                                    zero_tol=self.zero_tol,
-                                    sanity_checks=self.sanity_checks)
-                
-                #This is not strictly necessary, since r[n] is not used again,
-                self.r[n] = G.dot(self.r[n].dot(G.conj().T))
-                #self.K[n + 1] = G.dot(self.K[n + 1].dot(G.conj().T))
-
                 for s in xrange(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])
             
@@ -988,11 +985,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
-            
-        tm.eps_l_noop_inplace(self.l[self.N - 1], self.A[self.N], self.A[self.N], out=self.l[self.N])
-        GN = 1. / sp.sqrt(self.l[self.N].squeeze().real)
-        self.A[self.N] *= GN
-        self.l[self.N][:] = 1         
+
             
         for n in xrange(self.N, 0, -1):
             if n < self.N:
@@ -1005,18 +998,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
             
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
+            Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
+                                             sanity_checks=self.sanity_checks)
+            
+            #This is not strictly necessary, since l[n - 1] is not used again
+            self.l[n - 1] = Gi.conj().T.dot(self.l[n - 1].dot(Gi))
+            #KL[n - 1] = Gm1_i.conj().T.dot(KL[n - 1].dot(Gm1_i))
             if n > 1:
-                Gi = sp.eye(self.D[n], dtype=self.typ)
-                self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
-                                                 Gi, zero_tol=self.zero_tol,
-                                                 sanity_checks=self.sanity_checks)
-                
-                #This is not strictly necessary, since l[n - 1] is not used again
-                self.l[n - 1] = Gm1_i.conj().T.dot(self.l[n - 1].dot(Gm1_i))
-                #KL[n - 1] = Gm1_i.conj().T.dot(KL[n - 1].dot(Gm1_i))
-
                 for s in xrange(self.q[n - 1]):
-                    self.A[n - 1][s] = self.A[n - 1][s].dot(Gm1_i)
+                    self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
             
             #All needed l and r should now be up to date
             #All needed KL should be valid still
@@ -1027,12 +1017,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
-        
-        tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
-        G0 = 1. / sp.sqrt(self.r[0].squeeze().real)
-        self.A[1] *= G0
-        self.r[0][:] = 1
-            
 
         
     def expect_2s(self, op, n, AA=None):
