@@ -116,7 +116,7 @@ class EvoMPS_MPS_Generic(object):
         self.l = sp.empty((self.N + 1), dtype=sp.ndarray)        
         
         self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)  
-        self.l[0] = sp.eye(self.D[0], self.D[0], dtype=self.typ).copy(order=self.odr) #Already set the 0th element (not a dummy)    
+        self.l[0] = m.eyemat(self.D[0], dtype=self.typ)
     
         for n in xrange(1, self.N + 1):
             self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
@@ -300,38 +300,19 @@ class EvoMPS_MPS_Generic(object):
             for n in xrange(self.N):
                 self.r[n] *= 1 / norm    
                 
-    def restore_CF(self):
+    def restore_CF(self, use_QR=True):
         if self.canonical_form == 'right':
-            self.restore_RCF()
+            self.restore_RCF(use_QR=use_QR)
         else:
-            self.restore_LCF()
-    
-    def restore_RCF(self, update_l=True, normalize=True, diag_l=True):
+            self.restore_LCF(use_QR=use_QR)
+        
+    def restore_RCF(self, use_QR=True, update_l=True, diag_l=True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
         3.1, theorem 1 of arXiv:quant-ph/0608197v2.
         
-        This performs two 'almost' gauge transformations, where the 'almost'
-        means we allow the norm to vary (if "normalize" = True).
-        
-        The last step (A[1]) is done diffently to the others since G[0],
-        the gauge-transf. matrix, is just a number, which can be found more
-        efficiently and accurately without using matrix methods.
-        
-        The last step (A[1]) is important because, if we have successfully made 
-        r[1] = 1 in the previous steps, it fully determines the normalization 
-        of the state via r[0] ( = l[N]).
-        
-        Optionally (normalize=False), the function will not attempt to make
-        A[1] satisfy the orthonorm. condition, and will take G[0] = 1 = G[N],
-        thus performing a pure gauge-transformation, but not ensuring complete
-        canonical form.
-        
-        It is also possible to begin the process from a site n other than N,
-        in case the sites > n are known to be in the desired form already.
-        
-        It is also possible to skip the diagonalization of the l's, such that
+        It is possible to skip the diagonalization of the l's, such that
         only the right orthonormalization condition (r_n = eye) is met.
         
         By default, the l's are updated even if diag_l=False.
@@ -340,60 +321,34 @@ class EvoMPS_MPS_Generic(object):
         ----------
         update_l : bool
             Whether to call calc_l() after completion (defaults to True)
-        normalize : bool
-            Whether to also attempt to normalize the state.
         diag_l : bool
             Whether to put l in diagonal form (defaults to True)
         """   
-        start = self.N
-        
-        G_n_i = sp.eye(self.D[start], dtype=self.typ) #This is actually just the number 1
-        for n in xrange(start, 1, -1):
-            self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
-                                                         G_n_i, sc_data=('site', n),
-                                                         zero_tol=self.zero_tol,
-                                                         sanity_checks=self.sanity_checks)
-        
-        #Now do A[1]...
-        #Apply the remaining G[1]^-1 from the previous step.
-        for s in xrange(self.q[1]):                
-            self.A[1][s] = m.mmul(self.A[1][s], G_n_i)
-                    
-        #Now finish off
-        tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
-        
-        if normalize:
-            G0 = 1. / sp.sqrt(self.r[0].squeeze().real)
-            self.A[1] *= G0
-            self.r[0][:] = 1
-            
-            if self.sanity_checks:
-                r0 = tm.eps_r_noop(self.r[1], self.A[1], self.A[1])
-                if not sp.allclose(r0, 1, atol=1E-12, rtol=1E-12):
-                    log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
+        if use_QR:
+            tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
+                                     sc_data="restore_RCF_r")
+        else:
+            G_n_i = sp.eye(self.D[self.N], dtype=self.typ) #This is actually just the number 1
+            for n in xrange(self.N, 0, -1):
+                self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
+                                                             G_n_i, sc_data=('site', n),
+                                                             zero_tol=self.zero_tol,
+                                                             sanity_checks=self.sanity_checks)
 
+        if self.sanity_checks:
+            if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
+                log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
+        
+        self.S_hc.fill(0)
         if diag_l:
-            G_nm1 = sp.eye(self.D[0], dtype=self.typ)
-            for n in xrange(1, self.N):
-                self.l[n], G_nm1, G_nm1_i = tm.restore_RCF_l(self.A[n],
-                                                             self.l[n - 1],
-                                                             G_nm1,
-                                                             self.sanity_checks)
+            tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+                                                 sc_data="restore_RCF_l")
 
-            #Apply remaining G_Nm1 to A[N]
-            n = self.N
-            for s in xrange(self.q[n]):
-                self.A[n][s] = m.mmul(G_nm1, self.A[n][s])
-
-            #Deal with final, scalar l[N]
-            tm.eps_l_noop_inplace(self.l[n - 1], self.A[n], self.A[n], out=self.l[n])
-            
-            self.S_hc.fill(0)
             for n in xrange(1, self.N):
                 self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
 
             if self.sanity_checks:
-                if not sp.allclose(self.l[self.N].real, 1, atol=1E-12, rtol=1E-12):
+                if not sp.allclose(self.l[self.N].A, 1, atol=1E-12, rtol=1E-12):
                     log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
                     log.warning("l_N = %s", self.l[self.N].squeeze().real)
                 
@@ -405,59 +360,45 @@ class EvoMPS_MPS_Generic(object):
         elif update_l:
             self.calc_l()
             
-    def restore_LCF(self):
-        Gm1 = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
-        for n in xrange(1, self.N):
-            self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], Gm1,
-                                                zero_tol=self.zero_tol,
-                                                sanity_checks=self.sanity_checks)
-            Gm1 = G
+    def restore_LCF(self, use_QR=True, update_r=True, diag_r=True):
+        """Use a gauge-transformation to restore left canonical form.
         
-        #Now do A[N]...
-        #Apply the remaining G[N - 1] from the previous step.
-        for s in xrange(self.q[self.N]):                
-            self.A[self.N][s] = Gm1.dot(self.A[self.N][s])
-                    
-        #Now finish off
-        tm.eps_l_noop_inplace(self.l[self.N - 1], self.A[self.N], self.A[self.N], out=self.l[self.N])
-        
-        #normalize
-        GNi = 1. / sp.sqrt(self.l[self.N].squeeze().real)
-        self.A[self.N] *= GNi
-        self.l[self.N][:] = 1
+        See restore_RCF.
+        """
+        if use_QR:
+            tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+                                     sc_data="restore_LCF_l")
+        else:
+            G = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
+            for n in xrange(1, self.N + 1):
+                self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], G,
+                                                    zero_tol=self.zero_tol,
+                                                    sanity_checks=self.sanity_checks)
         
         if self.sanity_checks:
             lN = tm.eps_l_noop(self.l[self.N - 1], self.A[self.N], self.A[self.N])
             if not sp.allclose(lN, 1, atol=1E-12, rtol=1E-12):
                 log.warning("Sanity Fail in restore_LCF!: l_N is bad / norm failure")
-
-        #diag r
-        Gi = sp.eye(self.D[self.N], dtype=self.typ)
-        for n in xrange(self.N, 1, -1):
-            self.r[n - 1], Gm1, Gm1_i = tm.restore_LCF_r(self.A[n], self.r[n],
-                                                         Gi, self.sanity_checks)
-            Gi = Gm1_i
-
-        #Apply remaining G1i to A[1]
-        for s in xrange(self.q[1]):
-            self.A[1][s] = self.A[1][s].dot(Gi)
-
-        #Deal with final, scalar r[0]
-        tm.eps_r_noop_inplace(self.r[1], self.A[1], self.A[1], out=self.r[0])
         
         self.S_hc.fill(0)
-        for n in xrange(1, self.N):
-            self.S_hc[n] = -sp.sum(self.r[n].diag * sp.log2(self.r[n].diag))
+        if diag_r:
+            tm.restore_LCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
+                                                 sc_data="restore_LCF_r")
+    
+            for n in xrange(1, self.N):
+                self.S_hc[n] = -sp.sum(self.r[n].diag * sp.log2(self.r[n].diag))
 
-        if self.sanity_checks:
-            if not sp.allclose(self.r[0], 1, atol=1E-12, rtol=1E-12):
-                log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
-                log.warning("r_0 = %s", self.r[0].squeeze().real)
-            
-            for n in xrange(1, self.N + 1):
-                l = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
-                if not sp.allclose(l, self.l[n], atol=1E-11, rtol=1E-11):
-                    log.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
+            if self.sanity_checks:
+                if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
+                    log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
+                    log.warning("r_0 = %s", self.r[0].squeeze().real)
+                
+                for n in xrange(1, self.N + 1):
+                    l = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
+                    if not sp.allclose(l, self.l[n], atol=1E-11, rtol=1E-11):
+                        log.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
+        elif update_r:
+            self.calc_r()
                     
     
     def auto_truncate(self, update=True, zero_tol=None, return_update_data=False):
