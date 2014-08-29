@@ -166,17 +166,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 C_shape = tuple(ham_shape + [self.D[n - 1], self.D[n - 1 + self.ham_sites]])
                 self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
         
-        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
-        """The per-site contributions to the norm of the TDVP tangent vector 
+        self.eta_sq = sp.zeros((self.N + 1), dtype=self.typ)
+        """The per-site contributions to the norm-squared of the TDVP tangent vector 
            (projection of the exact time evolution onto the MPS tangent plane. 
            Only available after calling take_step()."""
-        self.eta.fill(sp.NaN)
+        self.eta_sq.fill(sp.NaN)
         
-        self.etaBB = sp.zeros((self.N + 1), dtype=self.typ)
-        """Norm of the evolution captured by the two-site tangent plane but not 
-           by the one-site tangent plane. Only available after calling
-           take_step() with calc_Y_2s or dynexp."""
-        self.etaBB.fill(sp.NaN)
+        self.etaBB_sq = sp.zeros((self.N + 1), dtype=self.typ)
+        """Per-site contributions to the norm-squared of the evolution captured 
+           by the two-site tangent plane but not by the one-site tangent plane. 
+           Only available after calling take_step() with calc_Y_2s or dynexp."""
+        self.etaBB_sq.fill(sp.NaN)
         
         self.h_expect = sp.zeros((self.N + 1), dtype=self.typ)
         """The local energy expectation values (of each Hamiltonian term), 
@@ -523,7 +523,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             x = self.calc_x(n, Vrh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
-                self.eta[n] = sp.sqrt(m.adot(x, x))
+                self.eta_sq[n] = sp.sqrt(m.adot(x, x))
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -546,7 +546,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             x = self.calc_x_l(n, Vlh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
-                self.eta[n] = sp.sqrt(m.adot(x, x))
+                self.eta_sq[n] = sp.sqrt(m.adot(x, x))
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -592,9 +592,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         sv_tol : float
             Only use singular values larger than this for dynamical expansion.
         """
-        eta_tot = 0
-        self.eta.fill(0)    
-        self.etaBB.fill(0)
+        eta_sq_tot = 0
+        self.eta_sq.fill(0)    
+        self.etaBB_sq.fill(0)
         
         if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
             and B is None):
@@ -603,7 +603,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
                 if n <= self.N:
                     B[n] = self.calc_B(n)
-                    eta_tot += self.eta[n]
+                    eta_sq_tot += self.eta_sq[n]
                 
                 #Only change an A after the next B no longer depends on it!
                 if n >= self.ham_sites:
@@ -641,7 +641,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                          l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
                                          Vlh=Vlh[n], Vrh=Vrh[n])
                         B.append(Bn)
-                        eta_tot += self.eta[n]
+                        eta_sq_tot += self.eta_sq[n]
             
             if calc_Y_2s or dynexp:
                 Y, self.etaBB = self.calc_BB_Y_2s(l_s, l_si, r_s, r_si, Vrh, Vlh)
@@ -680,8 +680,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
                                     
-                    
-        return eta_tot
+        #self.eta = sp.sqrt(eta_sq_tot)
+        
+        return sp.sqrt(eta_sq_tot)
         
     def take_step_RK4(self, dtau):
         """Take a step using the fourth-order explicit Runge-Kutta method.
@@ -695,8 +696,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
         """
-        eta_tot = 0
-        self.eta.fill(0)
+        eta_sq_tot = 0
+        self.eta_sq.fill(0)
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
@@ -708,7 +709,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         B = [None]
         for n in xrange(1, self.N + 1):
             B.append(self.calc_B(n)) #k1
-            eta_tot += self.eta[n]
+            eta_sq_tot += self.eta_sq[n]
             B_fin.append(B[-1])
         
         for n in xrange(1, self.N + 1):
@@ -751,7 +752,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
 
-        return eta_tot
+        return sp.sqrt(eta_sq_tot)
         
     def find_min_h_brent(self, Bs, dtau_init, tol=5E-2, skipIfLower=False, 
                          verbose=False, use_tangvec_overlap=False,
@@ -766,7 +767,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         taus=[0]
         if use_tangvec_overlap:
-            ress = [self.eta.real.sum()]
+            ress = [self.eta_sq.real.sum()]
         else:
             ress = [h_expect_0.real]
         hs = [h_expect_0.real]
@@ -774,7 +775,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         def f(tau, *args):
             if tau < 0:
                 if use_tangvec_overlap:
-                    res = tau**2 + self.eta.sum().real
+                    res = tau**2 + self.eta_sq.sum().real
                 else:
                     res = tau**2 + h_expect_0.real
                 log.debug((tau, res, "punishing negative tau!"))
@@ -894,12 +895,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 rather of the value of the energy. The gradient method is
                 more expensive, but is much more robust for small .
         """
-        self.eta.fill(0)
+        self.eta_sq.fill(0)
         Bs = [None] * (self.N + 1)
         for n in xrange(1, self.N + 1):
             Bs[n] = self.calc_B(n)
             
-        eta = self.eta.real.sum()
+        eta = self.eta_sq.real.sum()
         
         if reset:
             beta = 0.
