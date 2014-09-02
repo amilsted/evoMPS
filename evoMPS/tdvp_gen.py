@@ -21,7 +21,7 @@ import logging
 log = logging.getLogger(__name__)
 
 class Vari_Opt_Single_Site_Op:
-    def __init__(self, tdvp, n, KLnm1, sanity_checks=False):
+    def __init__(self, tdvp, n, KLnm1, tau=1, sanity_checks=False):
         """
         """
         self.D = tdvp.D
@@ -39,6 +39,8 @@ class Vari_Opt_Single_Site_Op:
         self.dtype = sp.dtype(tdvp.typ)
         
         self.calls = 0
+        
+        self.tau = tau
         
         if n > 1:
             try:
@@ -88,7 +90,50 @@ class Vari_Opt_Single_Site_Op:
         #print "en = ", (sp.inner(An.conj().ravel(), res.ravel())
         #                / sp.inner(An.conj().ravel(), An.ravel()))
         
-        return res.reshape(x.shape)
+        return res.reshape(x.shape) * self.tau
+        
+class Vari_Opt_SC_op:
+    def __init__(self, tdvp, n, KLn, tau=1, sanity_checks=False):
+        """
+        """
+        self.D = tdvp.D
+        self.q = tdvp.q
+        self.tdvp = tdvp
+        self.n = n
+        self.KLn = KLn
+        
+        self.sanity_checks = sanity_checks
+        self.sanity_tol = 1E-12
+        
+        d = self.D[n] * self.D[n]
+        self.shape = (d, d)
+        
+        self.dtype = sp.dtype(tdvp.typ)
+        
+        self.calls = 0
+        
+        self.tau = tau
+        
+    def matvec(self, x):
+        self.calls += 1
+        #print self.calls
+        
+        t = self.tdvp
+        n = self.n
+        
+        Gn = x.reshape((self.D[n], self.D[n]))
+
+        res = self.KLn.dot(Gn) + Gn.dot(t.K[n + 1])
+        
+        if n < t.N:
+            Ap1 = sp.array([Gn.dot(As) for As in t.A[n + 1]])
+            AAn = tm.calc_AA(t.A[n], Ap1)
+            Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
+            for s in xrange(t.q[n]):
+                sres = tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
+                res += t.A[n][s].conj().T.dot(t.l[n - 1].dot(sres))
+        
+        return res.reshape(x.shape) * self.tau
 
 class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
@@ -1017,6 +1062,95 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
+                
+                
+    def take_step_split(self, dtau, ncv=None):
+        assert self.canonical_form == 'right', 'vari_opt_ss_sweep only implemented for right canonical form'
+        assert self.ham_sites == 2, 'vari_opt_ss_sweep only implemented for nearest neighbour Hamiltonians'
+        dtau *= -1
+        import expokit as expokit
+        def expmh(A, v, t, norm_est=1., m=20):
+            xn = A.shape[0]
+            vf = sp.ones((xn,), dtype=A.dtype)
+            m = min(xn - 1, m)
+            wsp = sp.zeros((xn * (m + 2) + 5 * (m + 2)**2 + 6 + 1,), dtype=A.dtype)
+            iwsp = sp.zeros((m + 2,), dtype=int)
+            iflag = sp.zeros((1,), dtype=int)
+            itrace = sp.array([0])
+            expokit.zhexpv(m, [t], v, vf, [0.], [norm_est], 
+                           wsp, iwsp, A.matvec, itrace, iflag, n=[xn], 
+                           lwsp=[len(wsp)], liwsp=[len(iwsp)])
+            return vf
+    
+        KL = [None] * (self.N + 1)
+        KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
+        for n in xrange(1, self.N + 1):
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1])
+            #print "Befor A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
+            An = expmh(lop, self.A[n].ravel(), dtau/2., norm_est=abs(self.H_expect.real))            
+            self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
+            self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
+            norm = m.adot(self.l[n], self.r[n])
+            self.A[n] /= sp.sqrt(norm)
+            #print "After A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real, norm.real
+            
+            #shift centre matrix right (RCF is like having a centre "matrix" at "1")
+            G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
+                                     sanity_checks=self.sanity_checks) 
+                                     
+            if n > 1:
+                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+                KL[n], ex = tm.calc_K_l(KL[n - 1], self.C[n - 1], self.l[n - 2], 
+                                        self.r[n], self.A[n], self.AA[n - 1])
+                
+            if n < self.N:                    
+                lop2 = Vari_Opt_SC_op(self, n, KL[n])
+                #print "Befor G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real
+                G = expmh(lop2, G.ravel(), -dtau/2., norm_est=abs(self.H_expect.real))
+                G = G.reshape((self.D[n], self.D[n]))
+                norm = sp.trace(self.l[n].dot(G).dot(self.r[n].dot(G.conj().T)))
+                G /= sp.sqrt(norm)
+                #print "After G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real, norm.real
+                
+                for s in xrange(self.q[n + 1]):
+                    self.A[n + 1][s] = G.dot(self.A[n + 1][s])                
+                
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])           
+   
+        for n in xrange(self.N, 0, -1):
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=1, sanity_checks=self.sanity_checks)
+            #print "Before A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
+            An = expmh(lop, self.A[n].ravel(), dtau/2., norm_est=abs(self.H_expect.real))
+            self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
+            self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
+            norm = m.adot(self.l[n], self.r[n])
+            self.A[n] /= sp.sqrt(norm)
+            #print "After A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real, norm.real
+            
+            #shift centre matrix left (LCF is like having a centre "matrix" at "N")
+            Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
+                                      sanity_checks=self.sanity_checks)
+                                      
+            if n < self.N:
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])                                          
+                self.calc_K(n_low=n, n_high=n)
+            
+            if n > 1:
+                lop2 = Vari_Opt_SC_op(self, n - 1, KL[n - 1], tau=1, sanity_checks=self.sanity_checks)
+                Gi = expmh(lop2, Gi.ravel(), -dtau/2., norm_est=abs(self.H_expect.real))
+                Gi = Gi.reshape((self.D[n - 1], self.D[n - 1]))
+                norm = sp.trace(self.l[n - 1].dot(Gi).dot(self.r[n - 1].dot(Gi.conj().T)))
+                G /= sp.sqrt(norm)
+                #print "After G", n, sp.inner(Gi.ravel().conj(), lop2.matvec(Gi.ravel())).real, norm.real
+
+                for s in xrange(self.q[n - 1]):
+                    self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
+            
+                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
 
         
     def expect_2s(self, op, n, AA=None):
