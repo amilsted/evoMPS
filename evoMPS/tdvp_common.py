@@ -1243,10 +1243,11 @@ def restore_LCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
         
         l[n] = mm.eyemat(D, dtype=A[n].dtype)
         
-        l_ = eps_l_noop(l[n - 1], A[n], A[n])
-        if not sp.allclose(l_, l[n].A, atol=1E-13, rtol=1E-13):
-            log.warning("Sanity Fail in restore_LCF_l_seq!: l is bad")
-            log.warning(la.norm(l_ - l[n].A))
+        if sanity_checks:
+            l_ = eps_l_noop(l[n - 1], A[n], A[n])
+            if not sp.allclose(l_, l[n].A, atol=1E-13, rtol=1E-13):
+                log.warning("Sanity Fail in restore_LCF_l_seq!: l is bad")
+                log.warning(la.norm(l_ - l[n].A))
         
     return G
         
