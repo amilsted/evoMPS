@@ -788,9 +788,9 @@ def calc_BB_Y_2s(C, Vlh, Vrh_p1, l_s_m1, r_s_p1):
     for s in xrange(Vlh.shape[0]):
         Y += Vlh[s].dot(l_s_m1.dot(eps_r_noop(r_s_p1, C[s], Vr_p1)))
 
-    etaBB = sp.sqrt(mm.adot(Y, Y))
+    etaBB_sq = mm.adot(Y, Y)
     
-    return Y, etaBB
+    return Y, etaBB_sq
     
 def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_si_m1, r_s_p1, r_si_p1):
     Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj()
@@ -816,9 +816,9 @@ def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_
         for u in xrange(C_m1.shape[2]):
             Y += eps_l_op_2s_A1_A2_C34(l_m2, A_m1, liVl, C_m1[:, :, u]).dot(r_s_p1.dot(Vrh_p1[u]))
 
-    etaBB = sp.sqrt(mm.adot(Y, Y))
+    etaBB_sq = mm.adot(Y, Y)
     
-    return Y, etaBB
+    return Y, etaBB_sq
     
 def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, dD_max=16, sv_tol=1E-14):
     try:
