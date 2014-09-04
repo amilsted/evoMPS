@@ -568,7 +568,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             x = self.calc_x(n, Vrh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
-                self.eta_sq[n] = sp.sqrt(m.adot(x, x))
+                self.eta_sq[n] = m.adot(x, x)
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -591,7 +591,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             x = self.calc_x_l(n, Vlh, l_s_m1, r_s, l_si_m1, r_si)
             
             if set_eta:
-                self.eta_sq[n] = sp.sqrt(m.adot(x, x))
+                self.eta_sq[n] = m.adot(x, x)
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
@@ -1064,12 +1064,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
                 
                 
-    def take_step_split(self, dtau, ncv=None):
+    def take_step_split(self, dtau, ncv=None, ham_not_Herm=False):
         assert self.canonical_form == 'right', 'vari_opt_ss_sweep only implemented for right canonical form'
         assert self.ham_sites == 2, 'vari_opt_ss_sweep only implemented for nearest neighbour Hamiltonians'
         dtau *= -1
         import expokit as expokit
-        def expmh(A, v, t, norm_est=1., m=20):
+        def zexpmh(A, v, t, norm_est=1., m=20):
             xn = A.shape[0]
             vf = sp.ones((xn,), dtype=A.dtype)
             m = min(xn - 1, m)
@@ -1080,14 +1080,45 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             expokit.zhexpv(m, [t], v, vf, [0.], [norm_est], 
                            wsp, iwsp, A.matvec, itrace, iflag, n=[xn], 
                            lwsp=[len(wsp)], liwsp=[len(iwsp)])
+            if iflag[0] == 1:
+                print "Max steps reached!"
+            elif iflag[0] == 2:
+                print "Tolerance too high!"
             return vf
+            
+        def zexpm(A, v, t, norm_est=1., m=20):
+            xn = A.shape[0]
+            vf = sp.ones((xn,), dtype=A.dtype)
+            m = min(xn - 1, m)
+            wsp = sp.zeros((xn * (m + 2) + 5 * (m + 2)**2 + 6 + 1,), dtype=A.dtype)
+            iwsp = sp.zeros((m + 2,), dtype=int)
+            iflag = sp.zeros((1,), dtype=int)
+            itrace = sp.array([0])
+            expokit.zgexpv(m, [t], v, vf, [0.], [norm_est], 
+                           wsp, iwsp, A.matvec, itrace, iflag, n=[xn], 
+                           lwsp=[len(wsp)], liwsp=[len(iwsp)])
+            if iflag[0] == 1:
+                print "Max steps reached!"
+            elif iflag[0] == 2:
+                print "Tolerance too high!"
+            return vf
+            
+        if sp.iscomplex(dtau) or ham_not_Herm:
+            expm = zexpm
+            fac = 1.j
+            dtau = sp.imag(dtau)
+        else:
+            expm = zexpmh
+            fac = 1
+            
+        norm_est = abs(self.H_expect.real)
     
         KL = [None] * (self.N + 1)
         KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
         for n in xrange(1, self.N + 1):
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1])
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac)
             #print "Befor A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmh(lop, self.A[n].ravel(), dtau/2., norm_est=abs(self.H_expect.real))            
+            An = expm(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)            
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
             norm = m.adot(self.l[n], self.r[n])
@@ -1105,9 +1136,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                         self.r[n], self.A[n], self.AA[n - 1])
                 
             if n < self.N:                    
-                lop2 = Vari_Opt_SC_op(self, n, KL[n])
+                lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac)
                 #print "Befor G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real
-                G = expmh(lop2, G.ravel(), -dtau/2., norm_est=abs(self.H_expect.real))
+                G = expm(lop2, G.ravel(), -dtau/2., norm_est=norm_est)
                 G = G.reshape((self.D[n], self.D[n]))
                 norm = sp.trace(self.l[n].dot(G).dot(self.r[n].dot(G.conj().T)))
                 G /= sp.sqrt(norm)
@@ -1120,9 +1151,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])           
    
         for n in xrange(self.N, 0, -1):
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=1, sanity_checks=self.sanity_checks)
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
             #print "Before A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmh(lop, self.A[n].ravel(), dtau/2., norm_est=abs(self.H_expect.real))
+            An = expm(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
             norm = m.adot(self.l[n], self.r[n])
@@ -1139,8 +1170,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.calc_K(n_low=n, n_high=n)
             
             if n > 1:
-                lop2 = Vari_Opt_SC_op(self, n - 1, KL[n - 1], tau=1, sanity_checks=self.sanity_checks)
-                Gi = expmh(lop2, Gi.ravel(), -dtau/2., norm_est=abs(self.H_expect.real))
+                lop2 = Vari_Opt_SC_op(self, n - 1, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
+                Gi = expm(lop2, Gi.ravel(), -dtau/2., norm_est=norm_est)
                 Gi = Gi.reshape((self.D[n - 1], self.D[n - 1]))
                 norm = sp.trace(self.l[n - 1].dot(Gi).dot(self.r[n - 1].dot(Gi.conj().T)))
                 G /= sp.sqrt(norm)
