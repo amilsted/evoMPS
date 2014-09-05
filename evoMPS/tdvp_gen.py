@@ -542,6 +542,22 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     
     def calc_B(self, set_eta=True, l_s=None, l_si=None, r_s=None, r_si=None, 
                Vlh=None, Vrh=None):
+        """Generates the TDVP tangent vector.
+        
+        A TDVP time step is defined as: A -= dtau * B
+        where dtau is an infinitesimal imaginary time step.
+        
+        In other words, this returns B(x*) (equiv. eqn. (47) of 
+        arXiv:1103.0936v2 [cond-mat.str-el]) 
+        with x* the parameter matrices satisfying the Euler-Lagrange equations
+        as closely as possible.
+        
+        Returns
+        -------
+            B : sqeuence of ndarray or None
+                The TDVP tangent vector parameters for each site or None
+                if none is defined for that site.
+        """
         if l_s is None:
             l_s = [None] * (self.N + 1)
         if l_si is None:
@@ -571,14 +587,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     
     def calc_B_n(self, n, set_eta=True, l_s_m1=None, l_si_m1=None, r_s=None, r_si=None, Vlh=None, Vrh=None):
         """Generates the TDVP tangent vector parameters for a single site B[n].
-        
-        A TDVP time step is defined as: A[n] -= dtau * B[n]
-        where dtau is an infinitesimal imaginary time step.
-        
-        In other words, this returns B[n][x*] (equiv. eqn. (47) of 
-        arXiv:1103.0936v2 [cond-mat.str-el]) 
-        with x* the parameter matrices satisfying the Euler-Lagrange equations
-        as closely as possible.
         
         Returns
         -------
@@ -647,8 +655,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         If dtau is itself imaginary, real-time evolution results.
         
         Second-order corrections to the dynamics can be calculated if desired.
-        If they are, the norm of the second-order contributions for each bond 
-        is stored in the array self.eta_BB. For nearest-neighbour Hamiltonians, 
+        If they are, the norm of the second-order contributions is stored in 
+        self.eta_BB. For nearest-neighbour Hamiltonians, 
         this captures all errors made by projecting onto the MPS tangent plane.
                 
         The second-order contributions also form the basis of the dynamical 
@@ -758,8 +766,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.eta = sp.sqrt(self.eta_sq.sum())
         self.etaBB = sp.sqrt(self.etaBB_sq.sum())
         
-        return
-        
     def take_step_RK4(self, dtau):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
@@ -776,33 +782,27 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.etaBB_sq.fill(0)
 
         #Take a copy of the current state
-        A0 = sp.empty_like(self.A)
-        for n in xrange(1, self.N + 1):
-            A0[n] = self.A[n].copy()
-            
+        A0 = [An.copy() if not An is None else None for An in self.A]
+        
         B_fin = self.calc_B()
         
         for n in xrange(1, self.N + 1):
             if not B_fin[n] is None:
-                self.A[n] = A0[n] - dtau/2 * B_fin[n]
-
+                self.A[n] += -dtau/2 * B_fin[n]
         self.update(restore_CF=False, normalize=False)
-        
         B = self.calc_B(set_eta=False) #k2
+        
         for n in xrange(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B_fin[n] += 2 * B[n]
-
         self.update(restore_CF=False, normalize=False)
-
         B = self.calc_B(set_eta=False) #k3
             
         for n in xrange(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau * B[n]
                 B_fin[n] += 2 * B[n]
-
         self.update(restore_CF=False, normalize=False)
 
         for n in xrange(1, self.N + 1):
@@ -813,8 +813,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         for n in xrange(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau / 6 * B_fin[n]
-
-        return
         
     def find_min_h_brent(self, Bs, dtau_init, tol=5E-2, skipIfLower=False, 
                          verbose=False, use_tangvec_overlap=False,
