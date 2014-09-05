@@ -325,8 +325,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.K_l = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
         self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
 
-        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
-
         self.K_l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
         for n in xrange(1, self.N + 1):
@@ -336,11 +334,15 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         for n in xrange(self.N_centre, self.N + 2):
             self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)
             
-        self.eta = sp.zeros((self.N + 1), dtype=self.typ)
-        self.eta.fill(sp.NaN)
-        """The per-site contributions to the norm of the TDVP tangent vector 
+        self.eta_sq = sp.zeros((self.N + 1), dtype=self.typ)
+        self.eta_sq.fill(0)
+        """The per-site contributions to the norm-squared of the TDVP tangent vector 
            (projection of the exact time evolution onto the MPS tangent plane. 
            Only available after calling take_step()."""
+           
+        """The norm of the TDVP tangent vector.
+        """
+        self.eta = sp.NaN
         
         self.h_expect = sp.empty((self.N + 1), dtype=self.typ)
         self.h_expect.fill(sp.NaN)
@@ -538,9 +540,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             Bc[s] += lcm1_i.dot(Bcsbit)
            
         rb = tm.eps_r_noop(rc, Bc, Bc)
-        eta = sp.sqrt(mm.adot(lcm1, rb))
+        eta_sq = mm.adot(lcm1, rb)
                 
-        return Bc, eta
+        return Bc, eta_sq
 
     def calc_B(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
@@ -553,9 +555,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         In the case of Bc, use the general Bc generated in calc_B_centre().
         """
         if n == self.N_centre:
-            B, eta_c = self.calc_B_centre()
+            B, eta_sq_c = self.calc_B_centre()
             if set_eta:
-                self.eta[self.N_centre] = eta_c
+                self.eta_sq[self.N_centre] = eta_sq_c
         else:
             l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv = self.calc_l_r_roots(n)
             
@@ -585,7 +587,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                         print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
             
             if set_eta:
-                self.eta[n] = sp.sqrt(mm.adot(x, x))
+                self.eta_sq[n] = mm.adot(x, x)
 
 
         return B
@@ -641,19 +643,19 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
 
         eta_tot = 0
-        self.eta.fill(0)
+        self.eta_sq.fill(0)
         
         B = [None]
         for n in xrange(1, self.N + 1):
             B.append(self.calc_B(n))
-            eta_tot += self.eta[n]
+            eta_tot += self.eta_sq[n]
             
         for n in xrange(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] += -dtau * B[n]
                 B[n] = None
-
-        return eta_tot
+                
+        self.eta = sp.sqrt(self.eta_sq.sum())
 
 
     def take_step_RK4(self, dtau):
@@ -664,7 +666,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         and stable than forward Euler.
         """        
         eta_tot = 0
-        self.eta.fill(0)
+        self.eta_sq.fill(0)
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
@@ -676,8 +678,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         B = [None]
         for n in xrange(1, self.N + 1):
             B.append(self.calc_B(n)) #k1
-            eta_tot += self.eta[n]
+            eta_tot += self.eta_sq[n]
             B_fin.append(B[-1])
+            
+        self.eta = sp.sqrt(eta_tot)
         
         for n in xrange(1, self.N + 1):
             if not B[n] is None:
@@ -718,8 +722,6 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         for n in xrange(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
-
-        return eta_tot
         
     def grow_left(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
