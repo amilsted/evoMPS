@@ -499,9 +499,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if dynexp and self.D < maxD:
             if BB is None:
-                BB = self.calc_B_2s(dD_max=dD_max, sv_tol=sv_tol)
+                BB = self.calc_B_2s(dD_max=min(dD_max, maxD - self.D), sv_tol=sv_tol)
             if not BB is None:
-                BB1, BB2, etaBB = BB
+                BB1, BB2, etaBB_sq = BB
                 oldD = self.D
                 dD = BB1[0].shape[2]
                 self.expand_D(self.D + dD, refac=0, imfac=0) #FIXME: Currently expands all D
