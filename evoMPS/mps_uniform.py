@@ -354,6 +354,9 @@ class EvoMPS_MPS_Uniform(object):
         ncv : int
             Number of Arnoldii basis vectors to store.
         """
+        if ncv is None:
+            ncv = k * 3
+        
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
         
