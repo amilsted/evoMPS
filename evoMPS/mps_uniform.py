@@ -289,8 +289,7 @@ class EvoMPS_MPS_Uniform(object):
             eV *= -1
 
         eV = eV.reshape(self.D, self.D)
-        
-        eV *= n / norm(eV.ravel())
+        #eV *= 1 / norm(eV.ravel())
         
         x[:] = eV
                     
@@ -490,7 +489,7 @@ class EvoMPS_MPS_Uniform(object):
         if self.symm_gauge:
             norm = m.adot(self.l[-1], self.r[-1]).real
             itr = 0 
-            while not np.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
+            while not abs(norm - 1) < 1E-13 and itr < 10:
                 self.l[-1] *= 1. / ma.sqrt(norm)
                 self.r[-1] *= 1. / ma.sqrt(norm)
                 
@@ -507,7 +506,7 @@ class EvoMPS_MPS_Uniform(object):
 
             norm = m.adot(self.l[-1], self.r[-1]).real
             itr = 0 
-            while not np.allclose(norm, 1, atol=1E-13, rtol=0) and itr < 10:
+            while not abs(norm - 1) < 1E-13 and itr < 10:
                 self.l[-1] *= 1. / norm
                 norm = m.adot(self.l[-1], self.r[-1]).real
                 itr += 1
