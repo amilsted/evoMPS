@@ -339,7 +339,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-12, k=2, ncv=None):
+    def correlation_length(self, tol=1E-12, k=3, ncv=None):
         """
         Calculates the correlation length in units of the lattice spacing.
         
@@ -352,7 +352,7 @@ class EvoMPS_MPS_Uniform(object):
         tol : float
             Tolerance for second-largest eigenvalue.
         ncv : int
-            Number of Arnoldii basis vectors to store.
+            Number of Arnoldi basis vectors to store.
         """
         if ncv is None:
             ncv = k * 3
