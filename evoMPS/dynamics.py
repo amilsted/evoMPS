@@ -34,7 +34,6 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
 
 def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000, 
                 expand_to_D=None, expand_step=2, expand_tol=1E-2, 
-                expand_im_steps=5,
                 cb_func=None, **kwargs):
     j = 0
     if not cb_func is None:
@@ -46,36 +45,16 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
     if expand_to_D is None:
         expand_to_D = sys.D
         
-    while True:
-        sys, dj, h0, B = opt_conj_grad(sys, tol=tol if sys.D == expand_to_D else expand_tol, 
-                                    h_init=h_init, max_itr=max_itr, return_B_grad=True,
-                                    cb_func=cb_wrap, **kwargs)
-        j += dj
-            
-        if sys.D < expand_to_D:
-            D_old = sys.D
-            #sys.take_step(h_init, B=B, dynexp=True, dD_max=expand_step, maxD=expand_to_D)
-            #j += 1
-            #sys, dj, tau, dtau = opt_im_time(sys, tol=tol, dtau_base=h_init, max_itr=5, cb_func=cb_wrap)
-            #j += dj
-            while sys.eta.real < expand_tol and sys.D < expand_to_D:
-                sys.take_step(h_init, B=B, dynexp=True, dD_max=expand_step, maxD=expand_to_D)
-                j += 1
-                B = None
-                if not cb_wrap is None:
-                    cb_wrap(sys, 0)
-                sys, dj, tau, dtau = opt_im_time(sys, tol=tol, dtau_base=h_init, 
-                                                 max_itr=expand_im_steps, cb_func=cb_wrap)
-                j += dj
-                
-            if sys.D == D_old:
-                print "Converged before reaching target D."
-                break
-            else:
-                print "Expanded. New D:", sys.D
-        else:
-            break
-            
+    #Expand rapidly using imaginary time evolution before moving to CG
+    sys, dj, tau, dtau = opt_im_time(sys, tol=expand_tol, dtau_base=h_init, 
+                                     max_itr=max_itr, cb_func=cb_wrap,
+                                     expand_to_D=expand_to_D, expand_step=expand_step,
+                                     expand_tol=expand_tol)
+    j += dj        
+        
+    sys, dj, h0, B = opt_conj_grad(sys, tol=tol, h_init=h_init, max_itr=max_itr, 
+                                   return_B_grad=True, cb_func=cb_wrap, **kwargs)
+
     return sys
 
 def _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred):
@@ -113,7 +92,8 @@ def _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred):
     
 def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000, 
                 cb_func=None, auto_trunc=True, auto_dtau=True,
-                expand_to_D=None, expand_tol=1E-2, expand_step=2):
+                expand_to_D=None, expand_tol=1E-2, expand_step=2,
+                expand_wait_steps=5):
     if expand_to_D is None:
         expand_to_D = sys.D
         
@@ -125,6 +105,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
     tau = 0
     h = 0
     dh_pred = 0
+    expand_wait = 0
     for i in xrange(max_itr + 1):
         sys.update(auto_truncate=auto_trunc)
         B = sys.calc_B()
@@ -136,21 +117,27 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
         dh = h - sys.h_expect.real
         h = sys.h_expect.real
 
-        if eta.real < tol or i == max_itr:
+        if i == max_itr or eta.real < tol and sys.D == expand_to_D and expand_wait == 0:
             break
 
         if auto_dtau:
             dtau, dh_pred = _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred)
         
-        dynexp = sys.D < expand_to_D and eta.real < expand_tol
+        #Note: expand_wait is important for stability. Expansion adds relatively
+        #      small entries, and repeated expansion can lead to bad conditioning.
+        dynexp = sys.D < expand_to_D and eta.real < expand_tol and expand_wait == 0
         
         sys.take_step(dtau, B=B, dynexp=dynexp, dD_max=expand_step, 
                       maxD=expand_to_D)
+                      
+        expand_wait = max(expand_wait - 1, 0)
+        if dynexp:
+            expand_wait = expand_wait_steps
         tau += dtau
         
     return sys, i + 1, tau, dtau
 
-def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=15, 
+def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=10, 
                   max_itr=10000, cb_func=None, return_B_grad=False):
     B_CG = None
     B_grad = None
