@@ -2,22 +2,21 @@
 """
 @author: Ashley Milsted
 """
-import copy as cp
 import scipy as sp
 import scipy.optimize as opti
 import scipy.linalg as la
-import tdvp_common as tm
-import matmul as m
-from mps_uniform import EvoMPS_MPS_Uniform
-import logging
 
 def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None):
-    for i in xrange(int(t / dt)):
+    num_steps = int(t / dt)
+    for i in xrange(num_steps + 1):
         sys.update()
         B = sys.calc_B()
 
         if not cb_func is None:
             cb_func(sys, i)
+            
+        if i == num_steps:
+            break
 
         if integ.lower() == "euler":
             sys.take_step(dt * 1.j, B=B)
@@ -33,9 +32,10 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
         
     return sys    
 
-def find_ground(sys, tol=1E-6, h_init=0.04, use_CG=True, CG_gap=5, CG_max=5, 
-                CG_tol=1000,
-                max_itr=10000, gap_gd=False, cb_func=None):
+def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000, 
+                expand_to_D=None, expand_step=2, expand_tol=1E-2, 
+                expand_im_steps=5,
+                cb_func=None, **kwargs):
     j = 0
     if not cb_func is None:
         def cb_wrap(sys, i, **kwargs):
@@ -43,36 +43,40 @@ def find_ground(sys, tol=1E-6, h_init=0.04, use_CG=True, CG_gap=5, CG_max=5,
     else:
         cb_wrap = None
         
-    dtau = h_init
-    h0 = None
-    while j < max_itr:
-        if gap_gd:
-            sys, dj = opt_grad_descent(sys, tol=tol, h0=dtau, 
-                                       max_itr=min(CG_gap, max_itr - j), 
-                                       cb_func=cb_wrap)
-        else:
-            sys, dj, tau, dtau = opt_im_time(sys, tol=tol, dtau_base=h_init, 
-                                             dtau0=dtau, 
-                                             max_itr=min(CG_gap, max_itr - j), 
-                                             cb_func=cb_wrap, auto_trunc=True)
-        j += dj
+    if expand_to_D is None:
+        expand_to_D = sys.D
         
-        if use_CG:
-#            if j / (CG_gap + CG_max) % 4 == 0:
-#                h0 = None
-            if sys.eta < CG_tol:
-                CG_max_itr = min(CG_max, max_itr - j)
+    while True:
+        sys, dj, h0, B = opt_conj_grad(sys, tol=tol if sys.D == expand_to_D else expand_tol, 
+                                    h_init=h_init, max_itr=max_itr, return_B_grad=True,
+                                    cb_func=cb_wrap, **kwargs)
+        j += dj
+            
+        if sys.D < expand_to_D:
+            D_old = sys.D
+            #sys.take_step(h_init, B=B, dynexp=True, dD_max=expand_step, maxD=expand_to_D)
+            #j += 1
+            #sys, dj, tau, dtau = opt_im_time(sys, tol=tol, dtau_base=h_init, max_itr=5, cb_func=cb_wrap)
+            #j += dj
+            while sys.eta.real < expand_tol and sys.D < expand_to_D:
+                sys.take_step(h_init, B=B, dynexp=True, dD_max=expand_step, maxD=expand_to_D)
+                j += 1
+                B = None
+                if not cb_wrap is None:
+                    cb_wrap(sys, 0)
+                sys, dj, tau, dtau = opt_im_time(sys, tol=tol, dtau_base=h_init, 
+                                                 max_itr=expand_im_steps, cb_func=cb_wrap)
+                j += dj
+                
+            if sys.D == D_old:
+                print "Converged before reaching target D."
+                break
             else:
-                CG_max_itr = min(1, max_itr - j)
-            sys, dj, h0 = opt_conj_grad(sys, tol=tol, h_init=h_init, h0_prev=h0, 
-                                        max_itr=CG_max_itr, 
-                                        reset_every=CG_max, cb_func=cb_wrap)
-            j += dj
+                print "Expanded. New D:", sys.D
+        else:
+            break
             
-        if sys.eta < tol: #Note: In case tol not reached, this value is out of date, but that's okay.
-            break         
-            
-    return sys, j
+    return sys
 
 def _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred):
     #Adjust step size depending on eta vs. dh.
@@ -107,13 +111,21 @@ def _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred):
     return dtau, dh_pred_next
 
     
-def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=0.04, max_itr=10000, cb_func=None, auto_trunc=True, auto_dtau=True):
+def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000, 
+                cb_func=None, auto_trunc=True, auto_dtau=True,
+                expand_to_D=None, expand_tol=1E-2, expand_step=2):
+    if expand_to_D is None:
+        expand_to_D = sys.D
+        
+    if dtau0 is None:
+        dtau0 = dtau_base
+        
     i = -1
     dtau = dtau0
     tau = 0
     h = 0
     dh_pred = 0
-    for i in xrange(max_itr):
+    for i in xrange(max_itr + 1):
         sys.update(auto_truncate=auto_trunc)
         B = sys.calc_B()
 
@@ -124,19 +136,22 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=0.04, max_itr=10000, cb_fun
         dh = h - sys.h_expect.real
         h = sys.h_expect.real
 
+        if eta.real < tol or i == max_itr:
+            break
+
         if auto_dtau:
             dtau, dh_pred = _im_time_autostep(dtau, dtau_base, eta, dh, dh_pred)
         
-        if sys.eta < tol:
-            break
+        dynexp = sys.D < expand_to_D and eta.real < expand_tol
         
-        sys.take_step(dtau, B=B)
+        sys.take_step(dtau, B=B, dynexp=dynexp, dD_max=expand_step, 
+                      maxD=expand_to_D)
         tau += dtau
         
     return sys, i + 1, tau, dtau
 
-def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20, 
-                  max_itr=10000, cb_func=None):
+def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=15, 
+                  max_itr=10000, cb_func=None, return_B_grad=False):
     B_CG = None
     B_grad = None
     if not h0_prev is None:
@@ -147,7 +162,7 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
     BgdotBg = 0
 
     i = -1
-    for i in xrange(max_itr):
+    for i in xrange(max_itr + 1):
         reset = i % reset_every == 0
         sys.update(restore_CF=reset) #This simple CG works much better without restore_CF within a run.
                                      #With restore_CF, one would have to transform B_prev to match.
@@ -158,7 +173,7 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
         if not cb_func is None:
             cb_func(sys, i, h=h)
 
-        if sys.eta < tol:
+        if sys.eta < tol or i == max_itr:
             break
 
         sys.take_step(h, B=B_CG)
@@ -166,8 +181,11 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
         if i == 0:
             h0 = h #Store the first (steepest descent) step
             h = h_init #second step is usually far shorter than the first (GD) step!
-
-    return sys, i + 1, h0
+    
+    if return_B_grad:
+        return sys, i + 1, h0, B_grad
+    else:
+        return sys, i + 1, h0
 
 def opt_grad_descent(sys, tol=1E-6, h_init=0.01, max_itr=10000, im_gap=5, 
                      gap_every=1, cb_func=None):
