@@ -848,8 +848,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def save_state(self, file, userdata=None):
         np.save(file, self.export_state(userdata))
         
-    def import_state(self, state, expand=False, truncate=False,
-                     expand_q=False, shrink_q=False, refac=0.1, imfac=0.1):
+    def import_state(self, state, expand=False, truncate=False, 
+                     expand_q=False, shrink_q=False, refac=0.1, imfac=0.1,
+                     do_update=True):
         newA = state[0]
         newlL = state[1]
         newrL = state[2]
@@ -930,6 +931,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             log.warning("SHRUNK in q!")
         else:
             return False
+            
+        if do_update:
+            self.update()
             
     def load_state(self, file, expand=False, truncate=False, expand_q=False,
                    shrink_q=False, refac=0.1, imfac=0.1):
