@@ -94,10 +94,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
            (projection of the exact time
            evolution onto the MPS tangent plane. Only available after calling
            take_step()."""
-        self.eta_sq.fill(sp.NaN)
+        self.eta_sq.fill(0)
         
         self.eta = sp.NaN
         """The norm of the TDVP tangent vector (square root of the sum of eta_sq)."""
+        
+        self.etaBB_sq = sp.empty((L), dtype=self.A[0].dtype)
+        """The site contributions to the norm squared of the TDVP evolution
+           captured by the two-site tangent plane (but not the one-site tangent plane).
+           Available after calling take_step() with dynexp=True."""
+        self.etaBB_sq.fill(0)
+        
+        self.etaBB = sp.NaN
+        """The norm of the TDVP evolution captured by the two-site tangent plane.
+           Available after calling take_step() with dynexp=True."""
             
     def set_ham_array_from_function(self, ham_func):
         """Generates a Hamiltonian array from a function.
@@ -403,27 +413,28 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     log.warning("Sanity check failed: Gauge-fixing violation! %s", la.norm(tst))
             
         self.Vsh = Vsh
-        self.eta = sp.sqrt(self.eta_sq.real.sum())
+        self.eta = sp.sqrt(self.eta_sq.sum())
             
         return B
         
     def calc_BB_Y_2s(self, Vlh):
         L = self.L
         Y = sp.empty((L), dtype=sp.ndarray)
-        etaBB = sp.zeros((L), dtype=sp.complex128)
         if self.ham_sites == 2:
             for k in xrange(L):
-                Y[k], etaBB[k] = tm.calc_BB_Y_2s(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
+                Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
                                                    self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
         else:
             for k in xrange(L):
-                Y[k], etaBB[k] = tm.calc_BB_Y_2s_ham_3s(self.A[k - 1], self.A[(k + 2) % L], 
+                Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s_ham_3s(self.A[k - 1], self.A[(k + 2) % L], 
                                        self.C[k], self.C[k - 1], Vlh[k], self.Vsh[(k + 1) % L],
                                        self.l[(k - 2) % L], self.r[(k + 2) % L],
                                        self.l_sqrt[k - 1], self.l_sqrt_i[k - 1], 
                                        self.r_sqrt[(k + 1) % L], self.r_sqrt_i[(k + 1) % L])
         
-        return Y, etaBB
+        self.etaBB = sp.sqrt(self.etaBB_sq.sum())
+        
+        return Y, self.etaBB_sq
         
     def calc_B_2s(self, dD_max=16, sv_tol=1E-14):
         Vrh = self.Vsh
@@ -432,7 +443,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for k in xrange(L):
             Vlh.append(tm.calc_Vsh_l(self.A[k], self.l_sqrt[k - 1], sanity_checks=self.sanity_checks))
         
-        Y, etaBB = self.calc_BB_Y_2s(Vlh)
+        Y, etaBB_sq = self.calc_BB_Y_2s(Vlh)
         
         BB1 = [None] * L
         BB2 = [None] * L
@@ -441,7 +452,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                               self.l_sqrt_i[k - 1], self.r_sqrt_i[(k + 1) % L],
                                               dD_max=dD_max, sv_tol=0) #FIXME: Make D variable...
         
-        return BB1, BB2, etaBB
+        return BB1, BB2, etaBB_sq
         
     def update(self, restore_CF=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
