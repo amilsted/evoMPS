@@ -793,7 +793,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         ls = EvoMPS_line_search(self, BCG, BG)
         g0 = ls.gs[0].real
         if g0 > 0:
-            log.warning("CG: RESET due to bad search direction!")
+            log.info("CG: RESET due to bad search direction.")
             BCG = BG
             ls = EvoMPS_line_search(self, BCG, BG)
             g0 = ls.gs[0].real
@@ -1090,7 +1090,7 @@ class EvoMPS_line_search():
             
     def sane_first_step(self, dtau_init, max_itr=10):
         tau = dtau_init
-        h = 1
+        h = 1 + self.hs[0]
         g = -1
         i = 0
         while (g < 0 and h - self.hs[0] > 1E-13) and i < max_itr: #Energy increase with negative gradient!
@@ -1139,7 +1139,7 @@ class EvoMPS_line_search():
                     tau_opt = opti.brentq(self.f, taus[0], taus[-1], xtol=tol, maxiter=max_iter)
                 except ValueError:
                     log.warning("CG: Failed to find a valid bracket.")
-                    return 0, self.hs[0] #fail
+                    return 0, self.hs[0], 0 #fail
                 
             except ls_wolfe_sat as e:
                 log.debug("CG: Aborting early due to Wolfe")
