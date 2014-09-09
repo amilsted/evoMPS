@@ -285,21 +285,22 @@ class EvoMPS_MPS_Uniform(object):
             try:
                 ev, eV = las.eigs(opE, which='LM', k=k, v0=v0, tol=tol, ncv=ncv)
                 conv = True
+                ind = abs(ev).argmax()
+                ev = np.real_if_close(ev[ind])
+                ev = np.asscalar(ev)
+                eV = eV[:, ind]
+                if abs(ev) < 1E-12:
+                    raise ValueError("Largest eigenvector too small!")
                 break
-            except las.ArpackNoConvergence:
+            except (las.ArpackNoConvergence, ValueError):
                 log.warning("_calc_lr_ARPACK: Retry %u! (%s)", i, "l" if calc_l else "r")
                 v0 = None
                 k += 1
                 ncv = k * 3
                 
-        if i == max_retries + 1:
+        if i == max_retries - 1:
             log.error("_calc_lr_ARPACK: Failed to converge! (%s)", i, "l" if calc_l else "r")
             raise EvoMPSNoConvergence("_calc_lr_ARPACK: Failed to converge!")
-            
-        ind = abs(ev).argmax()
-        ev = np.real_if_close(ev[ind])
-        ev = np.asscalar(ev)
-        eV = eV[:, ind]
         
         #remove any additional phase factor
         eVmean = eV.mean()
