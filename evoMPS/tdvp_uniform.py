@@ -83,6 +83,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.C.append(np.zeros(C_shape, dtype=self.typ, order=self.odr))
             self.K.append(np.ones_like(self.A[k][0]))
             
+        self.K0_init = None
+            
         self.AAA = [None] * L
         
         self.Vsh = [None] * L
@@ -239,7 +241,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         self.h_expect /= L
         
+        if not self.K0_init is None:
+            self.K[0] = self.K0_init
+
         self.calc_PPinv(QHr, out=self.K[0], solver=self.K_solver)
+        
+        self.K0_init = None
         
         if self.ham_sites == 2:
             for k in sp.arange(L - 1, 0, -1) % L:
@@ -818,7 +825,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if tau > 0:
             self.lL_before_CF = ls.lLs[ind]
             self.rL_before_CF = ls.rLs[ind]
-            self.K[0] = ls.K0s[ind]
+            self.K0_init = ls.K0s[ind]
         else:
             log.warning("CG retries failed. Taking a small GD step.")
             tau = tau_init #If all else fails, take a blind imtime step
