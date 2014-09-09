@@ -68,6 +68,18 @@ class EOp:
         self.calls += 1
         
         return Ex.ravel()
+        
+class EvoMPSNoConvergence(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+        
+class EvoMPSNormError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
 
 class EvoMPS_MPS_Uniform(object):   
         
@@ -237,7 +249,7 @@ class EvoMPS_MPS_Uniform(object):
         return lL, rL        
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        tol=1E-14, ncv=None, k=1):
+                        tol=1E-14, ncv=None, k=1, max_retries=3):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -268,13 +280,21 @@ class EvoMPS_MPS_Uniform(object):
         
         opE = EOp(A1, A2, calc_l)
         x *= n / norm(x.ravel())
-        try:
-            ev, eV = las.eigs(opE, which='LM', k=k, v0=x.ravel(), tol=tol, ncv=ncv)
-            conv = True
-        except las.ArpackNoConvergence:
-            log.warning("Reset! (l? %s)", calc_l)
-            ev, eV = las.eigs(opE, which='LM', k=k, tol=tol, ncv=ncv)
-            conv = True
+        v0 = x.ravel()
+        for i in xrange(max_retries):
+            try:
+                ev, eV = las.eigs(opE, which='LM', k=k, v0=v0, tol=tol, ncv=ncv)
+                conv = True
+                break
+            except las.ArpackNoConvergence:
+                log.warning("_calc_lr_ARPACK: Retry %u! (%s)", i, "l" if calc_l else "r")
+                v0 = None
+                k += 1
+                ncv = k * 3
+                
+        if i == max_retries + 1:
+            log.error("_calc_lr_ARPACK: Failed to converge! (%s)", i, "l" if calc_l else "r")
+            raise EvoMPSNoConvergence("_calc_lr_ARPACK: Failed to converge!")
             
         ind = abs(ev).argmax()
         ev = np.real_if_close(ev[ind])
@@ -305,13 +325,24 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, conv, opE.calls
         
-    def _calc_E_largest_eigenvalues(self, tol=1E-6, k=2, ncv=10):
+    def _calc_E_largest_eigenvalues(self, tol=1E-6, k=2, ncv=None, max_retries=3):
         opE = EOp(self.A, self.A, False)
         
         r0 = np.asarray(self.r[-1])
         
-        ev = las.eigs(opE, which='LM', k=k, v0=r0.ravel(), tol=tol, ncv=ncv,
-                      return_eigenvectors=False)
+        for i in xrange(max_retries):
+            try:
+                ev = las.eigs(opE, which='LM', k=k, v0=r0.ravel(), tol=tol, ncv=ncv,
+                              return_eigenvectors=False)
+                break
+            except las.ArpackNoConvergence:
+                log.warning("_calc_E_largest_eigenvalues: Retry %u!", i)
+                k += 1
+                ncv = k * 3
+        
+        if i == max_retries - 1:
+            log.error("_calc_E_largest_eigenvalues: Failed to converge!")
+            raise EvoMPSNoConvergence("_calc_E_largest_eigenvalues failed!")
                           
         return ev
         
@@ -333,9 +364,11 @@ class EvoMPS_MPS_Uniform(object):
             Number of Arnoldii basis vectors to store.
         """
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
-                          
-        ev1_mag = abs(ev).max()
-        ev2_mag = abs(ev).min()
+        
+        ev = abs(ev)
+        ev.sort()
+        ev1_mag = ev[-1]
+        ev2_mag = ev[-2]
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
@@ -355,7 +388,7 @@ class EvoMPS_MPS_Uniform(object):
             Number of Arnoldi basis vectors to store.
         """
         if ncv is None:
-            ncv = k * 3
+            ncv = k * 4
         
         ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
@@ -368,6 +401,7 @@ class EvoMPS_MPS_Uniform(object):
         log.debug("Eigenvalue magnitudes of the transfer operator: %s", ev)
                           
         ev1 = ev[-1]
+        ev = ev[:-1]
         
         if abs(ev1 - 1) > tol:
             log.warning("Warning: Largest eigenvalue != 1")
@@ -375,6 +409,7 @@ class EvoMPS_MPS_Uniform(object):
         while True:
             if ev.shape[0] > 1 and (ev1 - ev[-1]) < tol:
                 ev = ev[:-1]
+                log.warning("Warning: Degenerate largest eigenvalue in E spectrum!")
             else:
                 break
 
@@ -488,34 +523,37 @@ class EvoMPS_MPS_Uniform(object):
         self.rL_before_CF = self.r[-1].copy()
             
         #normalize eigenvectors:
-
-        if self.symm_gauge:
-            norm = m.adot(self.l[-1], self.r[-1]).real
-            itr = 0 
-            while not abs(norm - 1) < 1E-13 and itr < 10:
-                self.l[-1] *= 1. / ma.sqrt(norm)
-                self.r[-1] *= 1. / ma.sqrt(norm)
-                
+        try:
+            if self.symm_gauge:
                 norm = m.adot(self.l[-1], self.r[-1]).real
-                
-                itr += 1
-                
-            if itr == 10:
-                log.warning("Warning: Max. iterations reached during normalization!")
-        else:
-            fac = self.D / np.trace(self.r[-1]).real
-            self.l[-1] *= 1 / fac
-            self.r[-1] *= fac
-
-            norm = m.adot(self.l[-1], self.r[-1]).real
-            itr = 0 
-            while not abs(norm - 1) < 1E-13 and itr < 10:
-                self.l[-1] *= 1. / norm
+                itr = 0 
+                while not abs(norm - 1) < 1E-13 and itr < 10:
+                    self.l[-1] *= 1. / ma.sqrt(norm)
+                    self.r[-1] *= 1. / ma.sqrt(norm)
+                    
+                    norm = m.adot(self.l[-1], self.r[-1]).real
+                    
+                    itr += 1
+                    
+                if itr == 10:
+                    log.warning("Warning: Max. iterations reached during normalization!")
+            else:
+                fac = self.D / np.trace(self.r[-1]).real
+                self.l[-1] *= 1 / fac
+                self.r[-1] *= fac
+    
                 norm = m.adot(self.l[-1], self.r[-1]).real
-                itr += 1
-                
-            if itr == 10:
-                log.warning("Warning: Max. iterations reached during normalization!")
+                itr = 0 
+                while not abs(norm - 1) < 1E-13 and itr < 10:
+                    self.l[-1] *= 1. / norm
+                    norm = m.adot(self.l[-1], self.r[-1]).real
+                    itr += 1
+                    
+                if itr == 10:
+                    log.warning("Warning: Max. iterations reached during normalization!")
+        except ValueError:
+            log.error("calc_lr: Normalization of eigenvectors failed!")
+            raise EvoMPSNormError("calc_lr")
 
         for k in xrange(len(self.A) - 1, 0, -1):
             self.r[k - 1] = tm.eps_r_noop(self.r[k], self.A[k], self.A[k])
