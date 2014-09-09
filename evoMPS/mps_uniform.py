@@ -616,13 +616,17 @@ class EvoMPS_MPS_Uniform(object):
             zero_tol = self.zero_tol
         
         for k in xrange(self.L):
-            X = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
-                                         force_evd=False, calc_inv=False,
-                                         sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r%u' % k)
-            
-            Y = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
-                                         force_evd=False, calc_inv=False,
-                                         sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l%u' % k)          
+            try:
+                X = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
+                                             force_evd=False, calc_inv=False,
+                                             sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r%u' % k)
+                
+                Y = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
+                                             force_evd=False, calc_inv=False,
+                                             sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l%u' % k)
+            except ValueError:
+                log.error("restore_SCF: Decomposition of l and r failed!")
+                raise ValueError('restore_SCF: Decomposition of l and r failed!')
             
             U, sv, Vh = la.svd(Y.dot(X))
             
