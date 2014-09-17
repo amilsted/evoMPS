@@ -118,6 +118,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         self.K0_init = None
         
+    def convert_to_TI_blocked(self, do_update=True):
+        L = self.L
+        q = self.q
+        newq = q**L
+        
+        #Currently, all supported Hams become nearest-neighbour.
+        newham = sp.zeros((newq**2, newq**2), dtype=self.typ)
+        oldham = self.ham.reshape((q**self.ham_sites, q**self.ham_sites))
+        
+        for k in xrange(L):
+            newham += sp.kron(sp.kron(sp.eye(q**k), oldham), sp.eye(q**(2 * L - k - self.ham_sites)))
+            
+        newham = newham.reshape((newq, newq, newq, newq))
+        self.ham = newham
+        super(EvoMPS_TDVP_Uniform, self).convert_to_TI_blocked(do_update=do_update)
             
     def set_ham_array_from_function(self, ham_func):
         """Generates a Hamiltonian array from a function.

@@ -193,6 +193,32 @@ class EvoMPS_MPS_Uniform(object):
         
         if do_update:
             self.update()
+            
+    def convert_to_TI_blocked(self, do_update=True):
+        L = self.L
+        q = self.q
+        newq = q**L
+        if newq > 1024:
+            print "Warning: Local dimension will be", newq
+        
+        newA = sp.zeros((newq, self.D, self.D), dtype=self.typ)
+        for s in xrange(newq):
+            newA[s] = sp.eye(self.D)
+            for k in xrange(L):
+                t = (s / q**k) % q
+                newA[s] = self.A[L - k - 1][t].dot(newA[s])
+                
+        newlL = sp.asarray(self.l[-1])
+        newrL = sp.asarray(self.r[-1])
+                
+        self._init_arrays(self.D, newq, 1)
+        
+        self.A[0] = newA
+        self.lL_before_CF = newlL
+        self.rL_before_CF = newrL
+        
+        if do_update:
+            self.update()
     
     def _init_arrays(self, D, q, L):
         self.D = D
