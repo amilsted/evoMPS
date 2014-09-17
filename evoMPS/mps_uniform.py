@@ -350,28 +350,36 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, conv, opE.calls
         
-    def _calc_E_largest_eigenvalues(self, tol=1E-6, k=2, ncv=None, max_retries=3):
-        opE = EOp(self.A, self.A, False)
+    def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
+                                    left=False, max_retries=3, 
+                                    return_eigenvectors=False):
+        A = list(self.A)
+        A = A[k:] + A[:k]
         
-        r0 = np.asarray(self.r[-1])
+        opE = EOp(A, A, left)
+        
+        if left:
+            v0 = np.asarray(self.l[(k - 1) % self.L])
+        else:
+            v0 = np.asarray(self.r[(k - 1) % self.L])
         
         for i in xrange(max_retries):
             try:
-                ev = las.eigs(opE, which='LM', k=k, v0=r0.ravel(), tol=tol, ncv=ncv,
-                              return_eigenvectors=False)
+                res = las.eigs(opE, which='LM', k=nev, v0=v0.ravel(), tol=tol, 
+                              ncv=ncv, return_eigenvectors=return_eigenvectors)
                 break
             except las.ArpackNoConvergence:
                 log.warning("_calc_E_largest_eigenvalues: Retry %u!", i)
-                k += 1
-                ncv = k * 3
+                nev += 1
+                ncv = nev * 3
         
         if i == max_retries - 1:
             log.error("_calc_E_largest_eigenvalues: Failed to converge!")
             raise EvoMPSNoConvergence("_calc_E_largest_eigenvalues failed!")
                           
-        return ev
+        return res
         
-    def calc_E_gap(self, tol=1E-6, k=2, ncv=None):
+    def calc_E_gap(self, tol=1E-6, nev=2, ncv=None):
         """
         Calculates the spectral gap of E by calculating the second-largest eigenvalue.
         
@@ -385,10 +393,12 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         tol : float
             Tolerance for second-largest eigenvalue.
+        nev : int
+            Number of eigenvalues to calculate.
         ncv : int
             Number of Arnoldii basis vectors to store.
         """
-        ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
+        ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         
         ev = abs(ev)
         ev.sort()
@@ -397,7 +407,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-12, k=3, ncv=None):
+    def correlation_length(self, tol=1E-12, nev=3, ncv=None):
         """
         Calculates the correlation length in units of the lattice spacing.
         
@@ -409,13 +419,15 @@ class EvoMPS_MPS_Uniform(object):
         ----------
         tol : float
             Tolerance for second-largest eigenvalue.
+        nev : int
+            Number of eigenvalues to calculate.
         ncv : int
             Number of Arnoldi basis vectors to store.
         """
         if ncv is None:
-            ncv = k * 4
+            ncv = nev * 4
         
-        ev = self._calc_E_largest_eigenvalues(tol=tol, k=k, ncv=ncv)
+        ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
         
         #We only require the absolute values, and sort() does not handle
