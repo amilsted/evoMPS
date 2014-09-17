@@ -17,7 +17,7 @@ import scipy.sparse.linalg as las
 import scipy.optimize as opti
 import tdvp_common as tm
 import matmul as m
-from mps_uniform import EvoMPS_MPS_Uniform
+from mps_uniform import EvoMPS_MPS_Uniform, EvoMPSNoConvergence, EvoMPSNormError
 from mps_uniform_pinv import pinv_1mE
 from mps_uniform_excite import Excite_H_Op
 import logging
@@ -801,11 +801,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         g0 = ls.gs[0].real
         if g0 > 0:
             log.info("CG: RESET due to bad search direction.")
+            self.update() #Restores CF
+            BG = self.calc_B()
             BCG = BG
             ls = EvoMPS_line_search(self, BCG, BG)
             g0 = ls.gs[0].real
         
-        tau, h_min, ind = ls.brentq(max(tau0, tau_init * 0.5))
+        try:
+            tau, h_min, ind = ls.brentq(max(tau0, tau_init * 0.5))
+        except (EvoMPSNoConvergence, EvoMPSNormError):
+            tau = 0
 
         if tau == 0:
             log.warning("CG RESET with dtau_init due to failed line search!")
@@ -817,9 +822,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             retry = False
 
         if retry:
-            if not BG is BCG: #Always reset when retrying
-                BCG = BG
-                ls = EvoMPS_line_search(self, BCG, BG)
+            self.update() #Restores CF
+            BG = self.calc_B()
+            BCG = BG
+            ls = EvoMPS_line_search(self, BCG, BG)
             tau, h_min, ind = ls.brentq(tau_init)
             
         if tau > 0:
