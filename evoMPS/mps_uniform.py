@@ -199,11 +199,6 @@ class EvoMPS_MPS_Uniform(object):
         self.q = q
         self.L = L
         
-        self.S_hc = sp.empty((L), dtype=sp.complex128)
-        """After calling restore_CF() or update(restore_CF=True), this contains
-           the von Neumann entropy of one infinite half of the system."""
-        self.S_hc.fill(sp.NaN)
-        
         self.A = []
         self.AA = []
         self.l = []
@@ -564,7 +559,7 @@ class EvoMPS_MPS_Uniform(object):
             
         for k in xrange(0, len(self.A) - 1):
             self.l[k] = tm.eps_l_noop(self.l[k - 1], self.A[k], self.A[k])
-
+            
         if self.sanity_checks:
             for k in xrange(self.L):
                 l = self.l[k]
@@ -635,9 +630,6 @@ class EvoMPS_MPS_Uniform(object):
             U, sv, Vh = la.svd(Y.dot(X))
             
             #s contains the Schmidt coefficients,
-            lam = sv**2
-            self.S_hc[k] = - np.sum(lam * sp.log2(lam))
-            
             S = m.simple_diag_matrix(sv, dtype=self.typ)
             Srt = S.sqrt()
             
@@ -742,11 +734,8 @@ class EvoMPS_MPS_Uniform(object):
                 G[k] = G[k].dot(EV)
                 G_i[k] = m.H(EV).dot(G_i[k])
                 
-                #ev contains the squares of the Schmidt coefficients,
-                self.S_hc[k] = - np.sum(ev * sp.log2(ev))                
+                #ev contains the squares of the Schmidt coefficients,              
                 self.l[k] = m.simple_diag_matrix(ev, dtype=self.typ)
-            else:
-                self.S_hc[k] = sp.NaN
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
@@ -840,12 +829,8 @@ class EvoMPS_MPS_Uniform(object):
         
                 G[k] = EV.dot(G[k])
                 G_i[k] = G_i[k].dot(EV.conj().T)
-                
-                #ev contains the squares of the Schmidt coefficients,
-                self.S_hc[k] = - np.sum(ev * sp.log2(ev))                
+                              
                 self.r[k] = m.simple_diag_matrix(ev, dtype=self.typ)
-            else:
-                self.S_hc[k] = sp.NaN
             
             j = (k + 1) % self.L
             for s in xrange(self.q):
@@ -1158,6 +1143,63 @@ class EvoMPS_MPS_Uniform(object):
             self.r[k] = gi[k].dot(self.r[k].dot(m.H(gi[k])))
         
         return g, gi, phi
+        
+    def schmidt_sq(self, k=0):
+        """Returns the squared Schmidt coefficients of one half of the system.
+        
+        The chain can be split into two halves between any two sites.
+        This returns the sqaured coefficients of the corresponding Schmidt
+        decomposition, which are equal to the eigenvalues of the corresponding
+        reduced density matrix.
+        
+        Parameters
+        ----------
+        k : int
+            Site offset for split.
+            
+        Returns
+        -------
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lr = self.l[k].dot(self.r[k])
+        try: 
+            lam = lr.diag
+        except AttributeError: #Assume we are not in canonical form.
+            lam = la.eigvals(lr)
+        return lam
+                        
+    def entropy(self, k=0, ret_schmidt_sq=False):
+        """Returns the von Neumann entropy of one half of the system.
+        
+        The chain can be split into two halves between any two sites.
+        This function returns the corresponding von Neumann entropy, which
+        is a measure of the entanglement between the two parts.
+        
+        For block lengths L > 1, the parameter k specifies that the splitting
+        should be done between sites k and k + 1 within a block.
+        
+        Parameters
+        ----------
+        k : int
+            Site offset for split.
+        ret_schmidt_sq : bool
+            Whether to also return the squared Schmidt coefficients.
+            
+        Returns
+        -------
+        S : float
+            The half-chain entropy.
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lam = self.schmidt_sq(k=k)
+        S = -np.sum(lam * sp.log2(lam)).real
+            
+        if ret_schmidt_sq:
+            return S, lam
+        else:
+            return S
             
     def expect_1s(self, op, k=0):
         """Computes the expectation value of a single-site operator.
