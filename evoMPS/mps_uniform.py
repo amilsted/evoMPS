@@ -1267,7 +1267,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return m.adot(self.l[k - 1], Or)
         
-    def expect_1s_1s(self, op1, op2, d, k=0):
+    def expect_1s_1s(self, op1, op2, d, k=0, return_intermediates=False):
         """Computes the expectation value of two single site operators acting 
         on two different sites.
         
@@ -1276,7 +1276,7 @@ class EvoMPS_MPS_Uniform(object):
         
         See expect_1s().
         
-        Requires d > 0.
+        Requires d > 0. Optionally returns results for all distances 0 to d.
         
         The state must be up-to-date -- see self.update()!
         
@@ -1290,11 +1290,14 @@ class EvoMPS_MPS_Uniform(object):
             The distance (number of sites) between the two sites acted on non-trivially.
         k : int
             Site offset of first site within block.
+        return_intermediates : bool
+            Whether to return results for intermediate d.
             
         Returns
         -------
-        expval : floating point number
-            The expectation value (data type may be complex)
+        expval : complex128 or sequence of complex128
+            The expectation value (data type may be complex), or values if
+            return_intermediates == True.
         """        
         
         assert d > 0, 'd must be greater than 1'
@@ -1305,16 +1308,85 @@ class EvoMPS_MPS_Uniform(object):
         
         if callable(op2):
             op2 = sp.vectorize(op2, otypes=[sp.complex128])
-            op2 = sp.fromfunction(op2, (self.q, self.q)) 
+            op2 = sp.fromfunction(op2, (self.q, self.q))
+            
+        L = self.L
         
-        rj = tm.eps_r_op_1s(self.r[k], self.A[k], self.A[k], op2)
+        res = sp.zeros((d + 1), dtype=sp.complex128)
+        lj = tm.eps_l_op_1s(self.l[(k - 1) % L], self.A[k], self.A[k], op1)
+        
+        if return_intermediates:
+            res[0] = self.expect_1s(op1.dot(op1), k=k)
 
-        for j in xrange(1, d):
-            rj = tm.eps_r_noop(rj, self.A[(k - j) % self.L], self.A[(k - j) % self.L])
-
-        rj = tm.eps_r_op_1s(rj, self.A[(k - d) % self.L], self.A[(k - d) % self.L], op1)
-         
-        return m.adot(self.l[(k - d - 1) % self.L], rj)
+        for j in xrange(1, d + 1):
+            if return_intermediates or j == d:
+                lj_op = tm.eps_l_op_1s(lj, self.A[(k + j) % L], self.A[(k + j) % L], op2)
+                res[j] = m.adot(lj_op, self.r[(k + j) % L])
+                
+            if j < d:
+                lj = tm.eps_l_noop(lj, self.A[(k + j) % L], self.A[(k + j) % L])
+                
+        if return_intermediates:
+            return res
+        else:
+            return res[-1]
+            
+    def correlation_1s_1s(self, op1, op2, d, k=0, return_exvals=False):
+        """Computes a correlation function of two 1 site operators.
+        
+        The result is < op1_k op2_k+j > - <op1_k> * <op2_k+j> 
+        with the operators acting on sites k and k + j, with j running from
+        0 to d.
+        
+        Optionally returns the corresponding expectation values <op1_k+j> and 
+        <op2_k+j>.
+        
+        Parameters
+        ----------
+        op1 : ndarray or callable
+            The first operator, acting on the first site.
+        op2 : ndarray or callable
+            The second operator, acting on the second site.
+        d : int
+            The distance (number of sites) between the two sites acted on non-trivially.
+        k : int
+            Site offset of first site within block.
+        return_exvals : bool
+            Whether to return expectation values for op1 and op2 for all sites.
+            
+        Returns
+        -------
+        ccf : sequence of complex128
+            The correlation function across d + 1 sites (including site k).
+        ex1 : sequence of complex128
+            Expectation values of op1 for each site. Only if return_exvals == True.
+        ex2 : sequence of complex128
+            See ex1.
+        """
+        L = self.L
+        ex1 = sp.zeros((L), dtype=sp.complex128)
+        for j in xrange(L):
+            ex1[j] = self.expect_1s(op1, (k + j) % L)
+            
+        if op1 is op2:
+            ex2 = ex1
+        else:
+            ex2 = sp.zeros((L), dtype=sp.complex128)
+            for j in xrange(L):
+                ex2[j] = self.expect_1s(op2, (k + j) % L)
+            
+        cf = self.expect_1s_1s(op1, op2, d, k=k, return_intermediates=True)
+            
+        ccf = sp.zeros((d + 1), dtype=sp.complex128)
+        for n in xrange(d + 1):
+            ccf[n] = cf[n] - ex1[0] * ex2[n % L]
+            
+        if return_exvals:
+            ex1_ = sp.tile(ex1, [(d + 1) / L + 1])[:d + 1]
+            ex2_ = sp.tile(ex1, [(d + 1) / L + 1])[:d + 1]
+            return ccf, ex1_, ex2_
+        else:
+            return ccf
             
     def expect_2s(self, op, k=0):
         """Computes the expectation value of a nearest-neighbour two-site operator.
