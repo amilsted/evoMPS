@@ -106,10 +106,6 @@ class EvoMPS_MPS_Generic(object):
         self.initialize_state()
     
     def _init_arrays(self):
-        self.S_hc = sp.zeros((self.N + 1), dtype=self.typ)
-        """Half-chain entropy for a cut between sites n and n + 1"""
-        self.S_hc.fill(sp.NaN)
-        
         self.A = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         
         self.r = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 0..N
@@ -339,13 +335,9 @@ class EvoMPS_MPS_Generic(object):
             if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
                 log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
         
-        self.S_hc.fill(0)
         if diag_l:
             tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                                  sc_data="restore_RCF_l")
-
-            for n in xrange(1, self.N):
-                self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
 
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].A, 1, atol=1E-12, rtol=1E-12):
@@ -380,14 +372,10 @@ class EvoMPS_MPS_Generic(object):
             if not sp.allclose(lN, 1, atol=1E-12, rtol=1E-12):
                 log.warning("Sanity Fail in restore_LCF!: l_N is bad / norm failure")
         
-        self.S_hc.fill(0)
         if diag_r:
             tm.restore_LCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
                                                  sc_data="restore_LCF_r")
     
-            for n in xrange(1, self.N):
-                self.S_hc[n] = -sp.sum(self.r[n].diag * sp.log2(self.r[n].diag))
-
             if self.sanity_checks:
                 if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
                     log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
@@ -568,6 +556,64 @@ class EvoMPS_MPS_Generic(object):
         normOK = sp.allclose(self.l[self.N], 1., atol=self.eps*1000, rtol=0)
         
         return (rnsOK, ls_trOK, ls_pos, ls_diag, normOK)
+        
+        
+    def schmidt_sq(self, n):
+        """Returns the squared Schmidt coefficients for a left-right parition.
+        
+        The chain can be split into two parts between any two sites.
+        This returns the sqaured coefficients of the corresponding Schmidt
+        decomposition, which are equal to the (non-zero) 
+        eigenvalues of the corresponding reduced density matrix.
+        
+        Parameters
+        ----------
+        n : int
+            Site for split.
+            
+        Returns
+        -------
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lr = self.l[n].dot(self.r[n])
+        try: 
+            lam = lr.diag
+        except AttributeError: #Assume we are not in canonical form.
+            lam = la.eigvals(lr)
+        return lam
+                        
+    def entropy(self, n, ret_schmidt_sq=False):
+        """Returns the von Neumann entropy of part of the system under a left-right split.
+        
+        The chain can be split into two parts between any two sites.
+        This function returns the corresponding von Neumann entropy, which
+        is a measure of the entanglement between the two parts.
+        
+        The parameter n specifies that the splitting should be done between 
+        sites n and n + 1.
+        
+        Parameters
+        ----------
+        k : int
+            Site offset for split.
+        ret_schmidt_sq : bool
+            Whether to also return the squared Schmidt coefficients.
+            
+        Returns
+        -------
+        S : float
+            The half-chain entropy.
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lam = self.schmidt_sq(n)
+        S = -sp.sum(lam * sp.log2(lam)).real
+            
+        if ret_schmidt_sq:
+            return S, lam
+        else:
+            return S
     
     def expect_1s(self, op, n):
         """Computes the expectation value of a single-site operator.
@@ -819,7 +865,7 @@ class EvoMPS_MPS_Generic(object):
         """
         sp.save(file, self.A)
         
-    def load_state(self, file):
+    def load_state(self, file, do_update=True):
         """Loads the parameter tensors self.A from a file.
 
         The saved state must contain the right number of tensors with
@@ -838,3 +884,6 @@ class EvoMPS_MPS_Generic(object):
             self.D[n + 1] = tmp_A[n + 1].shape[2]
         self._init_arrays()
         self.A = tmp_A
+        
+        if do_update:
+            self.update()
