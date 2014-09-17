@@ -877,8 +877,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.r[-1] = np.asarray(newrL)
             self.lL_before_CF = self.l[-1]
             self.rL_before_CF = self.r[-1]
-                
-            return True
         elif expand and len(newA) == self.L and (
         len(newA[0].shape) == 3) and (newA[0].shape[0] == 
         self.A[0].shape[0]) and (newA[0].shape[1] == newA[0].shape[2]) and (
@@ -937,10 +935,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.rL_before_CF = self.r[-1]
             log.warning("SHRUNK in q!")
         else:
+            log.error("Failed to import state!")
             return False
             
         if do_update:
             self.update()
+            
+        return True
             
     def load_state(self, file, expand=False, truncate=False, expand_q=False,
                    shrink_q=False, refac=0.1, imfac=0.1):
