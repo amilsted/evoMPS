@@ -49,17 +49,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """The local Hamiltonian term. Can be changed, for example, to perform
            a quench. The number of neighbouring sites acted on must be 
            specified in ham_sites."""
-        
-        if ham_sites is None:
-            try:
-                self.ham_sites = len(ham.shape) / 2
-            except AttributeError: #TODO: Try to count arguments using inspect module
-                self.ham_sites = 2
-        else:
-            self.ham_sites = ham_sites
-        
-        if not (self.ham_sites == 2 or self.ham_sites == 3):
-            raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
+          
+        self.ham_sites = ham_sites
 
         self.K_solver = las.bicgstab
         
@@ -71,19 +62,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     
     def _init_arrays(self, D, q, L):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q, L)
-        
-        ham_shape = []
-        for i in xrange(self.ham_sites):
-            ham_shape.append(q)
-        C_shape = tuple(ham_shape + [D, D])        
-        
-        self.C = []
-        self.K = []
-        for k in xrange(L):
-            self.C.append(np.zeros(C_shape, dtype=self.typ, order=self.odr))
-            self.K.append(np.ones_like(self.A[k][0]))
             
-        self.K0_init = None
+        self.set_ham(self.ham)
             
         self.AAA = [None] * L
         
@@ -110,6 +90,34 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.etaBB = sp.NaN
         """The norm of the TDVP evolution captured by the two-site tangent plane.
            Available after calling take_step() with dynexp=True."""
+           
+    def set_ham(self, ham, ham_sites=None):
+        if ham_sites is None:
+            try:
+                self.ham_sites = len(ham.shape) / 2
+            except AttributeError: #TODO: Try to count arguments using inspect module
+                self.ham_sites = 2
+        else:
+            self.ham_sites = ham_sites
+            
+        self.ham = ham
+        
+        if not (self.ham_sites == 2 or self.ham_sites == 3):
+            raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
+        
+        ham_shape = []
+        for i in xrange(self.ham_sites):
+            ham_shape.append(self.q)
+        C_shape = tuple(ham_shape + [self.D, self.D])        
+        
+        self.C = []
+        self.K = []
+        for k in xrange(self.L):
+            self.C.append(np.zeros(C_shape, dtype=self.typ, order=self.odr))
+            self.K.append(np.ones_like(self.A[k][0]))
+            
+        self.K0_init = None
+        
             
     def set_ham_array_from_function(self, ham_func):
         """Generates a Hamiltonian array from a function.
