@@ -145,12 +145,16 @@ class simple_diag_matrix:
     def dot(self, b):
         if isinstance(b, simple_diag_matrix):
             return simple_diag_matrix(self.diag * b.diag)
+        elif isinstance(b, eyemat):
+            return self
             
         return mmul_diag(self.diag, b)
         
     def dot_left(self, a):
         if isinstance(a, simple_diag_matrix):
             return simple_diag_matrix(self.diag * a.diag)
+        elif isinstance(a, eyemat):
+            return self
             
         return mmul_diag(self.diag, a, act_right=False)
         
@@ -411,35 +415,6 @@ def invmh(A, ret_evd=False, evd=None):
     else:
         return mmul(EV, B)   
     
-def sqrtmpo(A, out=None):
-    """Return the matrix square root of a hermitian or symmetric positive definite matrix
-
-    Uses a Cholesky decomposition, followed by a QR decomposition, and then
-    Nwewton iteration to obtain a polar form UH, with H Hermitian p.d. and
-    the desired square root, as described in algorithm 6.21 in:
-        
-    Higham, N. J., "Functions of Matrices, Theory and Computation", SCIAM 2008
-    
-    NOT YET IMPLEMENTED!
-
-    Parameters
-    ----------
-    A : ndarray
-        A hermitian or symmetric two-dimensional square array (a matrix)
-
-    Returns
-    -------
-    sqrt_A : ndarray
-        An array of the same shape and type as A containing the matrix square root of A.
-
-    """
-    R = la.cholesky(A)
-    R = la.qr(R, overwrite_a=True, mode='r')
-    
-    #FIXME: NOTFINISHED
-    assert False
-    
-    return 0
     
 def invtr(A, overwrite=False, lower=False):
     """Compute the inverse of a triangular matrix
@@ -474,110 +449,3 @@ def invtr(A, overwrite=False, lower=False):
                                                                     % -info)       
                                                                     
     return inv_A
-
-def invpo(A, out=None, lower=False):
-    """Efficient inversion of positive definite matrices using Cholesky decomposition.
-    
-    NOT YET WORKING
-    """
-    t = la.cholesky(A, lower=lower)
-    
-    print sp.allclose(sp.dot(H(t), t), A)
-    #a, lower = la.cho_factor(A, lower=lower) #no.. we need a clean answer, it seems
-    
-    potri, = la.lapack.get_lapack_funcs(('potri',), (A,))
-    
-    inv_A, info = potri(t, lower=lower, overwrite_c=1, rowmajor=1) #rowmajor (C-order) is the default...
-    
-    if info > 0:
-        raise sp.LinAlgError("%d-th diagonal element of the Cholesky factor is zero" % info)
-    if info < 0:
-        raise ValueError('illegal value in %d-th argument of internal potri'
-                                                                    % -info)    
-    return inv_A
-    
-def bicgstab_iso(A, x, b, MVop, VVop, max_itr=500, atol=1E-14, rtol=1E-14):
-    """Implements the Bi-CGSTAB method for isomorphic operations.
-    
-    The Bi-CGSTAB method is used to solve linear equations Ax = b.
-    
-    Should the vectors x, b be isomorphic to some other objects, say
-    matrices x' and b', with corresponding opeator A'
-    (for example, via the Choi-Jamiolkowski isomorphism), the method
-    can similarly be carried out in the alternative form.
-    
-    With this function, the operations corresponding to matrix-vector
-    and vector-vector multiplication are supplied by the caller to enable
-    using the method in an isomorphic way.
-    
-    Parameters
-    ----------
-    A : ndarray
-        The A matrix, or equivalent.        
-    x : ndarray
-        An initial value for the unknown vector, or equivalent.
-    b : ndarray
-        The b vector, or equivalent.
-    MVop : function(ndarray, ndarray)
-        The matrix-vector multiplication operation.
-    VVop : function(ndarray, ndarray)
-        The vector-vector multiplication operation.
-    max_itr : int
-        Maximum number of iterations.
-    atol : float
-        Absolute tolerance for solution.
-    rtol : float
-        Relative tolerance for solution.
-
-    Returns
-    -------
-    x : ndarray
-        The final value for the unknown vector x.
-    convg : bool
-        Whether the algorithm converged within max_itr iterations.
-    """
-    r_prv = b - MVop(A, x)
-    
-    r0 = r_prv.copy()
-    
-    rho_prv = 1
-    alpha = 1
-    omega_prv = 1
-    
-    v_prv = sp.zeros_like(x)
-    p_prv = sp.zeros_like(x)
-    
-    for i in xrange(max_itr):
-        rho = sp.trace(sp.dot(r0, r_prv))
-        
-        beta = (rho / rho_prv) * (alpha / omega_prv)
-        
-        p = r_prv + beta * (p_prv - omega_prv * v_prv)
-        
-        v = MVop(A, p)
-        
-        alpha = rho / VVop(r0, v)
-        
-        s = r_prv - alpha * v
-        
-        t = MVop(A, s)
-            
-        omega = VVop(t, s) / VVop(t, t)
-        
-        x += alpha * p + omega * s
-        
-        #Test x
-        if sp.allclose(MVop(A, x), b, atol=atol, rtol=rtol):
-            break
-        
-        r_prv = s - omega * t
-        
-        rho_prv = rho
-        omega_prv = omega
-        
-        v_prv[:] = v
-        p_prv[:] = p
-        
-    convg = i < max_itr - 1
-    
-    return x, convg
