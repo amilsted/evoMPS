@@ -299,7 +299,7 @@ class EvoMPS_MPS_Uniform(object):
                 ncv = k * 3
                 
         if i == max_retries - 1:
-            log.error("_calc_lr_ARPACK: Failed to converge! (%s)", i, "l" if calc_l else "r")
+            log.error("_calc_lr_ARPACK: Failed to converge! (%s)", "l" if calc_l else "r")
             raise EvoMPSNoConvergence("_calc_lr_ARPACK: Failed to converge!")
         
         #remove any additional phase factor
@@ -315,7 +315,10 @@ class EvoMPS_MPS_Uniform(object):
         x[:] = eV
                     
         if rescale and not abs(ev - 1) < tol:
-            A1[0] *= 1 / sp.sqrt(ev)
+            fac = (1 / sp.sqrt(ev))**(1. / len(A1))
+            for A in A1:
+                A *= fac
+            #A1[0] *= 1 / sp.sqrt(ev)
             if self.sanity_checks:
                 if not A1[0] is A2[0]:
                     log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
