@@ -626,8 +626,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return op        
     
     def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
-                        sigma=None,
-                        which='SM', return_eigenvectors=False):
+                        sigma=None, which='SM', return_eigenvectors=False,
+                        max_retries=3):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -660,6 +660,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Which eigenvalues to find ('SM' means the k smallest).
         return_eigenvectors : bool
             Whether to return eigenvectors as well as eigenvalues.
+        max_retries : int
+            Maximum number of retries (with growing ncv), in case of no convergence.
             
         Returns
         -------
@@ -670,9 +672,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         op = self._prepare_excite_op_top_triv(p)
         
-        res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
-                         return_eigenvectors=return_eigenvectors, 
-                         maxiter=max_itr, tol=tol, sigma=sigma)
+        for i in xrange(max_retries):
+            try:
+                res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
+                                 return_eigenvectors=return_eigenvectors, 
+                                 maxiter=max_itr, tol=tol, sigma=sigma)
+            except las.ArpackNoConvergence:
+                v0 = None
+                ncv = k * (3 + i)
+                if i == max_retries - 1:
+                    raise EvoMPSNoConvergence('excite_top_triv')
                           
         return res
     
