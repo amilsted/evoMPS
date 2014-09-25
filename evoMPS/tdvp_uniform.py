@@ -678,9 +678,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  return_eigenvectors=return_eigenvectors, 
                                  maxiter=max_itr, tol=tol, sigma=sigma)
             except las.ArpackNoConvergence:
+                log.warning("excite_top_triv: Retry %u!", i)
                 v0 = None
                 ncv = k * (3 + i)
                 if i == max_retries - 1:
+                    log.error("excite_top_triv: Failed to converge!")
                     raise EvoMPSNoConvergence('excite_top_triv')
                           
         return res
