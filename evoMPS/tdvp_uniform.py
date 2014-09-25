@@ -758,6 +758,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _B_to_x(self, B):
+        raise NotImplemented
         L = self.L
         x = [None] * self.L
         
@@ -768,11 +769,73 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for s in xrange(self.q):
                 x[k] += self.l_sqrt[(k - 1) % L].dot(B[k][s]).dot(self.r_sqrt[k].dot(self.Vsh[k][s]))
                 
-            B_.append(self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[(k-1)%L], self.r_sqrt_i[k]))
+            B_.append(self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[(k - 1) % L], self.r_sqrt_i[k]))
+            
+        if self.sanity_checks:
+            overlap = self._B_overlap(B, B_) / self._B_overlap(B, B)
+            if abs(1 - overlap) > 1E-12:
+                log.warning("_B_to_x: Sanity check failed! New B != old B", overlap)
                         
         return x, B_
         
-    def _B_overlap(self, B1, B2):
+    def _B_to_B_GF(self, B):
+        raise NotImplemented
+        
+    def _B_overlap_1GF(self, B1, B2, p=0):
+        L = self.L
+        
+        res = 0
+        for k in xrange(L):
+            res += m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], B1[k], B2[k]))
+        
+        twoR = sp.zeros_like(self.r[-1])
+        resconB = 0
+        for k in xrange(L):
+            twoR_k = tm.eps_r_noop(self.r[k], self.A[k], B2[k])
+            for j in xrange(k - 1, -1, -1):
+                resconB += sp.exp(-1.j * p) * m.adot(self.l[j - 1], tm.eps_r_noop(twoR_k, B1[j], self.A[j]))
+                twoR_k = sp.exp(-1.j * p) * tm.eps_r_noop(twoR_k, self.A[j], self.A[j])
+            twoR += twoR_k
+            
+        B2norm = m.adot(self.l[-1], twoR)
+            
+        QtwoR = twoR - self.r[-1] * B2norm
+        contwoR = sp.exp(-1.j * p) * self.calc_PPinv(QtwoR, p=(-L * p), 
+                                                     brute_check=False, 
+                                                     solver=las.gmres)
+        
+        rescon = 0
+        for k in xrange(L - 1, -1, -1):
+            rescon += m.adot(self.l[k - 1], tm.eps_r_noop(contwoR, B1[k], self.A[k]))
+            if k > 0:
+                contwoR = sp.exp(-1.j * p) * tm.eps_r_noop(contwoR, self.A[k], self.A[k])
+
+        #print res, rescon, resconB
+            
+        return res + rescon + resconB
+        
+    def _B_overlap_1GF_test(self):
+        B1 = self.calc_B()
+        etasq1 = self.eta**2
+        
+        x = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
+        
+        for p in sp.linspace(0, sp.pi, num=10):
+            B2 = [B1k.copy() for B1k in B1]
+            for k in xrange(self.L):
+                for s in xrange(self.q):
+                    B2[k][s] += etasq1 * (self.A[k][s].dot(x[k]) - sp.exp(-1.j * p) * x[(k - 1) % self.L].dot(self.A[k][s]))
+                
+            etasq1_o = self._B_overlap_1GF(B1, B1, p)
+            overlap = self._B_overlap_1GF(B1, B2, p)
+            
+            #x2, B2_ = self._B_to_x(B2)
+            #overlap_approx = self._B_overlap_GF(B1, B2_)
+        
+            print p, etasq1, etasq1_o, overlap#, overlap_approx
+
+        
+    def _B_overlap_GF(self, B1, B2):
         """Note: Both Bs must satisfy the GFC!
         """
         res = 0
@@ -810,9 +873,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
             BCG = BG
         else:
-            if use_PR:
-                x_prev, BG0_ = self._B_to_x(BG0)
-                BGdotBG0 = self._B_overlap(BG, BG0_)
+            if use_PR:                
+                BGdotBG0 = self._B_overlap_1GF(BG, BG0)
                 beta = (BGdotBG - BGdotBG0) / BG0dotBG0 #Note: Overall factors/signs on the gradients do not affect beta
             else:
                 beta = BGdotBG / BG0dotBG0 #FR
@@ -828,8 +890,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 BCG = [None] * self.L 
                 for k in xrange(self.L):
                     BCG[k] = BG[k] + beta * BCG0[k]
-                    
-                x_, BCG = self._B_to_x(BCG)
         
         ls = EvoMPS_line_search(self, BCG, BG)
         g0 = ls.gs[0].real
@@ -1055,7 +1115,7 @@ class EvoMPS_line_search():
         
         self.taus = [0]            
         self.hs = [tdvp.h_expect.real]
-        self.gs = [-2 * tdvp._B_overlap(B, Bg)]
+        self.gs = [-2 * tdvp._B_overlap_1GF(Bg, B)]
         self.lLs = [tdvp.lL_before_CF.copy()]
         self.rLs = [tdvp.rL_before_CF.copy()]
         self.K0s = [tdvp.K[0]]
@@ -1113,8 +1173,7 @@ class EvoMPS_line_search():
             Bg = self.tdvp.calc_B()
             self.tdvp_tau = tau
             
-            x_, B_ = self.tdvp._B_to_x(self.B)
-            g = -2 * self.tdvp._B_overlap(Bg, B_)
+            g = -2 * self.tdvp._B_overlap_1GF(Bg, self.B)
             h_exp = self.tdvp.h_expect.real
             wol = self.wolfe(g, h_exp, tau)
             K0 = self.tdvp.K[0].copy()
