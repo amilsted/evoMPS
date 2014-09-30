@@ -881,7 +881,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             BCG = BG
         else:
             if use_PR:                
-                BGdotBG0 = self._B_overlap_1GF(BG, BG0)
+                BGdotBG0 = self._B_overlap(BG, BG0, B1_is_GF=True, con_tol=B_overlap_tol)
                 beta = (BGdotBG - BGdotBG0) / BG0dotBG0 #Note: Overall factors/signs on the gradients do not affect beta
             else:
                 beta = BGdotBG / BG0dotBG0 #FR
@@ -898,14 +898,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 for k in xrange(self.L):
                     BCG[k] = BG[k] + beta * BCG0[k]
         
-        ls = EvoMPS_line_search(self, BCG, BG)
+        ls = EvoMPS_line_search(self, BCG, BG, B_overlap_tol=B_overlap_tol)
         g0 = ls.gs[0].real
         if g0 > 0:
             log.info("CG: RESET due to bad search direction.")
             self.update() #Restores CF
             BG = self.calc_B()
             BCG = BG
-            ls = EvoMPS_line_search(self, BCG, BG)
+            ls = EvoMPS_line_search(self, BCG, BG, B_overlap_tol=B_overlap_tol)
             g0 = ls.gs[0].real
         
         try:
@@ -926,8 +926,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             self.update() #Restores CF
             BG = self.calc_B()
             BCG = BG
-            ls = EvoMPS_line_search(self, BCG, BG)
-            tau, h_min, ind = ls.brentq(tau_init)
+            ls = EvoMPS_line_search(self, BCG, BG, B_overlap_tol=B_overlap_tol)
+            try:
+                tau, h_min, ind = ls.brentq(tau_init)
+            except (EvoMPSNoConvergence, EvoMPSNormError):
+                tau = 0
             
         if tau > 0:
             self.lL_before_CF = ls.lLs[ind]
@@ -1098,11 +1101,12 @@ class ls_wolfe_sat(Exception):
         return repr(self.value)
 
 class EvoMPS_line_search():
-    def __init__(self, tdvp, B, Bg):
+    def __init__(self, tdvp, B, Bg, B_overlap_tol=1E-6):
         self.B = B
         self.Bg0 = Bg
         self.penalise_neg = True
         self.in_search = False
+        self.con_tol = B_overlap_tol
         
         self.tdvp0 = tdvp
         self.tdvp = cp.deepcopy(tdvp)
@@ -1122,7 +1126,7 @@ class EvoMPS_line_search():
         
         self.taus = [0]            
         self.hs = [tdvp.h_expect.real]
-        self.gs = [-2 * tdvp._B_overlap_1GF(Bg, B)]
+        self.gs = [-2 * tdvp._B_overlap(Bg, B, B1_is_GF=True, con_tol=self.con_tol)]
         self.lLs = [tdvp.lL_before_CF.copy()]
         self.rLs = [tdvp.rL_before_CF.copy()]
         self.K0s = [tdvp.K[0]]
@@ -1180,7 +1184,7 @@ class EvoMPS_line_search():
             Bg = self.tdvp.calc_B()
             self.tdvp_tau = tau
             
-            g = -2 * self.tdvp._B_overlap_1GF(Bg, self.B)
+            g = -2 * self.tdvp._B_overlap(Bg, self.B, B1_is_GF=True, con_tol=self.con_tol)
             h_exp = self.tdvp.h_expect.real
             wol = self.wolfe(g, h_exp, tau)
             K0 = self.tdvp.K[0].copy()
