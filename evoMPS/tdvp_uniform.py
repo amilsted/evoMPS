@@ -852,7 +852,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return self._B_overlap(B1, B2, B1_is_GF=True, B2_is_GF=True)
         
     def calc_B_CG(self, BCG0, BG0, BG0dotBG0, tau0, tau_init=0.05,
-                  reset=False, use_PR=True):
+                  reset=False, use_PR=True, B_overlap_tol=1E-6):
         """Calculates a tangent vector using the non-linear conjugate gradient method.
         
         Parameters:
