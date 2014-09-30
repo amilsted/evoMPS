@@ -184,7 +184,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 self.C[k][:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA[k])
     
     def calc_PPinv(self, x, p=0, out=None, left=False, A1=None, A2=None, rL=None, 
-                   pseudo=True, brute_check=False, sc_data='', solver=None):
+                   pseudo=True, brute_check=False, sc_data='', solver=None,
+                   tol=None):
         """Uses an iterative method to calculate the result of applying 
         the (pseudo) inverse of (1 - exp(1.j * p) * E) to a vector |x>.
         
@@ -222,9 +223,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
         if rL is None:
             rL = self.r[-1]
+            
+        if tol is None:
+            tol = self.itr_rtol
         
         out = pinv_1mE(x, A1, A2, self.l[-1], rL, p=p, left=left, pseudo=pseudo, 
-                       out=out, tol=self.itr_rtol, solver=solver, brute_check=brute_check,
+                       out=out, tol=tol, solver=solver, brute_check=brute_check,
                        sanity_checks=self.sanity_checks, sc_data=sc_data)
 
         return out
