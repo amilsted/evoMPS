@@ -761,92 +761,95 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _B_to_x(self, B):
-        raise NotImplemented
-        L = self.L
-        x = [None] * self.L
-        
-        B_ = []
-        
-        for k in xrange(self.L):
-            x[k] = sp.zeros((self.D, self.D * (self.q - 1)), dtype=self.typ)
-            for s in xrange(self.q):
-                x[k] += self.l_sqrt[(k - 1) % L].dot(B[k][s]).dot(self.r_sqrt[k].dot(self.Vsh[k][s]))
-                
-            B_.append(self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[(k - 1) % L], self.r_sqrt_i[k]))
-            
-        if self.sanity_checks:
-            overlap = self._B_overlap(B, B_) / self._B_overlap(B, B)
-            if abs(1 - overlap) > 1E-12:
-                log.warning("_B_to_x: Sanity check failed! New B != old B", overlap)
-                        
-        return x, B_
-        
     def _B_to_B_GF(self, B):
         raise NotImplemented
         
-    def _B_overlap_1GF(self, B1, B2, p=0):
+    def _B_overlap(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
+                   con_tol=None, GF_tol=1E-15):
         L = self.L
         
         res = 0
         for k in xrange(L):
             res += m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], B1[k], B2[k]))
         
-        twoR = sp.zeros_like(self.r[-1])
-        resconB = 0
-        for k in xrange(L):
-            twoR_k = tm.eps_r_noop(self.r[k], self.A[k], B2[k])
-            for j in xrange(k - 1, -1, -1):
-                resconB += sp.exp(-1.j * p) * m.adot(self.l[j - 1], tm.eps_r_noop(twoR_k, B1[j], self.A[j]))
-                twoR_k = sp.exp(-1.j * p) * tm.eps_r_noop(twoR_k, self.A[j], self.A[j])
-            twoR += twoR_k
-            
-        B2norm = m.adot(self.l[-1], twoR)
-            
-        QtwoR = twoR - self.r[-1] * B2norm
-        contwoR = sp.exp(-1.j * p) * self.calc_PPinv(QtwoR, p=(-L * p), 
-                                                     brute_check=False, 
-                                                     solver=las.gmres)
-        
-        rescon = 0
-        for k in xrange(L - 1, -1, -1):
-            rescon += m.adot(self.l[k - 1], tm.eps_r_noop(contwoR, B1[k], self.A[k]))
-            if k > 0:
-                contwoR = sp.exp(-1.j * p) * tm.eps_r_noop(contwoR, self.A[k], self.A[k])
+        def calc_con(X1, X2, Y1, Y2, p_):
+            conR = sp.zeros_like(self.r[-1])
+            resconblock = 0
+            for k in xrange(L):
+                conR_k = tm.eps_r_noop(self.r[k], X1[k], X2[k])
+                for j in xrange(k - 1, -1, -1):
+                    resconblock += sp.exp(1.j * p_) * m.adot(self.l[j - 1], tm.eps_r_noop(conR_k, Y1[j], Y2[j]))
+                    conR_k = sp.exp(1.j * p_) * tm.eps_r_noop(conR_k, self.A[j], self.A[j])
+                conR += conR_k
+                
+            if sp.allclose(conR.ravel(), 0, rtol=GF_tol): #Skip the far connected contributions if we are approximately gauge-fixing
+                rescon = 0
+                Xnorm_component = 0
+            else:
+                Xnorm_component = m.adot(self.l[-1], conR)
+                QtwoR = conR - self.r[-1] * Xnorm_component
+                conRsum = QtwoR.copy()
+                conRsum = sp.exp(1.j * p_) * self.calc_PPinv(QtwoR, p=(L * p_), 
+                                                             solver=las.lgmres, 
+                                                             tol=con_tol,
+                                                             out=conRsum)
+                
+                rescon = 0
+                for k in xrange(L - 1, -1, -1):
+                    rescon += m.adot(self.l[k - 1], tm.eps_r_noop(conRsum, Y1[k], Y2[k]))
+                    if k > 0:
+                        conRsum = sp.exp(1.j * p_) * tm.eps_r_noop(conRsum, self.A[k], self.A[k])
+                        
+            #print res.real, resconblock.real, sp.real(rescon), la.norm(conR.ravel()), la.norm(conR.ravel()) < GF_tol
+            return rescon + resconblock, Xnorm_component
 
-        #print res, rescon, resconB
+        if not B2_is_GF:
+            con_B1_right, B2_overlap = calc_con(self.A, B2, B1, self.A, -p)
+            res += con_B1_right
+        else:
+            B2_overlap = 0
+
+        if not B1_is_GF:
+            con_B2_right, B1_overlap = calc_con(B1, self.A, self.A, B2, p)
+            res += con_B2_right
+        else:
+            B1_overlap = 0
             
-        return res + rescon + resconB
+        res -= B1_overlap * B2_overlap
         
-    def _B_overlap_1GF_test(self):
+        return res
+        
+    def _B_overlap_test(self):
         B1 = self.calc_B()
         etasq1 = self.eta**2
         
         x = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
+        x2 = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
         
         for p in sp.linspace(0, sp.pi, num=10):
             B2 = [B1k.copy() for B1k in B1]
+            B3 = [B1k.copy() for B1k in B1]
             for k in xrange(self.L):
                 for s in xrange(self.q):
                     B2[k][s] += etasq1 * (self.A[k][s].dot(x[k]) - sp.exp(-1.j * p) * x[(k - 1) % self.L].dot(self.A[k][s]))
+                    B3[k][s] += etasq1 * (self.A[k][s].dot(x2[k]) - sp.exp(-1.j * p) * x2[(k - 1) % self.L].dot(self.A[k][s]))
                 
-            etasq1_o = self._B_overlap_1GF(B1, B1, p)
-            overlap = self._B_overlap_1GF(B1, B2, p)
+            etasq1_o = self._B_overlap(B1, B1, p)
+            overlap = self._B_overlap(B3, B2, p)
+            overlap2 = self._B_overlap(B2, B3, p)
+            overlap_GF = self._B_overlap(B1, B2, p, B1_is_GF=True)
+            overlap2_GF = self._B_overlap(B2, B1, p, B2_is_GF=True)
             
             #x2, B2_ = self._B_to_x(B2)
             #overlap_approx = self._B_overlap_GF(B1, B2_)
         
-            print p, etasq1, etasq1_o, overlap#, overlap_approx
+            print p, etasq1, etasq1_o, overlap, overlap2, overlap_GF, overlap2_GF#, overlap_approx
 
         
     def _B_overlap_GF(self, B1, B2):
         """Note: Both Bs must satisfy the GFC!
         """
-        res = 0
-        for k in xrange(self.L):
-            res += m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], B1[k], B2[k]))
-            
-        return res
+        return self._B_overlap(B1, B2, B1_is_GF=True, B2_is_GF=True)
         
     def calc_B_CG(self, BCG0, BG0, BG0dotBG0, tau0, tau_init=0.05,
                   reset=False, use_PR=True):
