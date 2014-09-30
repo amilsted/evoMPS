@@ -1255,7 +1255,7 @@ class EvoMPS_line_search():
                         self.clear_hist()
                     
                 if taus is None:
-                    return 0, self.hs[0] #fail
+                    return 0, self.hs[0], 0 #fail
                 
                 try:
                     tau_opt = opti.brentq(self.f, taus[0], taus[-1], xtol=tol, maxiter=max_iter)
