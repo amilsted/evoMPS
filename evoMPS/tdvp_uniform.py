@@ -761,8 +761,75 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _B_to_B_GF(self, B):
-        raise NotImplemented
+    def _B_overlap_calc_BR(self, X1, X2, p_, con_tol=None, GF_tol=1E-15):
+        L = self.L
+        BRr = [None] * L
+        BR = [None] * L
+
+        BRblock = 0
+        for k in xrange(L - 1, -1, -1):
+            BRr[k] = tm.eps_r_noop(self.r[k], X1[k], X2[k])
+            if k < L - 1:
+                BRblock = sp.exp(1.j * p_) * tm.eps_r_noop(BRblock, self.A[k], self.A[k])
+            BRblock += BRr[k]
+                
+        if sp.allclose(BRblock.ravel(), 0, rtol=GF_tol): #Skip the far connected contributions if we are approximately gauge-fixing
+            BRblock_fid = 0
+        else:
+            BRblock_fid = m.adot(self.l[-1], BRblock)
+            QBRblock = BRblock - self.r[-1] * BRblock_fid
+            BR[0] = QBRblock.copy()
+            BR[0] = self.calc_PPinv(QBRblock, p=(L * p_), solver=las.lgmres, 
+                                    tol=con_tol, out=BR[0])
+                                                         
+            for k in xrange(L - 1, 0, -1):
+                BR[k] = BRr[k]
+                BR[k] += sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], self.A[k], self.A[k])
+            
+        return BR, BRblock_fid
+
+    def _B_to_B_GF(self, B, con_tol=None, GF_tol=1E-15):
+        L = self.L
+        
+        BR, BRblock_fid = self._B_overlap_calc_BR(B, self.A, 0, con_tol=con_tol, GF_tol=GF_tol)
+        
+        x = [None] * L
+        for k in xrange(L):
+            x[k] = tm.eps_r_noop(self.r_sqrt[k], B[k], self.Vsh[k])
+
+            try:
+                BRr = self.r_sqrt_i[k].dot_left(BR[(k + 1) % L])
+            except AttributeError:
+                BRr = BR[(k + 1) % L].dot(self.r_sqrt_i[k])
+            x[k] += tm.eps_r_noop(BRr, self.A[k], self.Vsh[k])
+            
+            x[k] = self.l_sqrt[k - 1].dot(x[k])
+        
+        newB = [None] * L
+        for k in xrange(L):
+            newB[k] = self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[k - 1], self.r_sqrt_i[k])
+            
+        return newB, x
+        
+    def _B_to_B_GF_test(self):
+        B1 = self.calc_B()
+        etasq1 = self.eta**2
+        
+        x = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
+        
+        for p in [0]:#sp.linspace(0, sp.pi, num=10):
+            B2 = [B1k.copy() for B1k in B1]
+            for k in xrange(self.L):
+                for s in xrange(self.q):
+                    B2[k][s] += etasq1 * (self.A[k][s].dot(x[k]) - sp.exp(-1.j * p) * x[(k - 1) % self.L].dot(self.A[k][s]))
+                
+            B2GF, B2GFx = self._B_to_B_GF(B2)
+            for k in xrange(self.L):
+                print la.norm(B1[k] - B2GF[k])
+                
+            ol = self._B_overlap(B1, B2, B1_is_GF=True, B2_is_GF=False)
+            ol2 = self._B_overlap(B1, B2GF, B1_is_GF=True, B2_is_GF=True)
+            print etasq1, ol, ol2
         
     def _B_overlap(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
                    con_tol=None, GF_tol=1E-15):
@@ -771,37 +838,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         res = 0
         for k in xrange(L):
             res += m.adot(self.l[k - 1], tm.eps_r_noop(self.r[k], B1[k], B2[k]))
-        
+            
         def calc_con(X1, X2, Y1, Y2, p_):
-            conR = sp.zeros_like(self.r[-1])
-            resconblock = 0
-            for k in xrange(L):
-                conR_k = tm.eps_r_noop(self.r[k], X1[k], X2[k])
-                for j in xrange(k - 1, -1, -1):
-                    resconblock += sp.exp(1.j * p_) * m.adot(self.l[j - 1], tm.eps_r_noop(conR_k, Y1[j], Y2[j]))
-                    conR_k = sp.exp(1.j * p_) * tm.eps_r_noop(conR_k, self.A[j], self.A[j])
-                conR += conR_k
-                
-            if sp.allclose(conR.ravel(), 0, rtol=GF_tol): #Skip the far connected contributions if we are approximately gauge-fixing
-                rescon = 0
-                Xnorm_component = 0
-            else:
-                Xnorm_component = m.adot(self.l[-1], conR)
-                QtwoR = conR - self.r[-1] * Xnorm_component
-                conRsum = QtwoR.copy()
-                conRsum = sp.exp(1.j * p_) * self.calc_PPinv(QtwoR, p=(L * p_), 
-                                                             solver=las.lgmres, 
-                                                             tol=con_tol,
-                                                             out=conRsum)
-                
-                rescon = 0
+            BR, BRbl_fid = self._B_overlap_calc_BR(X1, X2, p_, con_tol=con_tol, GF_tol=GF_tol)
+            
+            rescon = 0
+            if not BR[0] is None:
                 for k in xrange(L - 1, -1, -1):
-                    rescon += m.adot(self.l[k - 1], tm.eps_r_noop(conRsum, Y1[k], Y2[k]))
-                    if k > 0:
-                        conRsum = sp.exp(1.j * p_) * tm.eps_r_noop(conRsum, self.A[k], self.A[k])
+                    rescon += sp.exp(1.j * p_) * m.adot(self.l[k - 1], tm.eps_r_noop(BR[(k + 1) % L], Y1[k], Y2[k]))
                         
-            #print res.real, resconblock.real, sp.real(rescon), la.norm(conR.ravel()), la.norm(conR.ravel()) < GF_tol
-            return rescon + resconblock, Xnorm_component
+            return rescon, BRbl_fid
 
         if not B2_is_GF:
             con_B1_right, B2_overlap = calc_con(self.A, B2, B1, self.A, -p)
