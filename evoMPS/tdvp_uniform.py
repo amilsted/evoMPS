@@ -806,58 +806,111 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                     tol=con_tol, out=BR[0])
                                                          
             for k in xrange(L - 1, 0, -1):
-                BR[k] = BRr[k]
-                BR[k] += sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], self.A[k], self.A[k])
+                BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], self.A[k], self.A[k])
+                #BR[k] -= self.r[k - 1] *  m.adot(self.l[k - 1], BR[k]) NO
+                
+            #BR0_ = BRr[0] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[1 % L], self.A[0], self.A[0])
+            #BR0_ -= self.r[-1] *  m.adot(self.l[-1], BR0_)
+            #print "BR0_check", la.norm(BR0_ - BR[0])
                     
             #print "BRblock_fid", BRblock_fid
             #print "BR", la.norm(BR[0].ravel())
             
         return BR, BRblock_fid
 
-    def _B_to_B_GF(self, B, con_tol=None, GF_tol=1E-15):
+    def _B_to_B_GF(self, B, p=0, con_tol=None, GF_tol=1E-15):
         L = self.L
+        q = self.q
+        D = self.D
+        M = len(B[0].shape) - 2
+        A = list(self.A) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
         
-        BR, BRblock_fid = self._B_overlap_calc_BR(B, 0, conj=False, con_tol=con_tol, GF_tol=GF_tol)
+        BR, BRblock_fid = self._B_overlap_calc_BR(B, p, conj=False, con_tol=con_tol, GF_tol=GF_tol)
         
         x = [None] * L
-        for k in xrange(L):
-            x[k] = tm.eps_r_noop(self.r_sqrt[k], B[k], self.Vsh[k])
-
-            try:
-                BRr = self.r_sqrt_i[k].dot_left(BR[(k + 1) % L])
-            except AttributeError:
-                BRr = BR[(k + 1) % L].dot(self.r_sqrt_i[k])
-            x[k] += tm.eps_r_noop(BRr, self.A[k], self.Vsh[k])
-            
-            x[k] = self.l_sqrt[k - 1].dot(x[k])
-        
         newB = [None] * L
         for k in xrange(L):
-            newB[k] = self.get_B_from_x(x[k], self.Vsh[k], self.l_sqrt_i[k - 1], self.r_sqrt_i[k])
+            VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
+            VRr_si = sp.array([VRs.dot(self.r_sqrt_i[(k + M - 1) % L].A) for VRs in VR])
+            
+            x[k] = [0] * q**(M - 1)
+    
+            if not BR[(k + M) % L] is None:
+                BR_ = tm.eps_r_noop(BR[(k + M) % L], self.A[(k + M - 1) % L], VRr_si)
+            else:
+                BR_ = 0
+                
+            #Loops over overlapping terms (right overlap)
+            for j in xrange(0, M):
+                Bkj = B[(k + j) % L].reshape((q**(M - 1 - j), q**(j + 1), D, D))
+                
+                bra = [VRr_si] + A[k + M:k + M + j]
+                for s in xrange(q**(M - 1)):
+                    ket = [ Bkj[s % q**(M - 1 - j)] ]
+                    
+                    if j == 0:
+                        As = m.eyemat(D, dtype=self.typ)
+                    else:
+                        #TODO: Use pre-calculated A products here
+                        As = [A[k + l][(s / q**(M - 1 - l - 1)) % q] for l in xrange(j)]
+                        As = reduce(sp.dot, As)
+                    
+                    Rs = sp.exp(j * p * 1.j) \
+                          * tm.eps_r_noop_multi(self.r[(k + M - 1 + j) % L], ket, bra)
+                          
+                    #convenient place to add connected, but not overlapping contribution
+                    if j == M - 1:
+                        Rs += sp.exp(M * p * 1.j) * BR_
+                        
+                    x[k][s] += self.l_sqrt[k - 1].dot(As).dot(Rs)
+                                        
+            x[k] = sp.array(x[k])
+
+            newB[k] = sp.zeros((q**M, D, D), dtype=self.typ)
+            for s in xrange(q**(M)):
+                newB[k][s] = self.l_sqrt_i[k - 1].dot(x[k][s / q]).dot(VRr_si[s % q])
+            newB[k] = newB[k].reshape(tuple([q] * M + [D, D]))
             
         return newB, x
+    
+    def _B_random(self, M=1):
+        sha = tuple([self.q] * M + [self.D, self.D])
+        B = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in xrange(self.L)]
+        return B
+    
+    def _B_to_B_GF_test(self, ps=[0], M=1):
+        self.calc_B()
         
-    def _B_to_B_GF_test(self):
-        B1 = self.calc_B()
-        etasq1 = self.eta**2
+        B1GF, B1GFx, B1n = self._B_random_GF(M=M)
+        B2GF, B2GFx, B2n = self._B_random_GF(M=M)
         
-        x = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
+        ol = sp.sum([m.adot(x1k, x2k) for x1k, x2k in zip(B2GFx, B1GFx)])
+        ol2 = self._B_overlap(B1GF, B2GF, B1_is_GF=True, B2_is_GF=True)
+        print "GF overlap:", ol, ol2
         
-        for p in [0]:#sp.linspace(0, sp.pi, num=10):
-            B2 = [B1k.copy() for B1k in B1]
-            for k in xrange(self.L):
-                for s in xrange(self.q):
-                    B2[k][s] += etasq1 * (self.A[k][s].dot(x[k]) - sp.exp(-1.j * p) * x[(k - 1) % self.L].dot(self.A[k][s]))
-                
-            B2GF, B2GFx = self._B_to_B_GF(B2)
-            for k in xrange(self.L):
-                print la.norm(B1[k] - B2GF[k])
-                
-            ol = self._B_overlap(B1, B2, B1_is_GF=True, B2_is_GF=False)
-            ol2 = self._B_overlap(B1, B2GF, B1_is_GF=True, B2_is_GF=True)
-            print etasq1, ol, ol2
+        y1 = self._B_random_GT_par(M=M)
+        y2 = self._B_random_GT_par(M=M)
+        
+        for p in ps:
+            B1 = self._B_rand_GT(B1GF, p=p, x=y1)
+            B2 = self._B_rand_GT(B2GF, p=p, x=y2)
             
-    def _B_overlap_onsite(self, B1, B2, p):
+            print "p=", p
+            print "--------------"
+            ol_ = self._B_overlap(B1, B2, p=p)
+            print "B1,B2", ol_, abs(ol - ol_)
+            B1GF_, B1GF_x = self._B_to_B_GF(B1, p=p)
+            B2GF_, B2GF_x = self._B_to_B_GF(B2, p=p)
+            ol_ = self._B_overlap(B1GF_, B2GF_, B1_is_GF=True, B2_is_GF=True)
+            print "B1GF_,B2GF_", ol_, abs(ol - ol_)
+            ol_ = self._B_overlap(B1GF_, B2GF, p=p, B1_is_GF=True, B2_is_GF=True)
+            print "B1GF_,B2GF", ol_, abs(ol - ol_)
+            ol_ = self._B_overlap(B1GF, B2GF_, p=p, B1_is_GF=True, B2_is_GF=True)
+            print "B1GF,B2GF_", ol_, abs(ol - ol_)
+            
+            print 
+            
+    def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False):
         L = self.L
         M = len(B1[0].shape) - 2
         #print "M=", M
@@ -867,68 +920,97 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         #ter = range(len(A))
         
         res = 0
+        res12 = 0
+        res21 = 0
         for k in xrange(L):
             res += m.adot(self.l[k - 1], tm.eps_r_noop_multi(self.r[(k + M - 1) % L], [B1[k]], [B2[k]]))
             
             #B1 right of B2
-            for j in xrange(1, M):
-                #print k, j, ter[k:k + j], ter[k + M:k + M + j]
-                ket = A[k:k + j] + [B1[(k + j) % L]]
-                bra = [B2[k]] + A[k + M:k + M + j]
-                R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
-                #print la.norm(R), m.adot(self.l[k - 1], R)
-                res += sp.exp(j * 1.j * p) * m.adot(self.l[k - 1], R)
+            if not B1_is_GF:
+                for j in xrange(1, M):
+                    #print k, j, ter[k:k + j], ter[k + M:k + M + j]
+                    ket = A[k:k + j] + [B1[(k + j) % L]]
+                    bra = [B2[k]] + A[k + M:k + M + j]
+                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    #print la.norm(R), m.adot(self.l[k - 1], R)
+                    res21 += sp.exp((j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
             
             #B2 right of B1
-            for j in xrange(1, M):
-                ket = [B1[k]] + A[k + M:k + M + j]
-                bra = A[k:k + j] + [B2[(k + j) % L]]
-                R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
-                #print la.norm(R), m.adot(self.l[k - 1], R)
-                res += sp.exp(-j * 1.j * p) * m.adot(self.l[k - 1], R)
+            if not B2_is_GF:
+                for j in xrange(1, M):
+                    ket = [B1[k]] + A[k + M:k + M + j]
+                    bra = A[k:k + j] + [B2[(k + j) % L]]
+                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    #print la.norm(R), m.adot(self.l[k - 1], R)
+                    res12 += sp.exp(-(j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
+                    
+            if M == 1:
+                res21 += sp.exp(1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], B1[(k + 1) % L], self.A[(k + 1) % L]), self.A[k], B2[k]))
+                res12 += sp.exp(-1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], self.A[(k + 1) % L], B2[(k + 1) % L]), B1[k], self.A[k]))
+            
+        if M == 1:
+            #print "res12, res21", res12, res21
+            res12 = res21 = 0
         
-        return res
+        return res, res12, res21
         
         
     def _B_overlap(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
                    con_tol=None, GF_tol=1E-15):
         L = self.L
         
-        res = self._B_overlap_onsite(B1, B2, p)
-        #print "onsite = ", res
+        res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF)
+        #print "onsite = ", res, res12, res21
+        
+        res += res12 + res21
             
-        def calc_con(BnoGF, BGF, p_, no_GF_conj):
-            if no_GF_conj:
+        def calc_con(BnoGF, BGF, p_, noGF_conj):
+            if noGF_conj:
                 p_ = -p_
-            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=no_GF_conj, con_tol=con_tol, GF_tol=GF_tol)
-            
-            M = len(BGF[0].shape) - 2
-            A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
-            
-            As = [None] * L
-            Bs = [None] * L
-            for k in xrange(L):
-                As[k] = A[k:k + M]
-                Bs[k] = [BGF[k]]
-            
-            if no_GF_conj:
-                Y1 = Bs
-                Y2 = As
-            else:
-                Y1 = As
-                Y2 = Bs
+            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=noGF_conj, con_tol=con_tol, GF_tol=GF_tol)
+
             rescon = 0
             if not BR[0] is None:
-                for k in xrange(L - 1, -1, -1):
-                    R = tm.eps_r_noop_multi(BR[(k + 1 + M - 1) % L], Y1[k], Y2[k])
-                    rescon += sp.exp(1.j * p_) * m.adot(self.l[k - 1], R)
-                        
+                M = len(BGF[0].shape) - 2
+                A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+
+                As = [None] * L
+                BGFs = [None] * L
+                for k in xrange(L):
+                    As[k] = A[k:k + M]
+                    BGFs[k] = [BGF[k]]
+                
+                if noGF_conj:
+                    Y1 = BGFs
+                    Y2 = As
+                else:
+                    Y1 = As
+                    Y2 = BGFs
+                #rescon_1 = 0
+                for k in xrange(L):
+                    #print "sum BR", sp.sum(BR[k].ravel()), len(Y1[k]), len(Y2[k])
+                    if True or M == 1:
+                        R = tm.eps_r_noop_multi(BR[(k + M) % L], Y1[k], Y2[k])
+                        #R2 = sp.exp(1.j * p_) * tm.eps_r_noop(tm.eps_r_noop(BR[(k + 2) % L], self.A[(k+1)%L], self.A[(k+1)%L]), Y1[k][0], Y2[k][0])
+                        #rescon_1 += m.adot(self.l[k - 1], R2)
+                    else:
+                        if noGF_conj:
+                            R = tm.eps_r_op_2s_C12(BR[(k + M) % L], BGF[k], self.A[k], self.A[(k + 1) % L])
+                        else:
+                            R = tm.eps_r_op_2s_C34(BR[(k + M) % L], self.A[k], self.A[(k + 1) % L], BGF[k])
+                    rescon += m.adot(self.l[k - 1], R)
+                rescon *= sp.exp(M * 1.j * p_)
+                #rescon_1 *= sp.exp(M * 1.j * p_)
+                #print "rescon_1", rescon_1
+                #print "rescon - rescon_1", rescon - rescon_1
             return rescon, BRbl_fid
 
         if not B2_is_GF:
             con_B1_right, B2_overlap = calc_con(B2, B1, p, True)
             res += con_B1_right
             #print "con_B1_right = ", con_B1_right
+            #print "con_B1_right + os_21", con_B1_right + res21
+            #print "B2_overlap = ", B2_overlap
         else:
             B2_overlap = 0
 
@@ -936,60 +1018,93 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             con_B2_right, B1_overlap = calc_con(B1, B2, p, False)
             res += con_B2_right
             #print "con_B2_right = ", con_B2_right
+            #print "con_B2_right + os_12", con_B2_right + res12
+            #print "B1_overlap = ", B1_overlap
         else:
             B1_overlap = 0
             
+        #print "overlap part", B1_overlap * B2_overlap
         res -= B1_overlap * B2_overlap
+        
+        #print "final", res
         
         return res
         
+    def _B_random_GF(self, M=1):
+        sha = (self.q**(M - 1), self.D, (self.q - 1) * self.D)
+        x1 = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in xrange(self.L)]
+        
+        B1 = [None] * self.L
+        for k in xrange(self.L):
+            VR = sp.transpose(self.Vsh[(k + M - 1) % self.L].conj(), axes=(0, 2, 1))
+            VRr_si = sp.array([VRs.dot(self.r_sqrt_i[(k + M - 1) % self.L].A) for VRs in VR])
+            B1[k] = sp.zeros((self.q**M, self.D, self.D), dtype=self.typ)
+            for s in xrange(self.q**(M)):
+                B1[k][s] = self.l_sqrt_i[k - 1].dot(x1[k][s / self.q]).dot(VRr_si[s % self.q])
+            B1[k] = B1[k].reshape(tuple([self.q] * M + [self.D, self.D]))
+            
+        etasq1 = sp.sum([m.adot(x1k, x1k) for x1k in x1])
+        
+        return B1, x1, etasq1
+
+    def _B_random_GT_par(self, M=1, fac=1.):
+        sha = (self.q**(M - 1), self.D, self.D * (self.q - 1))
+        x = [fac * (sp.rand(*sha) + 1.j * sp.rand(*sha)) for k in xrange(self.L)]
+        
+        return x
+        
+    def _B_rand_GT(self, B, p=0, fac=1., x=None):
+        L = self.L
+        q = self.q
+        M = len(B[0].shape) - 2
+        if x is None:
+            x = self._B_random_GT_par(M=M, fac=fac)
+            
+        B2 = [Bk.copy() for Bk in B]
+        for k in xrange(L):
+            sha = (q**M, self.D, self.D)
+            B2k = B2[k].reshape(*sha)
+            for s in xrange(q**M):
+                B2k[s] += (self.A[k][s / q**(M - 1)].dot(x[(k + 1) % L][s % q**(M - 1)]) 
+                           - sp.exp(-1.j * p) 
+                             * x[k][s / q].dot(self.A[(k + M - 1) % L][s % q]))
+                                             
+        return B2
+    
     def _B_overlap_test(self, M=1, np=5):
-        B1 = self.calc_B()
-        etasq1 = self.eta**2
+        self.calc_B()
         
-        B1_ext = [B1k for B1k in B1]
-        if M == 2:
-            for k in xrange(self.L):
-                B1_ext[k] = tm.calc_AA(B1[k], self.A[(k + 1) % self.L])
+        B1, x1, etasq1 = self._B_random_GF(M=M)
         
-        x = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
-        x2 = [sp.rand(self.D, self.D * (self.q - 1)) + 1.j * sp.rand(self.D, self.D * (self.q - 1)) for k in xrange(self.L)]
+        B1B1 = self._B_overlap(B1, B1, p=0, B1_is_GF=True, B2_is_GF=True)
+        B1B1nGF = self._B_overlap(B1, B1, p=0)
+        B1_, x1_ = self._B_to_B_GF(B1, p=0)
+        B1B1_ = self._B_overlap(B1, B1_, p=0, B1_is_GF=True, B2_is_GF=True)
+        print "Initial check:", etasq1, B1B1, B1B1nGF, B1B1_
+        
+        y1 = self._B_random_GT_par(M=M, fac=etasq1)
+        y2 = self._B_random_GT_par(M=M, fac=etasq1)
         
         for p in sp.linspace(0, sp.pi, num=np):
-            B2 = [B1k.copy() for B1k in B1]
-            B3 = [B1k.copy() for B1k in B1]
-            for k in xrange(self.L):
-                for s in xrange(self.q):
-                    B2[k][s] += etasq1 * (self.A[k][s].dot(x[k]) - sp.exp(-1.j * p) * x[(k - 1) % self.L].dot(self.A[k][s]))
-                    B3[k][s] += etasq1 * (self.A[k][s].dot(x2[k]) - sp.exp(-1.j * p) * x2[(k - 1) % self.L].dot(self.A[k][s]))
-                    
-            etasq1_o = self._B_overlap(B1, B1, p)
-            overlap = self._B_overlap(B3, B2, p)
-            overlap2 = self._B_overlap(B2, B3, p)
-            overlap_GF = self._B_overlap(B1, B2, p, B1_is_GF=True)
-            overlap2_GF = self._B_overlap(B2, B1, p, B2_is_GF=True)
+            B2 = self._B_rand_GT(B1, p=p, x=y1)
+            B3 = self._B_rand_GT(B1, p=p, x=y2)
             
-            #x2, B2_ = self._B_to_x(B2)
-            #overlap_approx = self._B_overlap_GF(B1, B2_)
-        
-            print p, etasq1, etasq1_o, overlap, overlap2, overlap_GF, overlap2_GF#, overlap_approx
-                    
-            if M == 2:
-                for k in xrange(self.L):
-                    B2[k] = tm.calc_AA(B2[k], self.A[(k + 1) % self.L])
-                    B3[k] = tm.calc_AA(B3[k], self.A[(k + 1) % self.L])
-                
-            etasq1_o = self._B_overlap(B1_ext, B1_ext, p)
-            overlap = self._B_overlap(B3, B2, p)
-            overlap2 = self._B_overlap(B2, B3, p)
-            overlap_GF = self._B_overlap(B1_ext, B2, p, B1_is_GF=True)
-            overlap2_GF = self._B_overlap(B2, B1_ext, p, B2_is_GF=True)
+            print "p=", p
+            print "------------"
+            overlap = self._B_overlap(B3, B3, p)
+            print "B3,B3", overlap, abs(overlap - etasq1)
+            overlap = self._B_overlap(B2, B3, p)
+            print "B2,B3", overlap, abs(overlap - etasq1)
+            overlap = self._B_overlap(B1, B2, p, B1_is_GF=True)
+            print "B1,B2", overlap, abs(overlap - etasq1)
+            overlap = self._B_overlap(B2, B1, p, B2_is_GF=True)
+            print "B2,B1", overlap, abs(overlap - etasq1)
             
-            #x2, B2_ = self._B_to_x(B2)
-            #overlap_approx = self._B_overlap_GF(B1, B2_)
-        
-            print p, etasq1, etasq1_o, overlap, overlap2, overlap_GF, overlap2_GF#, overlap_approx
-
+            B2_, x2_ = self._B_to_B_GF(B2, p=p)
+            overlap = self._B_overlap(B1, B2_, p, B1_is_GF=True, B2_is_GF=True)
+            print "B1,B2_proj", overlap, abs(overlap - etasq1)
+            print "------------"
+            print 
         
     def _B_overlap_GF(self, B1, B2):
         """Note: Both Bs must satisfy the GFC!
