@@ -400,7 +400,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for k in xrange(self.L):
             self.l_sqrt[k], self.l_sqrt_i[k], self.r_sqrt[k], self.r_sqrt_i[k] = tm.calc_l_r_roots(self.l[k], self.r[k], zero_tol=self.zero_tol, sanity_checks=self.sanity_checks)
         
-    def calc_B(self, set_eta=True):
+    def calc_B(self, set_eta=True, return_x=False):
         """Calculates a gauge-fixing tangent-vector parameter tensor capturing the projected infinitesimal time evolution of the state.
         
         A TDVP time step is defined as: A -= dtau * B
@@ -416,18 +416,19 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         B = []
         Vsh = []
+        x = []
         for k in xrange(L):
             Vshk = tm.calc_Vsh(self.A[k], self.r_sqrt[k], sanity_checks=self.sanity_checks)
             Vsh.append(Vshk)
             
             if self.ham_sites == 2:
-                x = tm.calc_x(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
+                xk = tm.calc_x(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
                               self.r[(k+1)%L], self.l[(k-2)%L], self.A[(k-1)%L], 
                               self.A[k], self.A[(k+1)%L], 
                               self.l_sqrt[(k-1)%L], self.l_sqrt_i[(k-1)%L],
                               self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
             else:
-                x = tm.calc_x_3s(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
+                xk = tm.calc_x_3s(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
                                  self.C[(k-2)%L], self.r[(k+1)%L], self.r[(k+2)%L], 
                                  self.l[(k-2)%L], self.l[(k-3)%L], 
                                  self.AA[(k-2)%L], self.A[(k-1)%L], self.A[k], 
@@ -436,9 +437,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
             
             if set_eta:
-                self.eta_sq[k] = m.adot(x, x)
-            
-            B.append(self.get_B_from_x(x, Vshk, self.l_sqrt_i[(k-1)%L], self.r_sqrt_i[k]))
+                self.eta_sq[k] = m.adot(xk, xk)
+                
+            x.append(xk)
+            B.append(self.get_B_from_x(xk, Vshk, self.l_sqrt_i[(k - 1) % L], self.r_sqrt_i[k]))
         
             if self.sanity_checks:
                 #Test gauge-fixing:
@@ -449,7 +451,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.Vsh = Vsh
         self.eta = sp.sqrt(self.eta_sq.sum())
             
-        return B
+        if return_x:
+            return B, x
+        else:
+            return B
         
     def calc_BB_Y_2s(self, Vlh):
         L = self.L
