@@ -16,9 +16,7 @@ import evoMPS.dynamics as dy
 """
 First, we set up some global variables to be used as parameters.
 """
-seed = 8
-
-S = 0.5                       #Spin: Can be 0.5 or 1.
+S = 1                         #Spin: Can be 0.5 or 1.
 block_length = 1              #Translation-invariant block length
 bond_dim = 32                 #The maximum bond dimension
 
@@ -26,14 +24,15 @@ Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the an
 Jy = 1.00
 Jz = 0.00
 
-tol = 1E-6                #Ground state tolerance (norm of projected evolution vector)
+tol = 1E-7                    #Ground state tolerance (norm of projected evolution vector)
 
-step = 0.07                    #Imaginary time step size
+step = 0.04                    #Imaginary time step size
+max_steps = 10000             #Maximum number of iterations
 
 load_saved_ground = False      #Whether to load a saved ground state (if it exists)
 
-auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
-zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+auto_truncate = True         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
+zero_tol = 1E-20                  #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
 
 num_excitations = 24          #The number of excitations to obtain
 num_momenta = 20              #Number of points on momentum axis
@@ -41,6 +40,13 @@ num_momenta = 20              #Number of points on momentum axis
 plot_results = True
 
 sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+
+use_CUDA = False              #Whether to use CUDA to accelerate certain parts of evoMPS.
+
+random_seed = None            #Random seed to initialize state. Set to None to use default.
+
+#rl = tdvp.logging.getLogger()
+#rl.setLevel(tdvp.logging.DEBUG)
 
 """
 Next, we define our Hamiltonian and some observables.
@@ -95,11 +101,18 @@ def get_ham(Jx, Jy, Jz):
 """
 Now we are ready to create an instance of the evoMPS class.
 """
-sp.random.seed(seed)
-
-s = tdvp.EvoMPS_TDVP_Uniform(bond_dim, qn, get_ham(Jx, Jy, Jz), L=block_length)
-s.zero_tol = zero_tol
-s.sanity_checks = sanity_checks
+def create(D, seed=None):
+    if not seed is None:
+        sp.random.seed(seed)
+    s = tdvp.EvoMPS_TDVP_Uniform(D, qn, get_ham(Jx, Jy, Jz), L=block_length)
+    s.symm_gauge = True
+    s.zero_tol = zero_tol
+    s.sanity_checks = sanity_checks
+    s.ev_arpack_CUDA = use_CUDA
+    s.PPinv_use_CUDA = use_CUDA
+    return s
+    
+s = create(bond_dim, seed=random_seed)
 
 """
 The following loads a ground state from a file.
@@ -139,8 +152,7 @@ if __name__ == '__main__':
     print "Bond dimensions: " + str(s.D)
     print
     col_heads = ["Step", "t", "<h>", "d<h>",
-                 "Sz",
-                 "eta"]
+                 "Sz", "eta"]
     print "\t".join(col_heads)
     print
 
@@ -166,7 +178,7 @@ if __name__ == '__main__':
             exSzs.append("%.3g" % s.expect_1s(Sz, k=k).real)
         row += exSzs
         
-        row.append("%.6g" % s.eta)
+        row.append("%.6g" % s.eta.real)
 
         row.append(str(kwargs))
 
@@ -174,78 +186,7 @@ if __name__ == '__main__':
 
 
     if not loaded:
-        #s, steps, tau = dy.opt_im_time(s, tol=tol, dtau0=step, cb_func=cbf, max_itr=10)
-        #dy.opt_conj_grad2(s)
-        #exit()
-        
-        import time
-        import sys
-        Ts = []
-        hs = []
-        Ns = []
-        Szs = []
-        etas = []
-
-        test_type = 2
-
-        if test_type == 1:
-            t0 = time.clock()
-            s, steps = dy.find_ground(s, tol=tol, dtau=step, cb_func=cbf)
-            Ts.append(time.clock() - t0)
-            hs.append(s.h_expect.real)
-            Ns.append("find ground")
-            Szs.append(s.expect_1s(Sz, k=0).real)
-
-            sp.random.seed(seed)
-            s.randomize()
-            t0 = time.clock()
-            s, steps = dy.find_ground(s, tol=tol, dtau=step, cb_func=cbf, gap_gd=True)
-            Ts.append(time.clock() - t0)
-            hs.append(s.h_expect.real)
-            Ns.append("find ground, GD")
-            Szs.append(s.expect_1s(Sz, k=0).real)
-
-            sp.random.seed(seed)
-            s.randomize()
-            t0 = time.clock()
-            s, steps, tau = dy.opt_im_time(s, tol=tol, dtau0=step, cb_func=cbf)
-            Ts.append(time.clock() - t0)
-            hs.append(s.h_expect.real)
-            Ns.append("im time")
-            Szs.append(s.expect_1s(Sz, k=0).real)
-
-            sp.random.seed(seed)
-            s.randomize()
-            t0 = time.clock()
-            s, steps = dy.opt_conj_grad(s, tol=tol, h0=step, cb_func=cbf, reset_every=5)
-            Ts.append(time.clock() - t0)
-            hs.append(s.h_expect.real)
-            Ns.append("CG")
-            Szs.append(s.expect_1s(Sz, k=0).real)
-
-            map(lambda x: sys.stdout.write("\t".join(map(str, x)) + "\n"), zip(Ts, hs, Szs, Ns))
-        else:
-            for cg_steps in xrange(1, 11):
-                sp.random.seed(seed)
-                s.randomize()
-                t0 = time.clock()
-                #try:
-                s, steps = dy.find_ground(s, tol=tol, dtau=step, cb_func=cbf, gap_gd=False, CG_max=cg_steps, max_itr=100000)
-                Ts.append(time.clock() - t0)
-                hs.append(s.h_expect.real)
-                Ns.append(cg_steps)
-                Szs.append(s.expect_1s(Sz, k=0).real)
-                etas.append(s.eta.sum().real)
-                #except:
-                #    pass
-
-            hs = sp.array(hs)
-            hs = hs - hs.min()
-            hs = map(lambda x: "%.3e" % x, hs)
-            Szs = map(lambda x: "%.3e" % x, Szs)
-            map(lambda x: sys.stdout.write("\t".join(map(str, x)) + "\n"), zip(Ts, etas, hs, Szs, Ns))
-
-        exit()
+        s = dy.find_ground(s, tol=tol, h_init=step, cb_func=cbf, max_itr=max_steps)
         s.save_state(grnd_fname)
 
     """
