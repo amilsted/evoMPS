@@ -275,7 +275,7 @@ class EvoMPS_MPS_Uniform(object):
         return lL, rL        
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        tol=1E-14, ncv=None, k=1, max_retries=3):
+                        tol=1E-14, ncv=None, k=1, max_retries=3, which='LM'):
         if A1 is None:
             A1 = self.A
         if A2 is None:
@@ -313,7 +313,7 @@ class EvoMPS_MPS_Uniform(object):
         v0 = x.ravel()
         for i in xrange(max_retries):
             try:
-                ev, eV = las.eigs(opE, which='LM', k=k, v0=v0, tol=tol, ncv=ncv)
+                ev, eV = las.eigs(opE, which=which, k=k, v0=v0, tol=tol, ncv=ncv)
                 conv = True
                 ind = abs(ev).argmax()
                 ev = np.real_if_close(ev[ind])
@@ -344,7 +344,7 @@ class EvoMPS_MPS_Uniform(object):
         
         x[:] = eV
                     
-        if rescale and not abs(ev - 1) < tol:
+        if rescale: #and not abs(ev - 1) < tol:
             fac = (1 / sp.sqrt(ev))**(1. / len(A1))
             for A in A1:
                 A *= fac
