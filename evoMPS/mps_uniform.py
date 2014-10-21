@@ -653,7 +653,7 @@ class EvoMPS_MPS_Uniform(object):
                 if not np.allclose(norm, 1.0, atol=1E-13, rtol=0):
                     log.warning("Sanity check failed: Bad norm = %s", norm)
     
-    def restore_SCF(self, zero_tol=None):
+    def restore_SCF(self, zero_tol=None, force_evd=True):
         """Restores symmetric canonical form.
         
         In this canonical form, self.l == self.r and are diagonal matrices
@@ -666,11 +666,11 @@ class EvoMPS_MPS_Uniform(object):
         for k in xrange(self.L):
             try:
                 X = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
-                                             force_evd=False, calc_inv=False,
+                                             force_evd=force_evd, calc_inv=False,
                                              sanity_checks=self.sanity_checks, sc_data='Restore_SCF: r%u' % k)
                 
                 Y = tm.herm_fac_with_inv(self.l[k], lower=False, zero_tol=zero_tol,
-                                             force_evd=False, calc_inv=False,
+                                             force_evd=force_evd, calc_inv=False,
                                              sanity_checks=self.sanity_checks, sc_data='Restore_SCF: l%u' % k)
             except ValueError:
                 log.error("restore_SCF: Decomposition of l and r failed!")
