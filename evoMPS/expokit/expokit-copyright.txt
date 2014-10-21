@@ -1,0 +1,73 @@
+                              NOTICE
+
+Permission to use, copy, modify, and distribute EXPOKIT and its
+supporting documentation for non-commercial purposes, is hereby
+granted without fee, provided that this permission message and
+copyright notice appear in all copies. Approval must be sought for
+commercial purposes as testimony of its usage in applications.
+
+Neither the Institution (University of Queensland) nor the Author
+make any representations about the suitability of this software for
+any purpose.  This software is provided ``as is'' without express or
+implied warranty.
+
+The work resulting from EXPOKIT has been published in ACM-Transactions 
+on Mathematical Software, 24(1):130-156, 1998.
+
+The bibtex record of the citation:
+
+@ARTICLE{EXPOKIT,
+        AUTHOR  = {Sidje, R. B.},
+        TITLE   = {{\sc Expokit.} {A} Software Package for
+		  Computing Matrix Exponentials},
+        JOURNAL = {ACM Trans. Math. Softw.},
+        VOLUME  = {24},
+        NUMBER  = {1},
+        PAGES   = {130-156}
+        YEAR    = {1998}
+}
+
+Certain elements of the current software may include inadequacies
+that may be corrected at any time, as they are discovered. The Web 
+always contains the latest updates.
+
+                            Original Author:
+                 Roger B. Sidje <rbs@maths.uq.edu.au>
+           Department of Mathematics, University of Queensland 
+     Brisbane, QLD-4072, Australia, (c) 1996-2006 All Rights Reserved
+
+
+ERRATA - Added March 23, 1999.
+------------------------------
+Some cross-references were not resolved properly in the TOMS paper:
+
+Page 137 (bottom) and Page 138 (top) should read:
+The original large problem (5)   [instead of (10)]
+has been converted to the small problem (6)   [instead of (11)]
+
+Page 142 (line 7) should read
+An upper bound on (12)  [instead of (18)]
+
+Page 143 (line 6) should read
+the upper bound in (13)  [instead of (19)]
+
+Page 143 (line 11) should read
+it is reduced by formula (10)  [instead of (16)]
+
+Page 144 (line 8)
+If during the integration process (7) [instead of (12)]
+
+Added January 10 2003
+---------------------
+Page 135 (bottom) last equation: 2^8 should read 2^s
+page 136 (top) first equation: (2p+1) should read (2p+1)!
+
+Added Sep 29 2004
+-----------------
+Page 134 (line 1-2) should read
+Given the domain of applicability specified in (1) [instead of (4)]
+
+=========================================================================
+USE THE PREPRINT FOR EASE OF READING, IT DOESN'T HAVE THE PROBLEMS ABOVE.
+=========================================================================
+http://www.expokit.org/paper.pdf
