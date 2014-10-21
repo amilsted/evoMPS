@@ -10,6 +10,7 @@ for the Heisenberg model.
 import math as ma
 import scipy as sp
 import evoMPS.tdvp_gen as tdvp
+import time
 
 """
 First, we set up some global variables to be used as parameters.
@@ -22,9 +23,9 @@ Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the an
 Jy = 1.00
 Jz = 1.00
 
-Jx_quench = 1                 #Factors after quench
-Jy_quench = 1
-Jz_quench = 2
+Jx_quench = 1.                #Factors after quench
+Jy_quench = 1.
+Jz_quench = 2.
 
 tol_im = 1E-6                 #Ground state tolerance (norm of projected evolution vector)
 
@@ -32,10 +33,12 @@ step = 0.1                    #Imaginary time step size
 realstep = 0.01               #Real time step size
 real_steps = 1000             #Number of real time steps to simulate
 
+use_split_step = True         #Use the one-site split step integrator from http://arxiv.org/abs/1408.5056 (requires building evoMPS extension modules)
+
 load_saved_ground = True      #Whether to load a saved ground state
 
-auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
-zero_tol = 1E-10              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
+zero_tol = 0                  #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
 
 plot_results = True
 
@@ -109,6 +112,8 @@ Now we are ready to create an instance of the evoMPS class.
 s = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, Jx, Jy, Jz))
 s.zero_tol = zero_tol
 s.sanity_checks = sanity_checks
+#s.canonical_form = 'left'
+#s.gauge_fixing = 'left'
 
 """
 The following loads a ground state from a file.
@@ -170,10 +175,12 @@ if __name__ == '__main__':
 
     eta = 1
     i = 0
+    t0 = time.clock()
     while True:
+        if not use_split_step or not real_time:
+            s.update(auto_truncate=auto_truncate)
+        
         T.append(t)
-
-        s.update(auto_truncate=auto_truncate)
 
         H.append(s.H_expect.real)
 
@@ -205,6 +212,8 @@ if __name__ == '__main__':
         Switch to real time evolution if we have the ground state.
         """
         if (not real_time and eta < tol_im):
+#            print "time:", time.clock() - t0
+#            exit()
             real_time = True
             s.save_state(grnd_fname)
             s.ham = get_ham(N, Jx_quench, Jy_quench, Jz_quench)
@@ -219,13 +228,22 @@ if __name__ == '__main__':
         Carry out next step!
         """
         if not real_time:
-            s.take_step(step)
+            if i % 10 == 9 and eta > 1E-5:
+                print "Doing DMRG-style sweep."
+                s.vari_opt_ss_sweep()
+                eta = 100
+            else:
+                s.take_step(step)
+                eta = s.eta.real
             t += 1.j * step
         else:
-            s.take_step_RK4(realstep * 1.j)
+            if use_split_step:
+                s.take_step_split(realstep * 1.j)
+            else:
+                s.take_step_RK4(realstep * 1.j)
             t += realstep
-
-        eta = s.eta.real.sum()
+            eta = s.eta.real
+            
         row.append("%.6g" % eta)
 
         print "\t".join(row)
