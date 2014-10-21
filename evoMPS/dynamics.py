@@ -33,7 +33,7 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
     return sys    
 
 def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000, 
-                expand_to_D=None, expand_step=2, expand_tol=1E-2, 
+                expand_to_D=None, expand_step=128, expand_tol=None, 
                 cb_func=None, **kwargs):
     j = 0
     if not cb_func is None:
@@ -45,15 +45,32 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
     if expand_to_D is None:
         expand_to_D = sys.D
         
-    #Expand rapidly using imaginary time evolution before moving to CG
-    sys, dj, tau, dtau = opt_im_time(sys, tol=expand_tol, dtau_base=h_init, 
-                                     max_itr=max_itr, cb_func=cb_wrap,
-                                     expand_to_D=expand_to_D, expand_step=expand_step,
-                                     expand_tol=expand_tol)
-    j += dj        
+    #Converging a low D state first means there is less noise after expansion
+    if expand_tol is None:
+        expand_tol = tol
         
-    sys, dj, h0, B = opt_conj_grad(sys, tol=tol, h_init=h_init, max_itr=max_itr, 
-                                   return_B_grad=True, cb_func=cb_wrap, **kwargs)
+    #Do a little imaginary time evolution to condition the state
+    sys, dj, tau, dtau = opt_im_time(sys, tol=1E-2, dtau_base=h_init, 
+                                     max_itr=max_itr, cb_func=cb_wrap)
+    j += dj
+
+    while sys.D < expand_to_D:
+        sys, dj, h0, B = opt_conj_grad(sys, tol=expand_tol, h_init=h_init, 
+                                       max_itr=max_itr, return_B_grad=True, 
+                                       cb_func=cb_wrap, **kwargs)
+                                       
+        j += dj
+        
+        sys, dj, tau, dtau = opt_im_time(sys, tol=100, dtau_base=h_init, 
+                                         max_itr=max_itr, cb_func=cb_wrap,
+                                         expand_to_D=min(sys.D + expand_step, expand_to_D), 
+                                         expand_step=expand_step,
+                                         expand_tol=100)
+                                         
+        j += dj        
+        
+    sys, dj, h0 = opt_conj_grad(sys, tol=tol, h_init=h_init, max_itr=max_itr, 
+                                cb_func=cb_wrap, **kwargs)
 
     return sys
 
@@ -137,7 +154,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
         
     return sys, i + 1, tau, dtau
 
-def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=10, 
+def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20, 
                   max_itr=10000, cb_func=None, return_B_grad=False):
     B_CG = None
     B_grad = None
@@ -150,12 +167,15 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=10,
 
     i = -1
     for i in xrange(max_itr + 1):
-        reset = i % reset_every == 0
+        reset = i % reset_every == 0 or i == max_itr
         sys.update(restore_CF=reset) #This simple CG works much better without restore_CF within a run.
                                      #With restore_CF, one would have to transform B_prev to match.
         
-        B_CG, B_grad, BgdotBg, h = sys.calc_B_CG(B_CG, B_grad, BgdotBg, h, 
-                                                 tau_init=h_init, reset=reset)
+        if i == max_itr:
+            B_grad = sys.calc_B()
+        else:
+            B_CG, B_grad, BgdotBg, h = sys.calc_B_CG(B_CG, B_grad, BgdotBg, h, 
+                                                     tau_init=h_init, reset=reset)
 
         if not cb_func is None:
             cb_func(sys, i, h=h)
