@@ -133,6 +133,11 @@ class EvoMPS_MPS_Uniform(object):
         self.ev_arpack_ncv = None
         """The number of intermediate vectors stored during arnoldi iteration.
            See the documentation for scipy.sparse.linalg.eig()."""
+           
+        self.ev_arpack_CUDA = False
+        """Whether to use CUDA to implement the transfer matrix when calculating
+           l and r. Requires pycuda and scikits.cuda and a working CUDA setup
+           supporting double-precision arithmetic."""
                 
         self.symm_gauge = True
         """Whether to use symmetric canonical form or (if False) right canonical form."""
@@ -299,7 +304,11 @@ class EvoMPS_MPS_Uniform(object):
     
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        opE = EOp(A1, A2, calc_l)
+        if self.ev_arpack_CUDA:
+            import tdvp_cuda_alternatives as tcu
+            opE = tcu.EOp_CUDA(A1, A2, calc_l)
+        else:
+            opE = EOp(A1, A2, calc_l)
         x *= n / norm(x.ravel())
         v0 = x.ravel()
         for i in xrange(max_retries):

@@ -53,6 +53,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.ham_sites = ham_sites
 
         self.K_solver = las.bicgstab
+        """The sparse matrix solver to use for finding K (pseudo-inverse)."""
+        
+        self.PPinv_use_CUDA = False
+        """Whether to use CUDA to implement the pseudo-inverse iterations."""
         
         self.h_expect = sp.NaN
         """The energy density expectation value, available only after calling
@@ -229,7 +233,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         out = pinv_1mE(x, A1, A2, self.l[-1], rL, p=p, left=left, pseudo=pseudo, 
                        out=out, tol=tol, solver=solver, brute_check=brute_check,
-                       sanity_checks=self.sanity_checks, sc_data=sc_data)
+                       sanity_checks=self.sanity_checks, sc_data=sc_data,
+                       use_CUDA=self.PPinv_use_CUDA)
 
         return out
         
