@@ -186,11 +186,16 @@ def eps_r_noop_multi(x, A1, A2):
     """
     #M = sum([len(A1t.shape) - 2 for A1t in A1])
     
+    #TODO: Split into groups that can be processed seperately as successive eps_r's?
+    
     assert sp.all([len(At.shape) >= 3 for At in A1 + A2]), "Invalid input shapes"
     
     #Flatten site indices within each tensor
     A1 = [A1t.reshape((sp.prod(A1t.shape[:-2]), A1t.shape[-2], A1t.shape[-1])) for A1t in A1]
     A2 = [A2t.reshape((sp.prod(A2t.shape[:-2]), A2t.shape[-2], A2t.shape[-1])) for A2t in A2]
+    
+    nA1 = len(A1)
+    nA2 = len(A2)
     
     A1dims = sp.array([1] + [A1t.shape[0] for A1t in reversed(A1)])
     A1dims_prod = sp.cumprod(A1dims)
@@ -204,65 +209,29 @@ def eps_r_noop_multi(x, A1, A2):
     out = np.zeros((A1[0].shape[1], A2[0].shape[1]), dtype=A1[0].dtype)
     
     for s in xrange(S):
-        A1ind = [(s / A1dims_prod[t]) % A1dims[t + 1] for t in xrange(len(A1))]
-        A1s = [A1[t][A1ind[-(t + 1)]] for t in xrange(len(A1))]
-        A1s_prod = reduce(sp.dot, A1s)
+        A1s_prod = A1[nA1 - 1][s % A1dims[1]]
+        for t in xrange(1, nA1):
+            ind = (s / A1dims_prod[t]) % A1dims[t + 1]
+            A1s_prod = sp.dot(A1[nA1 - t - 1][ind], A1s_prod)
+            
+#        A1ind = [(s / A1dims_prod[t]) % A1dims[t + 1] for t in xrange(len(A1))]
+#        A1s = [A1[t][A1ind[-(t + 1)]] for t in xrange(len(A1))]
+#        A1s_prod = reduce(sp.dot, A1s)
+
+        A2s_prod = A2[nA2 - 1][s % A2dims[1]]
+        for t in xrange(1, nA2):
+            ind = (s / A2dims_prod[t]) % A2dims[t + 1]
+            A2s_prod = sp.dot(A2[nA2 - t - 1][ind], A2s_prod)
         
-        A2ind = [(s / A2dims_prod[t]) % A2dims[t + 1] for t in xrange(len(A2))]
-        A2s = [A2[t][A2ind[-(t + 1)]] for t in xrange(len(A2))]
-        A2s_prod = reduce(sp.dot, A2s)
+#        A2ind = [(s / A2dims_prod[t]) % A2dims[t + 1] for t in xrange(len(A2))]
+#        A2s = [A2[t][A2ind[-(t + 1)]] for t in xrange(len(A2))]
+#        A2s_prod = reduce(sp.dot, A2s)
         
         #print A1s_prod.shape, x.shape, A2s_prod.conj().T.shape
         
         out += A1s_prod.dot(x.dot(A2s_prod.conj().T))
     return out
     
-def eps_r_noop_multi_test():
-    d = [2, 3]
-    D = [2, 4, 3]
-    
-    l0 = sp.rand(D[0], D[0]) + 1.j * sp.rand(D[0], D[0])
-    r1 = sp.rand(D[1], D[1]) + 1.j * sp.rand(D[1], D[1])
-    r2 = sp.rand(D[2], D[2]) + 1.j * sp.rand(D[2], D[2])
-    
-    A0 = sp.rand(d[0], D[0], D[0]) + 1.j * sp.rand(d[0], D[0], D[0])
-    A1 = sp.rand(d[0], D[0], D[1]) + 1.j * sp.rand(d[0], D[0], D[1])
-    A2 = sp.rand(d[1], D[1], D[2]) + 1.j * sp.rand(d[1], D[1], D[2])
-    A3 = sp.rand(d[1], D[2], D[2]) + 1.j * sp.rand(d[1], D[2], D[2])
-    
-    B1 = sp.rand(d[0], D[0], D[1]) + 1.j * sp.rand(d[0], D[0], D[1])
-    B2 = sp.rand(d[1], D[1], D[2]) + 1.j * sp.rand(d[1], D[1], D[2])
-    
-    C12 = sp.rand(d[0], d[1], D[0], D[2]) + 1.j * sp.rand(d[0], d[1], D[0], D[2])
-    C01 = sp.rand(d[0], d[0], D[0], D[1]) + 1.j * sp.rand(d[0], d[0], D[0], D[1])
-    
-    AA12 = calc_AA(A1, A2)
-    BB12 = calc_AA(B1, B2)
-    
-    r0 = eps_r_noop(eps_r_noop(r2, A2, B2), A1, B1)
-    
-    r0_ = eps_r_noop_multi(r2, [A1, A2], [B1, B2])
-    
-    print la.norm(r0 - r0_)
-    
-    r0__ = eps_r_noop_multi(r2, [AA12], [BB12])
-    
-    print la.norm(r0 - r0__)
-    
-    r0C = eps_r_op_2s_C12(r2, C12, B1, B2)
-    r0C_ = eps_r_noop_multi(r2, [C12], [B1, B2])
-    
-    print la.norm(r0C - r0C_)    
-    
-    r0C2 = eps_r_op_2s_C12_AA34(r2, C12, BB12)
-    r0C2_ = eps_r_noop_multi(r2, [C12], [BB12])
-    
-    print la.norm(r0C2 - r0C2_)
-    
-    r0CA2 = eps_r_op_2s_C12(eps_r_noop(r2, A2, B2), C01, A0, B1)
-    r0CA2_ = eps_r_noop_multi(r2, [C01, A2], [A0, BB12])
-    
-    print la.norm(r0CA2 - r0CA2_)
     
 def eps_r_op_1s(x, A1, A2, op):
     """Implements the right epsilon map with a non-trivial single-site operator.
@@ -455,7 +424,7 @@ def eps_r_op_2s_C12_AA34(x, C12, AA34):
     return res
     
 def eps_r_op_2s_AA12_C34(x, AA12, C34):
-    res = np.zeros((AA12.shape[2], C34.shape[2]), dtype=C34.dtype)
+    res = np.zeros((AA12.shape[2], C34.shape[2]), dtype=x.dtype)
     for u in xrange(C34.shape[0]):
         for v in xrange(C34.shape[1]):
             res += AA12[u, v].dot(x.dot(C34[u, v].conj().T))

@@ -41,8 +41,10 @@ class TestOps(unittest.TestCase):
         self.r1 = sp.rand(self.D[1], self.D[1]) + 1.j * sp.rand(self.D[1], self.D[1])
         self.r2 = sp.rand(self.D[2], self.D[2]) + 1.j * sp.rand(self.D[2], self.D[2])
         
+        self.A0 = sp.rand(self.d[0], self.D[0], self.D[0]) + 1.j * sp.rand(self.d[0], self.D[0], self.D[0])
         self.A1 = sp.rand(self.d[0], self.D[0], self.D[1]) + 1.j * sp.rand(self.d[0], self.D[0], self.D[1])
         self.A2 = sp.rand(self.d[1], self.D[1], self.D[2]) + 1.j * sp.rand(self.d[1], self.D[1], self.D[2])
+        self.A3 = sp.rand(self.d[1], self.D[2], self.D[2]) + 1.j * sp.rand(self.d[1], self.D[2], self.D[2])
         
         self.B1 = sp.rand(self.d[0], self.D[0], self.D[1]) + 1.j * sp.rand(self.d[0], self.D[0], self.D[1])
         self.B2 = sp.rand(self.d[1], self.D[1], self.D[2]) + 1.j * sp.rand(self.d[1], self.D[1], self.D[2])
@@ -61,6 +63,8 @@ class TestOps(unittest.TestCase):
         
         self.C_A12 = tc.calc_C_mat_op_AA(self.op2s, self.AA12)
         self.C_conj_B12 = tc.calc_C_conj_mat_op_AA(self.op2s, self.BB12)
+        
+        self.C01 = sp.rand(self.d[0], self.d[0], self.D[0], self.D[1]) + 1.j * sp.rand(self.d[0], self.d[0], self.D[0], self.D[1])
 
     def test_eps_l_noop(self):
         l1 = tc.eps_l_noop(self.l0, self.A1, self.B1)
@@ -91,6 +95,34 @@ class TestOps(unittest.TestCase):
         r1_ = self.E2_AB.dot(self.r2.ravel()).reshape(self.D[1], self.D[1])
         
         self.assertTrue(sp.allclose(r1, r1_))
+        
+    def test_eps_r_noop_multi(self): 
+        r0 = tc.eps_r_noop(tc.eps_r_noop(self.r2, self.A2, self.B2), self.A1, self.B1)
+        
+        r0_ = tc.eps_r_noop_multi(self.r2, [self.A1, self.A2], [self.B1, self.B2])
+        
+        self.assertTrue(sp.allclose(r0, r0_))
+        
+        r0__ = tc.eps_r_noop_multi(self.r2, [self.AA12], [self.BB12])
+        
+        self.assertTrue(sp.allclose(r0, r0__))
+        
+        r0C = tc.eps_r_op_2s_C12(self.r2, self.C_A12, self.B1, self.B2)
+        r0C_ = tc.eps_r_noop_multi(self.r2, [self.C_A12], [self.B1, self.B2])
+        
+        self.assertTrue(sp.allclose(r0C, r0C_))
+        
+        r0C2 = tc.eps_r_op_2s_C12_AA34(self.r2, self.C_A12, self.BB12)
+        r0C2_ = tc.eps_r_noop_multi(self.r2, [self.C_A12], [self.BB12])
+        
+        self.assertTrue(sp.allclose(r0C2, r0C2_))
+        
+        r0CA2 = tc.eps_r_op_2s_C12(tc.eps_r_noop(self.r2, self.A2, self.B2), 
+                                   self.C01, self.A0, self.B1)
+        r0CA2_ = tc.eps_r_noop_multi(self.r2, [self.C01, self.A2], [self.A0, self.BB12])
+        
+        self.assertTrue(sp.allclose(r0CA2, r0CA2_))
+
         
     def test_eps_r_noop_inplace(self):
         r0 = sp.zeros_like(self.l0)
