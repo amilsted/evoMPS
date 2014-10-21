@@ -4,12 +4,22 @@ Created on Wed Dec 19 11:52:18 2012
 
 @author: ash
 """
+#cython: boundscheck=False
 
 import cython
 cimport numpy as np
 #cimport matmul as mm
 
+ctypedef fused flts:
+    np.complex128_t
+    np.complex64_t
+    np.float64_t
+    np.float32_t
 ctypedef np.complex128_t npcmp
+ctypedef cython.long[:] arint1D
+ctypedef flts[:, :] ndar2D
+ctypedef flts[:, :, :] ndar3D
+ctypedef flts[:, :, :, :] ndar4D
 
 @cython.locals(s = cython.int, out = np.ndarray)
 cpdef np.ndarray eps_l_noop(x, np.ndarray A1, np.ndarray A2)
@@ -25,6 +35,13 @@ cpdef np.ndarray eps_r_noop(x, np.ndarray A1, np.ndarray A2)
 
 @cython.locals(s = cython.int)
 cpdef np.ndarray eps_r_noop_inplace(x, np.ndarray A1, np.ndarray A2, np.ndarray out)
+
+@cython.locals(s = cython.int, t = cython.int, S = cython.long, ind = cython.int,
+               nA1 = cython.int, nA2 = cython.int,
+               A1dims_prod = arint1D, A2dims_prod = arint1D,
+               A1dims = arint1D, A2dims = arint1D,
+               A1s_prod = np.ndarray, A2s_prod = np.ndarray, out = np.ndarray)
+cpdef np.ndarray eps_r_noop_multi(x, A1, A2)
 
 @cython.locals(s = cython.int, t = cython.int, o_st = npcmp, out = np.ndarray)
 cpdef np.ndarray eps_r_op_1s(x, np.ndarray A1, np.ndarray A2, np.ndarray op)
@@ -84,10 +101,10 @@ cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qm1 = cython.int, s = cython.int,
                t = cython.int, u = cython.int, x = np.ndarray, 
                x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
-cpdef np.ndarray calc_x_3s(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, 
-                           np.ndarray Cm2, rp1, rp2, lm2, lm3, np.ndarray Am2Am1, 
-                           np.ndarray Am1, np.ndarray A, np.ndarray Ap1, 
-                           np.ndarray Ap1Ap2, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
+cpdef np.ndarray calc_x_3s(ndar2D Kp1, ndar4D C, ndar4D Cm1, 
+                           ndar4D Cm2, rp1, rp2, lm2, lm3, ndar4D Am2Am1, 
+                           ndar3D Am1, ndar3D A, ndar3D Ap1, 
+                           ndar4D Ap1Ap2, lm1_s, lm1_si, r_s, r_si, ndar3D Vsh)
 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qm1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray)
 cpdef np.ndarray calc_x_l(np.ndarray Km1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
