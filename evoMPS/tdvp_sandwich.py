@@ -97,7 +97,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         else:
             csvf = open(csv_file, "w")
         
-    header = "\t".join(["Step", "CPU", "t", "eta", "etas_mean", "E_nonuniform", "E - E_prev", "grown_left", 
+    header = "\t".join(["Step", "CPU", "t", "eta", "E_nonuniform", "E - E_prev", "grown_left", 
                         "grown_right"])
     print header
     print
@@ -116,15 +116,17 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         rewrite_opf = False
         if i > counter_start:
             if RK4:
-                eta = sim.take_step_RK4(tau)
+                sim.take_step_RK4(tau)
             else:
-                eta = sim.take_step(tau)
+                sim.take_step(tau)
+                
+            eta = sim.eta.real
 
-            etas = sim.eta[1:].copy()
+            etasqs = sim.eta_sq[1:].copy()
         
             #Basic dynamic expansion:
             if autogrow and sim.N < autogrow_max_N:
-                if etas[0] > sim.eta_uni.sum() * 10:
+                if etasqs[0] > sim.eta_sq_uni.mean() * 10:
                     rewrite_opf = True
                     print "Growing left by: %u" % autogrow_amount
                     sim.grow_left(autogrow_amount)
@@ -140,7 +142,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                         for row in etadata:
                             row.insert(0, 0)
     
-                if etas[-1] > sim.eta_uni.sum() * 10:
+                if etasqs[-1] > sim.eta_sq_uni.mean() * 10:
                     rewrite_opf = True
                     print "Growing right by: %u" % autogrow_amount
                     sim.grow_right(autogrow_amount)
@@ -158,7 +160,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
 
         else:            
             eta = 0
-            etas = sp.zeros(1)
+            etasqs = sp.zeros(1)
         
         #if not RK4:
         #    rcf = (i % 4 == 0)
@@ -188,12 +190,12 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             
         t = abs((i - counter_start) * tau) + abs(t_start)
         t_cpu = time.clock() - t_cpu0
-        line = "\t".join(map(str, (i, t_cpu, t, eta.real, etas.real.mean(), h.real, (h - h_prev).real, 
+        line = "\t".join(map(str, (i, "%.1f" % t_cpu, t, eta, h.real, (h - h_prev).real, 
                                    sim.grown_left, sim.grown_right)))
         print line
         if print_eta_n:
             print "eta_n:"
-            print etas.real
+            print etasqs.real
         
         if not csv_file is None:
             csvf.write(line + "\n")
@@ -243,7 +245,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 Sf.flush()
                 
         if (not eta_save_as is None):
-            row = sim.eta.real.tolist()
+            row = sim.eta_sq.real.tolist()
             etadata.append(row)
             if rewrite_opf:
                 etaf.close()
@@ -262,7 +264,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 olf.write("\t".join(map(str, row)) + "\n")
                 olf.flush()
             
-        if i > counter_start and etas.sum().real < tol:# eta.real < tol:
+        if i > counter_start and eta < tol:
             print "Tolerance reached!"
             break
             
@@ -296,8 +298,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                                            nearest-neighbour Hamiltonians at present!'
         
         self.uni_l.calc_B()
-        self.eta_uni = self.uni_l.eta
-        print "Bulk eta: ", self.eta_uni
+        self.eta_sq_uni = self.uni_l.eta_sq
+        print "Bulk eta: ", self.eta_sq_uni
         
         self.h_nn = None
         """The Hamiltonian for the nonuniform region. 

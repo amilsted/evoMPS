@@ -40,11 +40,6 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.q = sp.repeat(uni_ground.q, self.N + 2)
         """Vector containing the site Hilbert space dimensions. A[n] is a 
            q[n] x D[n - 1] x D[n] tensor."""
-           
-        self.S_hc = sp.repeat(sp.NaN, self.N + 1)
-        """Vector containing the von Neumann entropy S_hc[n] corresponding to 
-           splitting the state between sites n and n + 1. Available only
-           after performing update(restore_CF=True) or restore_CF()."""
           
         self.uni_l = copy.deepcopy(uni_ground)
         self.uni_l.symm_gauge = True
@@ -235,16 +230,11 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def _restore_CF_diag(self, dbg=False):
         nc = self.N_centre
 
-        self.S_hc = sp.zeros((self.N + 1), dtype=sp.complex128)
-
         #Want: r[0 <= n < nc] diagonal
         Ui = sp.eye(self.D[nc], dtype=self.typ)
         for n in xrange(nc, 0, -1):
             self.r[n - 1], Um1, Um1_i = tm.restore_LCF_r(self.A[n], self.r[n],
                                                          Ui, sanity_checks=self.sanity_checks)
-
-            self.S_hc[n - 1] = -sp.sum(self.r[n - 1].diag * sp.log2(self.r[n - 1].diag))
-
             Ui = Um1_i
 
         #Now U is U_0
@@ -262,9 +252,6 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         for n in xrange(nc, self.N + 1):
             self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1,
                                                 sanity_checks=self.sanity_checks)
-
-            self.S_hc[n] = -sp.sum(self.l[n].diag * sp.log2(self.l[n].diag))
-
             Um1 = U
 
         #Now, Um1 = U_N
