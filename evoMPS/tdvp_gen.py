@@ -1075,13 +1075,40 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
                 
                 
-    def take_step_split(self, dtau, ncv=None, ham_not_Herm=False):
+    def take_step_split(self, dtau, ham_is_Herm=True):
+        """Take a time-step dtau using the split-step integrator.
+        
+        This is the one-site version of a DMRG-like time integrator described
+        at:
+          http://arxiv.org/abs/1408.5056
+        
+        It has a fourth-order local error and is symmetric. It requires
+        iteratively computing two matrix exponentials per site, and thus
+        has less predictable CPU time requirements than the Euler or RK4 
+        methods.
+        
+        NOTE:
+        This requires the expokit extension, which is included in evoMPS but 
+        must be compiled during, e.g. using setup.py to build all extensions.
+        
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        ham_is_Herm : bool
+            Whether the Hamiltonian is really Hermitian. If so, the lanczos
+            method will be used for imaginary time evolution.
+        """
+        #TODO: Compute eta.
+        self.eta_sq.fill(0)
+        self.eta = 0
+        
         assert self.canonical_form == 'right', 'take_step_split only implemented for right canonical form'
         assert self.ham_sites == 2, 'take_step_split only implemented for nearest neighbour Hamiltonians'
         dtau *= -1
         from expokit_expmv import zexpmv, zexpmvh
 
-        if sp.iscomplex(dtau) or ham_not_Herm:
+        if sp.iscomplex(dtau) or not ham_is_Herm:
             expmv = zexpmv
             fac = 1.j
             dtau = sp.imag(dtau)
