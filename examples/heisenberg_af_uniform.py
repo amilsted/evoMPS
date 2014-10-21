@@ -26,13 +26,13 @@ Jz = 0.00
 
 tol = 1E-7                    #Ground state tolerance (norm of projected evolution vector)
 
-step = 0.04                    #Imaginary time step size
+step = 0.04                   #Imaginary time step size
 max_steps = 10000             #Maximum number of iterations
 
-load_saved_ground = False      #Whether to load a saved ground state (if it exists)
+load_saved_ground = True      #Whether to load a saved ground state (if it exists)
 
-auto_truncate = True         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
-zero_tol = 1E-20                  #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
+auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
+zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
 
 num_excitations = 24          #The number of excitations to obtain
 num_momenta = 20              #Number of points on momentum axis
@@ -139,14 +139,6 @@ else:
 
 if __name__ == '__main__':
     """
-    Prepare some loop variables and some vectors to hold data from each step.
-    """
-    t = 0
-
-    T = []
-    H = []
-
-    """
     Print a table header.
     """
     print "Bond dimensions: " + str(s.D)
@@ -155,20 +147,21 @@ if __name__ == '__main__':
                  "Sz", "eta"]
     print "\t".join(col_heads)
     print
-
+    
+    prev_h = 0
     def cbf(s, i, **kwargs):
-        H.append(s.h_expect.real)
+        global prev_h
+        
+        h = s.h_expect.real
 
         row = [str(i)]
 
-        row.append("%.15g" % H[-1])
+        row.append("%.15g" % h)
 
-        if len(H) > 1:
-            dH = H[-1] - H[-2]
-        else:
-            dH = 0
+        dh = h - prev_h
+        prev_h = h
 
-        row.append("%.2e" % (dH.real))
+        row.append("%.2e" % (dh))
 
         """
         Compute expectation values!
@@ -206,17 +199,6 @@ if __name__ == '__main__':
     """
     if plot_results:
         import matplotlib.pyplot as plt
-
-        if not loaded: #Plot imaginary time evolution of K1 and Mx
-            tau = sp.array(T).imag
-
-            fig1 = plt.figure(1)
-            H_tau = fig1.add_subplot(111)
-            H_tau.set_xlabel('tau')
-            H_tau.set_ylabel('H')
-            H_tau.set_title('Imaginary time evolution: Energy')
-
-            H_tau.plot(tau, H)
 
         plt.figure()
         ex_p = sp.array(ex_p).ravel()
