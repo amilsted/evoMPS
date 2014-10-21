@@ -572,6 +572,7 @@ class EvoMPS_MPS_Uniform(object):
         try:
             if self.symm_gauge:
                 norm = m.adot(self.l[-1], self.r[-1]).real
+                init_norm = norm
                 itr = 0 
                 while not abs(norm - 1) < 1E-13 and itr < 10:
                     self.l[-1] *= 1. / ma.sqrt(norm)
@@ -582,13 +583,14 @@ class EvoMPS_MPS_Uniform(object):
                     itr += 1
                     
                 if itr == 10:
-                    log.warning("Warning: Max. iterations reached during normalization!")
+                    log.warning("Warning: Max. iterations reached during normalization! %g", init_norm)
             else:
                 fac = self.D / np.trace(self.r[-1]).real
                 self.l[-1] *= 1 / fac
                 self.r[-1] *= fac
     
                 norm = m.adot(self.l[-1], self.r[-1]).real
+                init_norm = norm
                 itr = 0 
                 while not abs(norm - 1) < 1E-13 and itr < 10:
                     self.l[-1] *= 1. / norm
@@ -596,9 +598,9 @@ class EvoMPS_MPS_Uniform(object):
                     itr += 1
                     
                 if itr == 10:
-                    log.warning("Warning: Max. iterations reached during normalization!")
+                    log.warning("Warning: Max. iterations reached during normalization! %g", init_norm)
         except ValueError:
-            log.error("calc_lr: Normalization of eigenvectors failed!")
+            log.error("calc_lr: Normalization of eigenvectors failed! %g", init_norm)
             raise EvoMPSNormError("calc_lr")
 
         for k in xrange(len(self.A) - 1, 0, -1):
