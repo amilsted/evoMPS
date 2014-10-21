@@ -754,7 +754,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         sp.save(file_name, tosave)
 
-    def load_state(self, file_name, autogrow=False):
+    def load_state(self, file_name, autogrow=False, do_update=True):
         toload = sp.load(file_name)
         
         try:
@@ -811,6 +811,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.A[self.N + 1] = None
 
             print "loaded."
+            
+            if do_update:
+                self.update()
 
             return toload[8]
             
