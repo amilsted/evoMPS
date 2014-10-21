@@ -98,7 +98,8 @@ def pinv_1mE_brute_LOP(A1, A2, lL, rL, p=0, pseudo=True, left=False):
     return la.inv(bop)
     
 def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
-             out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None):
+             out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None,
+             use_CUDA=False):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
     
@@ -110,7 +111,11 @@ def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=
     if out is None:
         out = np.ones_like(A1[0][0])
     
-    op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
+    if use_CUDA:
+        import tdvp_cuda_alternatives as tcu
+        op = tcu.PinvOp_CUDA(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
+    else:
+        op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     
     res = out.ravel()
     x = x.ravel()
