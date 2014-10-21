@@ -1194,9 +1194,9 @@ class EvoMPS_MPS_Uniform(object):
         return g, gi, phi
         
     def schmidt_sq(self, k=0):
-        """Returns the squared Schmidt coefficients of one half of the system.
+        """Returns the squared Schmidt coefficients for a left-right parition.
         
-        The chain can be split into two halves between any two sites.
+        The chain can be split into two parts between any two sites.
         This returns the sqaured coefficients of the corresponding Schmidt
         decomposition, which are equal to the eigenvalues of the corresponding
         reduced density matrix.
