@@ -539,7 +539,7 @@ class EvoMPS_MPS_Uniform(object):
         else:
             if self.ev_use_arpack:
                 self.l[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                                       calc_l=True,
+                                                       calc_l=True, rescale=True,
                                                        tol=self.itr_rtol,
                                                        k=self.ev_arpack_nev,
                                                        ncv=self.ev_arpack_ncv)
@@ -553,7 +553,7 @@ class EvoMPS_MPS_Uniform(object):
             
             if self.ev_use_arpack:
                 self.r[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
-                                                       calc_l=False,
+                                                       calc_l=False, which='LR', rescale=False,
                                                        tol=self.itr_rtol,
                                                        k=self.ev_arpack_nev,
                                                        ncv=self.ev_arpack_ncv)
