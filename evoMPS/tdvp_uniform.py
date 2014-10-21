@@ -840,8 +840,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         x = [None] * L
         newB = [None] * L
         for k in xrange(L):
-            VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
-            VRr_si = sp.array([VRs.dot(self.r_sqrt_i[(k + M - 1) % L].A) for VRs in VR])
+            #VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
+            r_si = self.r_sqrt_i[(k + M - 1) % L]
+            VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
             
             x[k] = [0] * q**(M - 1)
     
@@ -872,7 +873,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     if j == M - 1:
                         Rs += sp.exp(M * p * 1.j) * BR_
                         
-                    x[k][s] += self.l_sqrt[k - 1].dot(As).dot(Rs)
+                    x[k][s] += self.l_sqrt[k - 1].dot(As.dot(Rs))
                                         
             x[k] = sp.array(x[k])
 
@@ -1164,6 +1165,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 log.warning("CG: RESET due to large beta!")
                 BCG = BG
             else:
+                BCG0, BCG0x = self._B_to_B_GF(BCG0)
                 BCG = [None] * self.L 
                 for k in xrange(self.L):
                     BCG[k] = BG[k] + beta * BCG0[k]
