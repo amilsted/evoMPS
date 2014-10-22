@@ -20,6 +20,7 @@ ctypedef cython.long[:] arint1D
 ctypedef flts[:, :] ndar2D
 ctypedef flts[:, :, :] ndar3D
 ctypedef flts[:, :, :, :] ndar4D
+ctypedef flts[:, :, :, :, :] ndar5D
 
 @cython.locals(s = cython.int, out = np.ndarray)
 cpdef np.ndarray eps_l_noop(x, np.ndarray A1, np.ndarray A2)
@@ -101,10 +102,10 @@ cpdef np.ndarray calc_x(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, rp1, lm2, 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qm1 = cython.int, s = cython.int,
                t = cython.int, u = cython.int, x = np.ndarray, 
                x_part = np.ndarray, x_subpart = np.ndarray, x_subsubpart = np.ndarray)
-cpdef np.ndarray calc_x_3s(ndar2D Kp1, ndar4D C, ndar4D Cm1, 
-                           ndar4D Cm2, rp1, rp2, lm2, lm3, ndar4D Am2Am1, 
-                           ndar3D Am1, ndar3D A, ndar3D Ap1, 
-                           ndar4D Ap1Ap2, lm1_s, lm1_si, r_s, r_si, ndar3D Vsh)
+cpdef np.ndarray calc_x_3s(np.ndarray Kp1, np.ndarray C, np.ndarray Cm1, 
+                           np.ndarray Cm2, rp1, rp2, lm2, lm3, np.ndarray Am2Am1, 
+                           np.ndarray Am1, np.ndarray A, np.ndarray Ap1, 
+                           np.ndarray Ap1Ap2, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
 
 @cython.locals(D = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qm1 = cython.int, s = cython.int, t = cython.int, x = np.ndarray, x_part = np.ndarray, x_subpart = np.ndarray)
 cpdef np.ndarray calc_x_l(np.ndarray Km1, np.ndarray C, np.ndarray Cm1, rp1, lm2, np.ndarray Am1, np.ndarray A, np.ndarray Ap1, lm1_s, lm1_si, r_s, r_si, np.ndarray Vsh)
