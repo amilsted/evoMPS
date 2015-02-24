@@ -294,7 +294,7 @@ class EvoMPS_MPS_Uniform(object):
         n = x.size #we will scale x so that stuff doesn't get too small
         
         if self.ev_arpack_CUDA:
-            import tdvp_cuda_alternatives as tcu
+            import cuda_alternatives as tcu
             opE = tcu.EOp_CUDA(A1, A2, calc_l)
         else:
             opE = EOp(A1, A2, calc_l)

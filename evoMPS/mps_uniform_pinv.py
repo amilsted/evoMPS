@@ -112,7 +112,7 @@ def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=
         out = np.ones_like(A1[0][0])
     
     if use_CUDA:
-        import tdvp_cuda_alternatives as tcu
+        import cuda_alternatives as tcu
         op = tcu.PinvOp_CUDA(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     else:
         op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
