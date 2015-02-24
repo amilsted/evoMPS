@@ -6,6 +6,7 @@ Created on Fri Jan 11 18:11:02 2013
 """
 
 import scipy as sp
+import evoMPS.matmul as mm
 import evoMPS.tdvp_common as tc
 import unittest
 
@@ -41,6 +42,14 @@ class TestOps(unittest.TestCase):
         self.r1 = sp.rand(self.D[1], self.D[1]) + 1.j * sp.rand(self.D[1], self.D[1])
         self.r2 = sp.rand(self.D[2], self.D[2]) + 1.j * sp.rand(self.D[2], self.D[2])
         
+        self.ld0 = mm.simple_diag_matrix(sp.rand(self.D[0]) + 1.j * sp.rand(self.D[0]))
+        self.rd1 = mm.simple_diag_matrix(sp.rand(self.D[1]) + 1.j * sp.rand(self.D[1]))
+        self.rd2 = mm.simple_diag_matrix(sp.rand(self.D[2]) + 1.j * sp.rand(self.D[2]))
+        
+        self.eye0 = mm.eyemat(self.D[0], dtype=sp.complex128)
+        self.eye1 = mm.eyemat(self.D[1], dtype=sp.complex128)
+        self.eye2 = mm.eyemat(self.D[2], dtype=sp.complex128)
+        
         self.A0 = sp.rand(self.d[0], self.D[0], self.D[0]) + 1.j * sp.rand(self.d[0], self.D[0], self.D[0])
         self.A1 = sp.rand(self.d[0], self.D[0], self.D[1]) + 1.j * sp.rand(self.d[0], self.D[0], self.D[1])
         self.A2 = sp.rand(self.d[1], self.D[1], self.D[2]) + 1.j * sp.rand(self.d[1], self.D[1], self.D[2])
@@ -72,6 +81,20 @@ class TestOps(unittest.TestCase):
         l1_ = self.E1_AB.conj().T.dot(self.l0.ravel()).reshape(self.D[1], self.D[1])
         
         self.assertTrue(sp.allclose(l1, l1_))
+        
+    def test_eps_l_noop_diag(self):
+        l1 = tc.eps_l_noop(self.ld0, self.A1, self.B1)
+        
+        l1_ = self.E1_AB.conj().T.dot(self.ld0.A.ravel()).reshape(self.D[1], self.D[1])
+        
+        self.assertTrue(sp.allclose(l1, l1_))
+        
+    def test_eps_l_noop_eye(self):
+        l1 = tc.eps_l_noop(self.eye0, self.A1, self.B1)
+        
+        l1_ = self.E1_AB.conj().T.dot(self.eye0.A.ravel()).reshape(self.D[1], self.D[1])
+        
+        self.assertTrue(sp.allclose(l1, l1_))
 
     def test_eps_l_noop_inplace(self):
         l1 = sp.zeros_like(self.r1)
@@ -95,6 +118,20 @@ class TestOps(unittest.TestCase):
         r1_ = self.E2_AB.dot(self.r2.ravel()).reshape(self.D[1], self.D[1])
         
         self.assertTrue(sp.allclose(r1, r1_))
+        
+    def test_eps_r_noop_diag(self):
+        r0 = tc.eps_r_noop(self.rd1, self.A1, self.B1)
+        
+        r0_ = self.E1_AB.dot(self.rd1.A.ravel()).reshape(self.D[0], self.D[0])
+        
+        self.assertTrue(sp.allclose(r0, r0_))
+        
+    def test_eps_r_noop_eye(self):
+        r0 = tc.eps_r_noop(self.eye1, self.A1, self.B1)
+        
+        r0_ = self.E1_AB.dot(self.eye1.A.ravel()).reshape(self.D[0], self.D[0])
+        
+        self.assertTrue(sp.allclose(r0, r0_))
         
     def test_eps_r_noop_multi(self): 
         r0 = tc.eps_r_noop(tc.eps_r_noop(self.r2, self.A2, self.B2), self.A1, self.B1)
