@@ -713,7 +713,7 @@ class EvoMPS_MPS_Generic(object):
         res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], C, AAA)
         return m.adot(self.l[n - 1], res)
 
-    def expect_1s_1s(self, op1, op2, n1, n2):
+    def expect_1s_1s(self, op1, op2, n1, n2, return_intermediates=False):
         """Computes the expectation value of two single site operators acting 
         on two different sites.
         
@@ -735,11 +735,14 @@ class EvoMPS_MPS_Generic(object):
             The site number of the first site.
         n2 : int
             The site number of the second site (must be > n1).
+        return_intermediates : bool
+            Whether to return results for intermediate sites.
             
         Returns
         -------
-        expval : floating point number
-            The expectation value (data type may be complex)
+        expval : complex128 or sequence of complex128
+            The expectation value (data type may be complex), or values if
+            return_intermediates == True.
         """        
         if callable(op1):
             op1 = sp.vectorize(op1, otypes=[sp.complex128])
@@ -749,14 +752,99 @@ class EvoMPS_MPS_Generic(object):
             op2 = sp.vectorize(op2, otypes=[sp.complex128])
             op2 = sp.fromfunction(op2, (self.q[n2], self.q[n2])) 
         
-        r_n = tm.eps_r_op_1s(self.r[n2], self.A[n2], self.A[n2], op2)
+        d = n2 - n1
+        
+        res = sp.zeros((d + 1), dtype=sp.complex128)
+        lj = tm.eps_l_op_1s(self.l[n1 - 1], self.A[n1], self.A[n1], op1)
+        
+        if return_intermediates:
+            res[0] = self.expect_1s(op1.dot(op1), n1)
 
-        for n in reversed(xrange(n1 + 1, n2)):
-            r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
-
-        r_n = tm.eps_r_op_1s(r_n, self.A[n1], self.A[n1], op1)
-         
-        return m.adot(self.l[n1 - 1], r_n)
+        for j in xrange(1, d + 1):
+            if return_intermediates or j == d:
+                lj_op = tm.eps_l_op_1s(lj, self.A[n1 + j], self.A[n1 + j], op2)
+                res[j] = m.adot(lj_op, self.r[n1 + j])
+                
+            if j < d:
+                lj = tm.eps_l_noop(lj, self.A[n1 + j], self.A[n1 + j])
+                
+        if return_intermediates:
+            return res
+        else:
+            return res[-1]
+            
+    def correlation_1s_1s(self, op1, op2, n1, d, return_exvals=False):
+        """Computes a correlation function of two 1 site operators.
+        
+        The result is < op1_k op2_k+j > - <op1_k> * <op2_k+j> 
+        with the operators acting on sites k and k + j, with j running from
+        0 to d.
+        
+        Optionally returns the corresponding expectation values <op1_k+j> and 
+        <op2_k+j>.
+        
+        Parameters
+        ----------
+        op1 : ndarray or callable
+            The first operator, acting on the first site.
+        op2 : ndarray or callable
+            The second operator, acting on the second site.
+        n1  : int
+            Site to begin from.
+        d : int
+            The distance (number of sites) between the two sites acted on non-trivially.
+        return_exvals : bool
+            Whether to return expectation values for op1 and op2 for all sites.
+            
+        Returns
+        -------
+        ccf : sequence of complex128
+            The correlation function across d + 1 sites (including site k).
+        ex1 : sequence of complex128
+            Expectation values of op1 for each site. Only if return_exvals == True.
+        ex2 : sequence of complex128
+            See ex1.
+        """
+        ex1 = sp.zeros((d + 1), dtype=sp.complex128)
+        for j in xrange(d + 1):
+            ex1[j] = self.expect_1s(op1, n1 + j)
+            
+        if op1 is op2:
+            ex2 = ex1
+        else:
+            ex2 = sp.zeros((d + 1), dtype=sp.complex128)
+            for j in xrange(d + 1):
+                ex2[j] = self.expect_1s(op2, n1 + j)
+            
+        cf = self.expect_1s_1s(op1, op2, n1, n1 + d, return_intermediates=True)
+            
+        ccf = sp.zeros((d + 1), dtype=sp.complex128)
+        for j in xrange(d + 1):
+            ccf[j] = cf[j] - ex1[0] * ex2[j]
+            
+        if return_exvals:
+            ex1_ = sp.tile(ex1, [(d + 1) / d + 1])[:d + 1]
+            ex2_ = sp.tile(ex1, [(d + 1) / d + 1])[:d + 1]
+            return ccf, ex1_, ex2_
+        else:
+            return ccf
+        
+    def expect_string_1s(self, op, n, d):
+        """Calculates the expectation values of finite strings
+        with lengths 1 to d, starting at position n.
+        """
+        if callable(op):
+            op = sp.vectorize(op, otypes=[sp.complex128])
+            op = sp.fromfunction(op, (self.q, self.q))
+        
+        res = sp.zeros((d), dtype=self.A[1].dtype)
+        x = self.l[n - 1]
+        for j in xrange(n, n + d + 1):
+            Aop = sp.tensordot(op, self.A[j], axes=([1],[0]))
+            x = tm.eps_l_noop(x, self.A[j], Aop)
+            res[j - n - 1] = m.adot(x, self.r[j])
+        
+        return res
 
     def density_1s(self, n):
         """Returns a reduced density matrix for a single site.
