@@ -9,7 +9,7 @@ from distutils.core import setup
 from distutils.extension import Extension
 
 setup(
-    name='evoMPS_c_alt',
+    name='evoMPS-ext-pure-c',
     ext_modules = [Extension("evoMPS.eps_maps_c", ["evoMPS/eps_maps_c.c"], 
                              libraries=["cblas"])]
 )
