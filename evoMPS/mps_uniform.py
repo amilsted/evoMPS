@@ -172,7 +172,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         for Ak in self.A:
             m.randomize_cmplx(Ak)
-            Ak /= la.norm(Ak)
+            #Ak /= la.norm(Ak)
         
         if do_update:
             self.update()
@@ -200,6 +200,9 @@ class EvoMPS_MPS_Uniform(object):
             self.update()
             
     def convert_to_TI_blocked(self, do_update=True):
+        if self.L == 1:
+            return
+            
         L = self.L
         q = self.q
         newq = q**L
@@ -248,16 +251,18 @@ class EvoMPS_MPS_Uniform(object):
         
         self.tmp = np.zeros_like(self.A[0][0])
         
-    def _calc_lr_brute(self):
-        E = np.zeros((self.L, self.D**2, self.D**2), dtype=self.typ, order='C')
-        
+    def _get_dense_transfer_op_block(self):
+        E = m.eyemat(self.D**2)
         for k in xrange(self.L):
-            for s in xrange(self.q):
-                E[k] += sp.kron(self.A[k][s], self.A[k][s].conj())
-                
-        Eblock = E[0].copy()
-        for k in xrange(1, self.L):
-            Eblock = Eblock.dot(E[k])
+            A = self.A[k]
+            Ek = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
+            for s in xrange(A.shape[0]):
+                Ek += sp.kron(A[s], A[s].conj())
+            E = E.dot(Ek)
+        return E
+        
+    def _calc_lr_brute(self):
+        Eblock = self._get_dense_transfer_op_block()
             
         ev, eVL, eVR = la.eig(Eblock, left=True, right=True)
         
@@ -280,22 +285,6 @@ class EvoMPS_MPS_Uniform(object):
             A1 = self.A
         if A2 is None:
             A2 = self.A
-            
-        if self.D == 1:
-            x.fill(1)
-            if calc_l:
-                for k in xrange(len(A1)):
-                    x = tm.eps_l_noop(x, A1[k], A2[k])
-            else:
-                for k in xrange(len(A1) - 1, -1, -1):
-                    x = tm.eps_r_noop(x, A1[k], A2[k])
-                
-            ev = x[0, 0]
-            
-            if rescale and not abs(ev - 1) < tol:
-                A1[0] *= 1 / sp.sqrt(ev)
-            
-            return x, True, 1
                         
         try:
             norm = la.get_blas_funcs("nrm2", [x])
@@ -362,6 +351,12 @@ class EvoMPS_MPS_Uniform(object):
     def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
                                     left=False, max_retries=3, 
                                     return_eigenvectors=False):
+        if self.D == 1:
+            return sp.array([1. + 0.j])
+        elif self.D <= 3:
+            E = self._get_dense_transfer_op_block()
+            return la.eigvals(E)
+        
         A = list(self.A)
         A = A[k:] + A[:k]
         
@@ -409,6 +404,9 @@ class EvoMPS_MPS_Uniform(object):
         """
         ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         
+        if len(ev) == 1:
+            return sp.NaN
+        
         ev = abs(ev)
         ev.sort()
         ev1_mag = ev[-1]
@@ -433,6 +431,9 @@ class EvoMPS_MPS_Uniform(object):
         ncv : int
             Number of Arnoldi basis vectors to store.
         """
+        if self.D == 1:
+            return 0.
+        
         if ncv is None:
             ncv = nev * 4
         
@@ -534,7 +535,7 @@ class EvoMPS_MPS_Uniform(object):
         self.lL_before_CF = np.asarray(self.lL_before_CF)
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
-        if self.ev_brute:
+        if self.ev_brute or self.D <= 3:
             self.l[-1], self.r[-1] = self._calc_lr_brute()
         else:
             if self.ev_use_arpack:
@@ -1653,8 +1654,17 @@ class EvoMPS_MPS_Uniform(object):
             res[n - k - 1] = m.adot(x, self.r[nm])
         
         return res
+        
+    def basis_occupancy(self, k=0):
+        L = self.L
+        A = self.A
+        l = self.l
+        r = self.r
+        res = [m.adot(l[(k - 1) % L], A[k][s].dot(r[k].dot(A[k][s].conj().T))) 
+               for s in xrange(self.q)]
+        return sp.array(res).real
                 
-    def set_q(self, newq):
+    def set_q(self, newq, offset=0):
         """Alter the single-site Hilbert-space dimension q.
         
         Any added parameters are set to zero.
@@ -1679,9 +1689,9 @@ class EvoMPS_MPS_Uniform(object):
             A.fill(0)
         for k in xrange(self.L):
             if self.q > oldq:
-                self.A[k][:oldq, :, :] = oldA[k]
+                self.A[k][offset:oldq + offset, :, :] = oldA[k]
             else:
-                self.A[k][:] = oldA[k][:self.q, :, :]
+                self.A[k][:] = oldA[k][-offset:self.q - offset, :, :]
         
             
     def expand_D(self, newD, refac=100, imfac=0):
