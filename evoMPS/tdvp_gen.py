@@ -1258,7 +1258,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         NOTE:
         This requires the expokit extension, which is included in evoMPS but 
-        must be compiled during, e.g. using setup.py to build all extensions.
+        must be compiled, for example using setup.py to build all extensions.
         
         Parameters
         ----------
@@ -1268,7 +1268,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Whether the Hamiltonian is really Hermitian. If so, the lanczos
             method will be used for imaginary time evolution.
         """
-        #TODO: Compute eta.
         self.eta_sq.fill(0)
         self.eta = 0
         
@@ -1286,13 +1285,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             fac = 1
             
         norm_est = abs(self.H_expect.real)
+        
+        etas_A = sp.zeros((self.N + 1,), dtype=sp.float64)
+        etas_G = sp.zeros((self.N + 1,), dtype=sp.float64)
     
         KL = [None] * (self.N + 1)
         KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
         for n in xrange(1, self.N + 1):
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac)
             #print "Befor A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmv(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)            
+            An_old = self.A[n].ravel()
+            Bn = lop.matvec(An_old) - An_old
+            etas_A[n] += m.adot(Bn, Bn).real
+            An = expmv(lop, An_old, dtau/2., norm_est=norm_est)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
             norm = m.adot(self.l[n], self.r[n])
@@ -1312,7 +1317,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if n < self.N:                    
                 lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac)
                 #print "Befor G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real
-                G = expmv(lop2, G.ravel(), -dtau/2., norm_est=norm_est)
+                Gold = G.ravel()
+                BG = lop2.matvec(Gold) - Gold
+                etas_G[n] += m.adot(BG, BG).real
+                G = expmv(lop2, Gold, -dtau/2., norm_est=norm_est)
                 G = G.reshape((self.D[n], self.D[n]))
                 norm = sp.trace(self.l[n].dot(G).dot(self.r[n].dot(G.conj().T)))
                 G /= sp.sqrt(norm)
@@ -1323,11 +1331,16 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
                 self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])           
+
+        print sp.sqrt(sp.sum(etas_A)), sp.sqrt(sp.sum(etas_G))
    
         for n in xrange(self.N, 0, -1):
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
             #print "Before A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmv(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)
+            An_old = self.A[n].ravel()
+            Bn = lop.matvec(An_old) - An_old
+            etas_A[n] += m.adot(Bn, Bn).real
+            An = expmv(lop, An_old, dtau/2., norm_est=norm_est)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
             norm = m.adot(self.l[n], self.r[n])
@@ -1345,7 +1358,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
             if n > 1:
                 lop2 = Vari_Opt_SC_op(self, n - 1, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
-                Gi = expmv(lop2, Gi.ravel(), -dtau/2., norm_est=norm_est)
+                Giold = Gi.ravel()
+                BGi = lop2.matvec(Giold) - Giold
+                etas_G[n] += m.adot(BGi, BGi).real
+                Gi = expmv(lop2, Giold, -dtau/2., norm_est=norm_est)
                 Gi = Gi.reshape((self.D[n - 1], self.D[n - 1]))
                 norm = sp.trace(self.l[n - 1].dot(Gi).dot(self.r[n - 1].dot(Gi.conj().T)))
                 G /= sp.sqrt(norm)
@@ -1356,6 +1372,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
                 self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
                 self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+                
+        print sp.sqrt(sp.sum(etas_A)), sp.sqrt(sp.sum(etas_G))
 
         
     def expect_2s(self, op, n, AA=None):
