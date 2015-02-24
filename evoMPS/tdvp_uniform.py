@@ -123,6 +123,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K0_init = None
         
     def convert_to_TI_blocked(self, do_update=True):
+        if self.L == 1:
+            return
+            
         L = self.L
         q = self.q
         newq = q**L
@@ -354,7 +357,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 self.K_left[k] -= self.l[k] * hk
         else:
             for k in sp.arange(0, L - 1):
-                self.K_left[k], hk = tm.calc_K_3s_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
+                self.K_left[k], hk = tm.calc_K_3s_l(self.K[(k - 1) % L], self.C[(k - 2) % L], 
                                                 self.l[(k - 3) % L], self.r[k],
                                                 self.A[k],
                                                 self.AAA[(k - 2) % L])
@@ -1152,7 +1155,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             BCG = BG
         else:
             if use_PR:                
-                BGdotBG0 = self._B_overlap(BG, BG0, B1_is_GF=True, con_tol=B_overlap_tol)
+                BGdotBG0 = self._B_overlap(BG, BG0, B1_is_GF=True)
                 beta = (BGdotBG - BGdotBG0) / BG0dotBG0 #Note: Overall factors/signs on the gradients do not affect beta
             else:
                 beta = BGdotBG / BG0dotBG0 #FR
@@ -1332,10 +1335,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  expand_q=expand_q, shrink_q=shrink_q,
                                  refac=refac, imfac=imfac)
             
-    def set_q(self, newq):
+    def set_q(self, newq, offset=0):
         oldK = self.K        
-        super(EvoMPS_TDVP_Uniform, self).set_q(newq)        
+        super(EvoMPS_TDVP_Uniform, self).set_q(newq, offset=offset)        
         self.K = oldK
+        print "New Hamiltonian required! Use set_ham(...)."
                     
     def expand_D(self, newD, refac=100, imfac=0):
         oldK0 = self.K[0]
