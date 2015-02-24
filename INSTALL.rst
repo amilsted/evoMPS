@@ -29,8 +29,11 @@ Numpy should be compiled with a LAPACK library, preferably
 an optimized one such as ATLAS <http://math-atlas.sourceforge.net/>. 
 Scipy requires a LAPACK library to be present.
 
-If present, Cython <http://www.cython.org/> will also be used to perform
-some (currently minor) optimizations.
+If present, a c compiler will be used to compile some parts of evoMPS,
+resulting in performance gains, especially at low bond dimensions.
+
+Some parts of evoMPS *require* compilation, such as the split-step
+integrator, which needs the (included) expokit FORTRAN program.
 
 To run the included examples, the following is also required:
 
@@ -50,6 +53,14 @@ Alternatively, to install for the current user only, run::
 
 Installation is not strictly necessary, as scripts using evoMPS can
 also be run from the base source directory.
+
+As of version 0.9, setup.py does *not* perform any compilation of extensions.
+This makes it easier to install the pure python version in case c or FORTRAN
+compilers are not present. To compile extensions, also run::
+
+    python setup_ext.py install
+    
+Again, add the --user option to install for the current user only.
 
 Getting Started
 ---------------
