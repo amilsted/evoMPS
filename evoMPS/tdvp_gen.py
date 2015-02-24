@@ -625,6 +625,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                    
         B = [None] #There is no site zero
         eta_sq_tot = 0
+        if set_eta:
+            self.eta_sq.fill(0)
         for n in xrange(1, self.N + 1):
             Bn = self.calc_B_n(n, set_eta=set_eta, l_s_m1=l_s[n-1], 
                              l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
@@ -669,7 +671,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = m.mmul(l_si_m1, x, m.H(Vrh[s]), r_si)
+                B[s] = l_si_m1.dot(x).dot(r_si.dot(Vrh[s]).conj().T)
             return B
         else:
             return None
@@ -799,7 +801,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         sv_tol : float
             Only use singular values larger than this for dynamical expansion.
         """
-        self.eta_sq.fill(0)    
         self.etaBB_sq.fill(0)
         
         if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
@@ -875,12 +876,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     log.info("Dyn. expanded! New D: %s", self.D)
                     self.eta_sq = oldeta
                     self.etaBB_sq = oldetaBB
+                    self.eta = sp.sqrt(self.eta_sq.sum())
             else:
                 for n in xrange(1, self.N + 1):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
                        
-        self.eta = sp.sqrt(self.eta_sq.sum())
         self.etaBB = sp.sqrt(self.etaBB_sq.sum())
         
     def take_step_RK4(self, dtau):
