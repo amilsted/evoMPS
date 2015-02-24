@@ -85,8 +85,8 @@ To submit ideas or bug reports, please use the GitHub Issues system <http://gith
 References
 ----------
 
-1. J. Haegeman, \J. I. Cirac, T. J. Osborne, I. Pizorn, H. Verschelde and F. Verstraete, arXiv:1103.0936. <http://arxiv.org/abs/1103.0936v2>.
-2. A. Milsted, T. J. Osborne, F. Verstraete, J. Haegeman, arXiv:1207.0691. <http://arxiv.org/abs/1207.0691>.
+1. \J. Haegeman, J. I. Cirac, T. J. Osborne, I. Pizorn, H. Verschelde and F. Verstraete, arXiv:1103.0936. <http://arxiv.org/abs/1103.0936v2>.
+2. \A. Milsted, T. J. Osborne, F. Verstraete, J. Haegeman, arXiv:1207.0691. <http://arxiv.org/abs/1207.0691>.
 
 About
 -----
