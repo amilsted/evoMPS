@@ -228,6 +228,15 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
 
     return Vsh
 
+def apply_MPO_local(Mn, An):
+    q = An.shape[0]
+    Dm1 = An.shape[1]
+    D = An.shape[2]
+    MAn = sp.tensordot(An, Mn, axes=[[0], [2]])
+    MAn = sp.transpose(MAn, axes=(4, 0, 2, 1, 3)).copy()
+    MAn = MAn.reshape((q, Dm1 * len(Mn), D * len(Mn[0])))
+    
+    return MAn
    
 def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     D = A.shape[2]
