@@ -56,61 +56,50 @@ class Vari_Opt_Single_Site_Op:
         t = self.tdvp
         n = self.n        
         
-        AAnm1 = None
-        AAn = None
-        
-        AAAnm2 = None
-        AAAnm1 = None
-        AAAn = None
-        
-        Cnm2 = None
-        Cnm1 = None
-        Cn = None
-        
-        if n > 1:
-            AAnm1 = tm.calc_AA(t.A[n - 1], An)            
-        if n < t.N:
-            AAn = tm.calc_AA(An, t.A[n + 1])
-        
+        #Assuming RCF        
         if t.ham_sites == 2:
             if n > 1:
+                AAnm1 = tm.calc_AA(t.A[n - 1], An)
                 Cnm1 = tm.calc_C_mat_op_AA(t.ham[n - 1], AAnm1)
                 Cnm1 = sp.transpose(Cnm1, axes=(1, 0, 2, 3)).copy()
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[s, :])
             if n < t.N:
+                AAn = tm.calc_AA(An, t.A[n + 1])
                 Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
-        elif t.ham_sites == 3:
-            if n > 1 and n < t.N:
-                AAAnm1 = tm.calc_AAA_AA(AAnm1, t.A[n + 1])
-                Cnm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAnm1)
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
+                
+        if t.ham_sites == 3:
             if n > 2:
                 AAAnm2 = tm.calc_AAA_AA(t.AA[n - 2], An)
                 Cnm2 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 2], AAAnm2)
                 Cnm2 = sp.transpose(Cnm2, axes=(2, 0, 1, 3, 4)).copy()
-            if n < t.N - 1:
-                AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
-                Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
-        
-        #Assuming RCF        
-        for s in xrange(t.q[n]):
-            if t.ham_sites == 2:
-                if not Cnm1 is None:
-                    res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[s, :])
-                if not Cn is None:
-                    res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
-                    
-            if t.ham_sites == 3:
-                if not Cnm2 is None:
+                for s in xrange(t.q[n]):
                     res[s] += tm.eps_l_op_2s_AA12_C34(t.l[n - 3], t.AA[n - 2], Cnm2[s, :, :])
-                if not Cnm1 is None:
+                    
+            if n > 1 and n < t.N:
+                AAnm1 = tm.calc_AA(t.A[n - 1], An)  
+                AAAnm1 = tm.calc_AAA_AA(AAnm1, t.A[n + 1])
+                Cnm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAnm1)
+                for s in xrange(t.q[n]):
                     for u in xrange(t.q[n - 1]):
                         res[s] += t.A[n - 1][u].conj().T.dot(t.l[n - 2].dot(
                                   tm.eps_r_noop(t.r[n + 1], Cnm1[u, s, :], t.A[n + 1])))
-                if not Cn is None:
+                                  
+            if n < t.N - 1:
+                AAn = tm.calc_AA(An, t.A[n + 1])
+                AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
+                Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
+                for s in xrange(t.q[n]):
                     res[s] += tm.eps_r_op_2s_AA12_C34(t.r[n + 2], Cn[s, :, :], t.AA[n + 1])
             
-            if n > 1:
+        if n > 1:
+            for s in xrange(t.q[n]):
                 res[s] += self.KLnm1.dot(An[s])
-            if n < t.N:
+                
+        if n < t.N:
+            for s in xrange(t.q[n]):
                 res[s] += An[s].dot(t.K[n + 1])
                 
     def apply_ham_MPO(self, An, res):
@@ -1342,18 +1331,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if print_progress:
             print
             
-        Bs_eff = [1 / abs(dtau) * (An - An_old) for An, An_old in zip(self.A[1:self.N + 1], A_old)]
-        self.calc_l()
-        etasq = [m.adot(self.l[n - 1], 
-                        tm.eps_r_noop(self.r[n], Bs_eff[n - 1], Bs_eff[n - 1])) for n in xrange(1, self.N + 1)]
-        print sp.sqrt(sp.sum(etasq))
+        #Bs_eff = [1 / abs(dtau) * (An - An_old) for An, An_old in zip(self.A[1:self.N + 1], A_old)]
+        #self.calc_l()
+        #etasq = [m.adot(self.l[n - 1], 
+        #                tm.eps_r_noop(self.r[n], Bs_eff[n - 1], Bs_eff[n - 1])) for n in xrange(1, self.N + 1)]
+        #print sp.sqrt(sp.sum(etasq))
         
         self.H_expect = 0
         if use_local_ham:
             self.H_expect += self.K[1][0, 0]
         if not HMPO is None:
             self.H_expect += HMR[0][0, 0]
-        print self.H_expect
 
         
     def expect_2s(self, op, n, AA=None):
