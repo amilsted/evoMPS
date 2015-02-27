@@ -1172,19 +1172,20 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         #self.eta_sq.fill(0)
         #self.eta = 0
         
-        dtau *= -1
-        from expokit_expmv import zexpmv
-
-        if sp.iscomplex(dtau):
-            op_is_herm = False
-            fac = 1.j
-            dtau = sp.imag(dtau)
-        else:
-            if ham_is_Herm:
-                op_is_herm = True
-            else:
+        if not DMRG:
+            dtau *= -1
+            from expokit_expmv import zexpmv
+    
+            if sp.iscomplex(dtau):
                 op_is_herm = False
-            fac = 1
+                fac = 1.j
+                dtau = sp.imag(dtau)
+            else:
+                if ham_is_Herm:
+                    op_is_herm = True
+                else:
+                    op_is_herm = False
+                fac = 1
         
         assert self.canonical_form == 'right', 'take_step_split only implemented for right canonical form'
         assert self.ham_sites == 2 or self.ham_sites == 3
@@ -1281,7 +1282,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         norm_est = abs(self.H_expect.real)
         
-        A_old = [An.copy() for An in self.A[1:self.N + 1]]
+#        A_old = [An.copy() for An in self.A[1:self.N + 1]]
     
         for n in xrange(1, self.N + 1):
             if print_progress:
@@ -1330,12 +1331,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
         if print_progress:
             print
-            
-        #Bs_eff = [1 / abs(dtau) * (An - An_old) for An, An_old in zip(self.A[1:self.N + 1], A_old)]
-        #self.calc_l()
-        #etasq = [m.adot(self.l[n - 1], 
-        #                tm.eps_r_noop(self.r[n], Bs_eff[n - 1], Bs_eff[n - 1])) for n in xrange(1, self.N + 1)]
-        #print sp.sqrt(sp.sum(etasq))
+
+#        #NON-WORKING estimate of eta
+#        tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+#                                             sc_data="restore_RCF_l")
+#        print "norm", m.adot(self.l[self.N], self.r[self.N])
+#        Bs_eff = [None] + [1 / abs(dtau) * (An - An_old) for An, An_old in zip(self.A[1:self.N + 1], A_old)]
+#        etasq = [m.adot(self.l[n - 1], 
+#                        tm.eps_r_noop(self.r[n], Bs_eff[n], Bs_eff[n])) for n in xrange(1, self.N + 1)]
+#        print sp.sqrt(sp.sum(etasq))
         
         self.H_expect = 0
         if use_local_ham:
