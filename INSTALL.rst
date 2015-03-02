@@ -54,7 +54,7 @@ Alternatively, to install for the current user only, run::
 Installation is not strictly necessary, as scripts using evoMPS can
 also be run from the base source directory.
 
-As of version 0.9, setup.py does *not* perform any compilation of extensions.
+As of version 1.9, setup.py does *not* perform any compilation of extensions.
 This makes it easier to install the pure python version in case c or FORTRAN
 compilers are not present. To compile extensions, also run::
 
