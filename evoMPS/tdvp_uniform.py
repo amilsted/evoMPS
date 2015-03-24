@@ -805,7 +805,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_nontriv(donor, pinv_tol=pinv_tol)
+        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
         
         for i in xrange(max_retries):
             try:
