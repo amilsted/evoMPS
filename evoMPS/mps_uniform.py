@@ -278,6 +278,15 @@ class EvoMPS_MPS_Uniform(object):
         rL *= 1 / sp.sqrt(norm)
 
         return lL, rL        
+        
+    def _get_EOP(self, A1, A2, left):
+        if self.ev_arpack_CUDA:
+            import cuda_alternatives as tcu
+            opE = tcu.EOp_CUDA(A1, A2, left)
+        else:
+            opE = EOp(A1, A2, left)
+            
+        return opE
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
                         tol=1E-14, ncv=None, k=1, max_retries=3, which='LM'):
@@ -293,11 +302,7 @@ class EvoMPS_MPS_Uniform(object):
     
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        if self.ev_arpack_CUDA:
-            import cuda_alternatives as tcu
-            opE = tcu.EOp_CUDA(A1, A2, calc_l)
-        else:
-            opE = EOp(A1, A2, calc_l)
+        opE = self._get_EOP(A1, A2, calc_l)
         x *= n / norm(x.ravel())
         v0 = x.ravel()
         for i in xrange(max_retries):
@@ -360,7 +365,7 @@ class EvoMPS_MPS_Uniform(object):
         A = list(self.A)
         A = A[k:] + A[:k]
         
-        opE = EOp(A, A, left)
+        opE = self._get_EOP(A, A, left)
         
         if left:
             v0 = np.asarray(self.l[(k - 1) % self.L])
@@ -483,7 +488,7 @@ class EvoMPS_MPS_Uniform(object):
 
         n = x.size #we will scale x so that stuff doesn't get too small
         
-        opE = EOp(A1, A2, calc_l)
+        opE = self._get_EOP(A1, A2, calc_l)
         
         x = x.ravel()
         tmp = tmp.ravel()
@@ -1095,7 +1100,7 @@ class EvoMPS_MPS_Uniform(object):
             else:
                 return abs(ev[ind])**(1./self.L), ev[ind]
         else:
-            opE = EOp(As[0], As[1], left)
+            opE = self._get_EOP(As[0], As[1], left)
             res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
             if full_output:
                 ev, eV = res
@@ -1573,7 +1578,7 @@ class EvoMPS_MPS_Uniform(object):
                 ev *= evk
             eV = sp.ones((1), dtype=sp.complex128)
         else:            
-            opE = EOp(Aop, Ashift, False)
+            opE = self._get_EOP(Aop, Ashift, False)
             ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
             ev = ev[0]
             #Note: eigs normalizes the eigenvector so that norm(eV) = 1.
@@ -1632,7 +1637,7 @@ class EvoMPS_MPS_Uniform(object):
                 ev *= evk
             return ev**(1./self.L)
         else:            
-            opE = EOp(Aop, self.A, False)
+            opE = self._get_EOP(Aop, self.A, False)
             ev = las.eigs(opE, v0=np.asarray(self.r[-1]), which='LM', k=1, ncv=ncv)
             return ev[0]**(1./self.L)
             
