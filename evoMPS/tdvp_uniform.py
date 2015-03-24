@@ -630,7 +630,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def evolve_state():
         pass
             
-    def _prepare_excite_op_top_triv(self, p, pinv_tol=1E-12):
+    def _prepare_excite_op_top_triv(self, p, pinv_tol=1E-12, pinv_solver=None):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
 
@@ -641,12 +641,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         op = Excite_H_Op(self, self, p, pinv_tol=pinv_tol,
                          sanity_checks=self.sanity_checks)
         op.pinv_CUDA = self.PPinv_use_CUDA
+        op.pinv_solver = pinv_solver
 
         return op        
     
     def excite_top_triv(self, p, nev=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None, which='SM', return_eigenvectors=False,
-                        max_retries=3, pinv_tol=1E-12):
+                        max_retries=3, pinv_tol=1E-12, pinv_solver=None):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -691,7 +692,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
+        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol,
+                                              pinv_solver=pinv_solver)
         
         for i in xrange(max_retries):
             try:
@@ -725,7 +727,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12):
+    def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
+                                       pinv_solver=None):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -749,12 +752,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         op = Excite_H_Op(self, donor, p, pinv_tol=pinv_tol,
                          sanity_checks=self.sanity_checks)
         op.pinv_CUDA = self.PPinv_use_CUDA
+        op.pinv_solver = pinv_solver
 
         return op 
 
     def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None, max_retries=3, pinv_tol=1E-12):
+                           ncv=None, max_retries=3, pinv_tol=1E-12,
+                           pinv_solver=None):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -805,7 +810,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
+        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
+                                                 pinv_solver=pinv_solver)
         
         for i in xrange(max_retries):
             try:
