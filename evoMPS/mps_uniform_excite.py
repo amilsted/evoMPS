@@ -17,7 +17,8 @@ import logging
 log = logging.getLogger(__name__)
         
 class Excite_H_Op:
-    def __init__(self, tdvp, tdvp2, p, sanity_checks=False, sanity_tol=1E-12):
+    def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
+                 sanity_checks=False, sanity_tol=1E-12):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -51,7 +52,8 @@ class Excite_H_Op:
         self.sanity_checks = sanity_checks
         self.sanity_tol = sanity_tol
         
-        self.pinv_tol = 1E-12
+        self.pinv_tol = pinv_tol
+        self.pinv_CUDA = False
         
         d = (self.q - 1) * self.D**2
         self.shape = (d, d)
@@ -278,6 +280,7 @@ class Excite_H_Op:
 #            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
         M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
+                     use_CUDA=self.pinv_CUDA,
                      sanity_checks=self.sanity_checks, sc_data='M')
         
         #print m.adot(r, M)
@@ -356,7 +359,8 @@ class Excite_H_Op:
         if pseudo:
             y = y - m.adot(l, y) * r_
         y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
-                        pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, solver=pinv_solver,
+                        pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
+                        solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         sanity_checks=self.sanity_checks, sc_data='y_pi')
         #print m.adot(l, y_pi)
         if self.sanity_checks:
