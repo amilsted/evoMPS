@@ -630,7 +630,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def evolve_state():
         pass
             
-    def _prepare_excite_op_top_triv(self, p):
+    def _prepare_excite_op_top_triv(self, p, pinv_tol=1E-12):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
 
@@ -638,13 +638,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_l_r_roots()
         self.Vsh[0] = tm.calc_Vsh(self.A[0], self.r_sqrt[0], sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, self, p, sanity_checks=self.sanity_checks)
+        op = Excite_H_Op(self, self, p, pinv_tol=pinv_tol,
+                         sanity_checks=self.sanity_checks)
+        op.pinv_CUDA = self.PPinv_use_CUDA
 
         return op        
     
-    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
+    def excite_top_triv(self, p, nev=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None, which='SM', return_eigenvectors=False,
-                        max_retries=3):
+                        max_retries=3, pinv_tol=1E-12):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -661,7 +663,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         ----------
         p : float
             Momentum in units of inverse lattice spacing.
-        k : int
+        nev : int
             Number of eigenvalues to calculate.
         tol : float
             Tolerance (defaults to machine precision).
@@ -674,11 +676,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         sigma : float
             Eigenvalue shift to use.
         which : string
-            Which eigenvalues to find ('SM' means the k smallest).
+            Which eigenvalues to find ('SM' means the nev smallest).
         return_eigenvectors : bool
             Whether to return eigenvectors as well as eigenvalues.
         max_retries : int
             Maximum number of retries (with growing ncv), in case of no convergence.
+        pinv_tol : float
+            Tolerance for pseudo-inverse operations.
             
         Returns
         -------
@@ -687,25 +691,25 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_triv(p)
+        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
         
         for i in xrange(max_retries):
             try:
-                res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
+                res = las.eigsh(op, which=which, k=nev, v0=v0, ncv=ncv,
                                  return_eigenvectors=return_eigenvectors, 
                                  maxiter=max_itr, tol=tol, sigma=sigma)
             except las.ArpackNoConvergence:
                 log.warning("excite_top_triv: Retry %u!", i)
                 v0 = None
-                ncv = k * (3 + i)
+                ncv = nev * (3 + i)
                 if i == max_retries - 1:
                     log.error("excite_top_triv: Failed to converge!")
                     raise EvoMPSNoConvergence('excite_top_triv')
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_triv(p)
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12):
+        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -721,7 +725,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _prepare_excite_op_top_nontriv(self, donor, p):
+    def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -742,23 +746,85 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         donor.calc_l_r_roots()
         donor.Vsh[0] = tm.calc_Vsh(donor.A[0], donor.r_sqrt[0], sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, donor, p, sanity_checks=self.sanity_checks)
+        op = Excite_H_Op(self, donor, p, pinv_tol=pinv_tol,
+                         sanity_checks=self.sanity_checks)
+        op.pinv_CUDA = self.PPinv_use_CUDA
 
         return op 
 
-    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
+    def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
-                            
-        res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
-                            return_eigenvectors=return_eigenvectors, 
-                            maxiter=max_itr, tol=tol, ncv=ncv)
+                           ncv=None, max_retries=3, pinv_tol=1E-12):
+        """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
+        using tangent vectors of the current state as ansatz states.
         
+        This is best used with an approximate ground state to find approximate
+        excitation energies.
+        
+        This uses topologically nontrivial ansatz states and requires two
+        ground of the possible states. One will be used on one infinite half
+        of the chain, the other on the other half. The local disturbance
+        represents the interface (a kink, for example) between the two.
+        
+        The second ground state can be generated by applying a symmetry
+        operation to a copy of an existing ground state.
+        
+        Many of the parameters are passed on to scipy.sparse.linalg.eigsh().
+        
+        Parameters
+        ----------
+        donor : EvoMPS_TDVP_Uniform
+            The second ground state.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        nev : int
+            Number of eigenvalues to calculate.
+        tol : float
+            Tolerance (defaults to machine precision).
+        max_itr : int
+            Maximum number of iterations.
+        v0 : ndarray
+            Starting vector.
+        ncv : int
+            Number of Arnoldi vectors to store.
+        sigma : float
+            Eigenvalue shift to use.
+        which : string
+            Which eigenvalues to find ('SM' means the nev smallest).
+        return_eigenvectors : bool
+            Whether to return eigenvectors as well as eigenvalues.
+        max_retries : int
+            Maximum number of retries (with growing ncv), in case of no convergence.
+        pinv_tol : float
+            Tolerance for pseudo-inverse operations.
+            
+        Returns
+        -------
+        ev : ndarray
+            List of eigenvalues.
+        eV : ndarray
+            Matrix of eigenvectors (if return_eigenvectors == True).
+        """
+        op = self._prepare_excite_op_top_nontriv(donor, pinv_tol=pinv_tol)
+        
+        for i in xrange(max_retries):
+            try:
+                res = las.eigsh(op, sigma=sigma, which=which, k=nev, v0=v0,
+                                    return_eigenvectors=return_eigenvectors, 
+                                    maxiter=max_itr, tol=tol, ncv=ncv)
+            except las.ArpackNoConvergence:
+                log.warning("excite_top_nontriv: Retry %u!", i)
+                v0 = None
+                ncv = nev * (3 + i)
+                if i == max_retries - 1:
+                    log.error("excite_top_nontriv: Failed to converge!")
+                    raise EvoMPSNoConvergence('excite_top_nontriv')
+                          
         return res
         
-    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
+                                 pinv_tol=1E-12):
+        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
