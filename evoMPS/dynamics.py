@@ -34,7 +34,7 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
 
 def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000, 
                 expand_to_D=None, expand_step=128, expand_tol=None, 
-                cb_func=None, **kwargs):
+                cb_func=None, CG_start_tol=1E-2, **kwargs):
     j = 0
     if not cb_func is None:
         def cb_wrap(sys, i, **kwargs):
@@ -50,7 +50,7 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
         expand_tol = tol
         
     #Do a little imaginary time evolution to condition the state
-    sys, dj, tau, dtau = opt_im_time(sys, tol=1E-2, dtau_base=h_init, 
+    sys, dj, tau, dtau = opt_im_time(sys, tol=CG_start_tol, dtau_base=h_init, 
                                      max_itr=max_itr, cb_func=cb_wrap)
     j += dj
 
