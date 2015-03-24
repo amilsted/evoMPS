@@ -52,6 +52,7 @@ class Excite_H_Op:
         self.sanity_checks = sanity_checks
         self.sanity_tol = sanity_tol
         
+        self.pinv_solver = None
         self.pinv_tol = pinv_tol
         self.pinv_CUDA = False
         
@@ -219,8 +220,6 @@ class Excite_H_Op:
     
     def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
                     M_prev=None, y_pi_prev=None, pinv_solver=None):
-        """As for self.calc_BHB(), but for Hamiltonian terms acting on three sites.
-        """
         if pinv_solver is None:
             pinv_solver = las.gmres
             
@@ -391,6 +390,7 @@ class Excite_H_Op:
                                                          self.tdvp2, 
                                                          self.prereq,
                                                          M_prev=self.M_prev, 
-                                                         y_pi_prev=self.y_pi_prev)
+                                                         y_pi_prev=self.y_pi_prev,
+                                                         pinv_solver=self.pinv_solver)
         
         return res.ravel()
