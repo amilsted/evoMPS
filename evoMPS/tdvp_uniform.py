@@ -51,6 +51,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
            specified in ham_sites."""
           
         self.ham_sites = ham_sites
+        
+        self.ham_tp = None
 
         self.K_solver = las.bicgstab
         """The sparse matrix solver to use for finding K (pseudo-inverse)."""
@@ -185,7 +187,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         for k in xrange(self.L):
             if self.ham_sites == 2:
-                self.C[k][:] = tm.calc_C_mat_op_AA(ham, self.AA[k])
+                if not self.ham_tp is None:
+                    self.C[k][:] = tm.calc_C_mat_op_tp(self.ham_tp, self.A[k], self.A[(k + 1) % self.L])
+                else:
+                    self.C[k][:] = tm.calc_C_mat_op_AA(ham, self.AA[k])
             else:
                 self.AAA[k] = tm.calc_AAA_AA(self.AA[k], self.A[(k + 2) % self.L])
                 self.C[k][:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA[k])

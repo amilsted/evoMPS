@@ -34,7 +34,8 @@ from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, \
                                eps_l_op_2s_A1_A2_C34, eps_r_op_3s_C123_AAA456, \
                                eps_l_op_3s_AAA123_C456, calc_C_mat_op_AA, \
                                calc_C_3s_mat_op_AAA, calc_C_conj_mat_op_AA, \
-                               calc_C_func_op, calc_C_func_op_AA
+                               calc_C_func_op, calc_C_func_op_AA, \
+                               calc_C_mat_op_tp
         
 eps_r_op_2s_C12_AA34 = eps_r_op_2s_AA12_C34
     

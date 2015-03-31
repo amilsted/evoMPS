@@ -489,14 +489,47 @@ def eps_l_op_3s_AAA123_C456(x, AAA123, C456):
     S2 = (d, C456.shape[3], C456.shape[4])
     return eps_l_noop(x, AAA123.reshape(S1), C456.reshape(S2))
 
-def calc_C_mat_op_AA(op, AA):
+def calc_C_mat_op_AA_tensordot(op, AA):
     return np.tensordot(op, AA, ((2, 3), (0, 1)))
+
+def calc_C_mat_op_AA(op, AA):
+    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
+    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
+    C_ = op_.dot(AA_)
+    return C_.reshape(AA.shape)
     
 def calc_C_3s_mat_op_AAA(op, AAA):
+    AAA_ = AAA.reshape((AAA.shape[0] * AAA.shape[1] * AAA.shape[2], 
+                        AAA.shape[3] * AAA.shape[4]))
+    op_ = op.reshape((op.shape[0] * op.shape[1] * op.shape[2], 
+                      op.shape[3] * op.shape[4] * op.shape[5]))
+    C_ = op_.dot(AAA_)
+    return C_.reshape(AAA.shape)
+    
+def calc_C_3s_mat_op_AAA_tensordot(op, AAA):
     return np.tensordot(op, AAA, ((3, 4, 5), (0, 1, 2)))
 
 def calc_C_conj_mat_op_AA(op, AA):
+    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
+    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
+    C_ = op_.conj().T.dot(AA_)
+    return C_.reshape(AA.shape)
+    
+def calc_C_conj_mat_op_AA_tensordot(op, AA):
     return np.tensordot(op.conj(), AA, ((0, 1), (0, 1)))
+    
+def calc_C_mat_op_tp(op_tp, A, Ap1):
+    """op_tp contains the terms of a tensor product decomposition of a
+       nearest-neighbour operator.
+    """
+    C = np.zeros((A.shape[0], Ap1.shape[0], A.shape[1], Ap1.shape[2]), dtype=A.dtype)
+    for op_tp_ in op_tp:
+        A_op0 = op_tp_[0].dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
+        Ap1_op1 = op_tp_[1].dot(Ap1.reshape((Ap1.shape[0], Ap1.shape[1] * Ap1.shape[2]))).reshape(Ap1.shape)
+        
+        C += calc_AA(A_op0, Ap1_op1)
+        
+    return C
 
 def calc_C_func_op(op, A, Ap1):
     q = A.shape[0]
