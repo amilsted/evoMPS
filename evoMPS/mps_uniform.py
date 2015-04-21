@@ -1027,7 +1027,7 @@ class EvoMPS_MPS_Uniform(object):
                 if restore_CF_after_trunc:
                     self.restore_CF()
                 
-        self.calc_AA()
+        #self.calc_AA()
             
     def fidelity_per_site(self, other, full_output=False, left=False, 
                           force_dense=False, force_sparse=False,
@@ -1437,6 +1437,33 @@ class EvoMPS_MPS_Uniform(object):
         
         Ck = tm.calc_C_mat_op_AA(op, self.AA[k])
         res = tm.eps_r_op_2s_C12_AA34(self.r[k], Ck, self.AA[k])
+        
+        return m.adot(self.l[k - 1], res)
+        
+    def expect_2s_tp(self, op_tp, k=0):
+        """Computes the expectation value of a nearest-neighbour two-site operator.
+        
+        The operator should be a q x q x q x q array 
+        such that op[s, t, u, v] = <st|op|uv> or a function of the form 
+        op(s, t, u, v) = <st|op|uv>.
+        
+        The state must be up-to-date -- see self.update()!
+        
+        Parameters
+        ----------
+        op : list of list of ndarrays
+            The operator in tensor product decomposition
+        k : int
+            Site offset within block.
+            
+        Returns
+        -------
+        expval : floating point number
+            The expectation value (data type may be complex)
+        """
+        L = self.L
+        Ck = tm.calc_C_tp(op_tp, self.A[k], self.A[(k + 1) % L])
+        res = tm.eps_r_op_2s_C12_tp(self.r[k], Ck, self.A[k], self.A[(k + 1) % L])
         
         return m.adot(self.l[k - 1], res)
         

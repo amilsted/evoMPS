@@ -397,3 +397,309 @@ class Excite_H_Op:
                                                          pinv_solver=self.pinv_solver)
         
         return res.ravel()
+
+def get_Aop(A, op_tp, index, conj=False):
+    Aops = []
+    for op_tp_ in op_tp:
+        if index < 2:
+            if conj:
+                op = op_tp_[index].conj()
+            else:
+                op = op_tp_[index]
+            A_op = op.T.dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
+        else:
+            if conj:
+                op = op_tp_[index - 2].conj()
+            else:
+                op = op_tp_[index - 2]
+            A_op = op.dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
+        Aops.append(A_op)
+        
+    return Aops
+
+def get_A_ops(A0, A1, op_tp, conj=False):
+    A_ops_ = []
+    
+    if conj:
+        for op_tp_ in op_tp:
+            A0_op0 = op_tp_[0].conj().T.dot(A0.reshape((A0.shape[0], A0.shape[1] * A0.shape[2]))).reshape(A0.shape)
+            A1_op1 = op_tp_[1].conj().T.dot(A1.reshape((A1.shape[0], A1.shape[1] * A1.shape[2]))).reshape(A1.shape)
+            A_ops_.append([A0_op0, A1_op1])        
+    else:
+        for op_tp_ in op_tp:
+            A0_op0 = op_tp_[0].dot(A0.reshape((A0.shape[0], A0.shape[1] * A0.shape[2]))).reshape(A0.shape)
+            A1_op1 = op_tp_[1].dot(A1.reshape((A1.shape[0], A1.shape[1] * A1.shape[2]))).reshape(A1.shape)
+            A_ops_.append([A0_op0, A1_op1])
+        
+    return A_ops_
+
+class Excite_H_Op_tp:
+    def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
+                 sanity_checks=False, sanity_tol=1E-12):
+        """Creates an Excite_H_Op object, which is a LinearOperator.
+        
+        This wraps the effective Hamiltonian in terms of MPS tangent vectors
+        as a LinearOperator that can be used with SciPy's sparse linear
+        algebra routines.
+        
+        Parameters
+        ----------
+        tdvp : EvoMPS_TDVP_Uniform
+            tdvp object providing the required operations in the matrix representation.
+        tdvp2 : EvoMPS_TDVP_Uniform
+            Second tdvp object (can be the same as tdvp), for example containing a different ground state.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        """
+        assert tdvp.L == 1, 'Excite_H_Op only supports blocks of size 1'
+        
+        assert tdvp.L == tdvp2.L, 'Block sizes must match!'
+        assert tdvp.q == tdvp2.q, 'Hilbert spaces must match!'
+        assert tdvp.D == tdvp2.D, 'Bond-dimensions must match!'
+        
+        self.tdvp = tdvp
+        self.tdvp2 = tdvp2
+        self.p = p
+        
+        self.D = tdvp.D
+        self.q = tdvp.q
+        self.ham_sites = tdvp.ham_sites
+        self.ham_tp = tdvp.ham_tp
+        
+        self.sanity_checks = sanity_checks
+        self.sanity_tol = sanity_tol
+        
+        self.pinv_solver = None
+        self.pinv_tol = pinv_tol
+        self.pinv_CUDA = False
+        self.pinv_CUDA_batch = False
+        
+        d = (self.q - 1) * self.D**2
+        self.shape = (d, d)
+        
+        self.dtype = np.dtype(tdvp.typ)
+        
+        self.prereq = (self.calc_BHB_prereq(tdvp, tdvp2))
+        
+        self.calls = 0
+        
+        self.M_prev = None
+        self.y_pi_prev = None
+        
+    def calc_BHB_prereq(self, tdvp, tdvp2):
+        """Calculates prerequisites for the application of the effective Hamiltonian in terms of tangent vectors.
+        
+        This is called (indirectly) by the self.excite.. functions.
+        
+        Parameters
+        ----------
+        tdvp2: EvoMPS_TDVP_Uniform
+            Second state (may be the same, or another ground state).
+            
+        Returns
+        -------
+        A lot of stuff.
+        """
+        l = tdvp.l[0]
+        r_ = tdvp2.r[0]
+        r__sqrt = tdvp2.r_sqrt[0]
+        r__sqrt_i = tdvp2.r_sqrt_i[0]
+        A = tdvp.A[0]
+        A_ = tdvp2.A[0]
+            
+        V_ = sp.transpose(tdvp2.Vsh[0], axes=(0, 2, 1)).conj().copy(order='C')
+        
+        Vri_ = sp.zeros_like(V_)
+        try:
+            for s in xrange(self.q):
+                Vri_[s] = r__sqrt_i.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(self.q):
+                Vri_[s] = V_[s].dot(r__sqrt_i)
+
+        Vr_ = sp.zeros_like(V_)            
+        try:
+            for s in xrange(self.q):
+                Vr_[s] = r__sqrt.dot_left(V_[s])
+        except AttributeError:
+            for s in xrange(self.q):
+                Vr_[s] = V_[s].dot(r__sqrt)
+                
+        if self.ham_sites == 2:
+            #eyeham = m.eyemat(self.q, dtype=sp.complex128)
+            eyeham = sp.eye(self.q, dtype=sp.complex128)
+            #diham = m.simple_diag_matrix(sp.repeat([-tdvp.h_expect.real], self.q))
+            diham = -tdvp.h_expect.real * sp.eye(self.q, dtype=sp.complex128)
+            _ham_tp = self.ham_tp + [[diham, eyeham]]  #subtract norm dof
+            
+            AhlAo1 = [tm.eps_l_op_1s(l, A, A, o1.conj().T) for o1, o2 in _ham_tp]
+            
+            Vr_o2c = get_Aop(Vr_, _ham_tp, 1, conj=True)
+            
+            Vri_o1c = get_Aop(Vri_, _ham_tp, 0, conj=True)
+            
+            A_o2c = get_Aop(A_, _ham_tp, 1, conj=True)
+            
+            Ao1c = get_Aop(A, _ham_tp, 0, conj=True)
+            
+            A_Vr_ho2 = [tm.eps_r_op_1s(r__sqrt, A_, V_, o2) for o1, o2 in _ham_tp]
+            
+            A_A_o12c = get_A_ops(A_, A_, _ham_tp, conj=True)
+            
+            rhs10 = 0
+            for al in xrange(len(Vri_o1c)):
+                rhs10 += tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_o2c[al]), A_, Vri_o1c[al])
+                
+            return V_, Vri_, Vr_, AhlAo1, Vr_o2c, Vri_o1c, A_o2c, Ao1c, A_Vr_ho2, A_A_o12c, rhs10
+            
+        elif self.ham_sites == 3:
+            return
+
+    
+    def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
+                    M_prev=None, y_pi_prev=None, pinv_solver=None):
+        if pinv_solver is None:
+            pinv_solver = las.gmres
+            
+        if self.ham_sites == 3:
+            return
+        else:
+            V_, Vri_, Vr_, AhlAo1, Vr_o2c, Vri_o1c, A_o2c, Ao1c, A_Vr_ho2, A_A_o12c, rhs10 = prereq
+        
+        A = tdvp.A[0]
+        A_ = tdvp2.A[0]
+        
+        l = tdvp.l[0]
+        r_ = tdvp2.r[0]
+        
+        l_sqrt = tdvp.l_sqrt[0]
+        l_sqrt_i = tdvp.l_sqrt_i[0]
+        
+        r__sqrt = tdvp2.r_sqrt[0]
+        r__sqrt_i = tdvp2.r_sqrt_i[0]
+        
+        K__r = tdvp2.K[0]
+        K_l = tdvp.K_left[0]
+        
+        pseudo = tdvp2 is tdvp
+        
+        B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
+        
+        #Skip zeros due to rank-deficiency
+        if la.norm(B) == 0:
+            return sp.zeros_like(x), M_prev, y_pi_prev
+        
+        if self.sanity_checks:
+            tst = tm.eps_r_noop(r_, B, A_)
+            if not la.norm(tst) > self.sanity_tol:
+                log.warning("Sanity check failed: Gauge-fixing violation! " 
+                            + str(la.norm(tst)))
+
+        if self.sanity_checks:
+            B2 = np.zeros_like(B)
+            for s in xrange(self.q):
+                B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
+            if la.norm(B - B2) / la.norm(B) > self.sanity_tol:
+                log.warning("Sanity Fail in calc_BHB! Bad Vri!")
+
+        y = tm.eps_l_noop(l, B, A)
+        
+#        if pseudo:
+#            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
+        M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
+                     out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
+                     use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
+                     sanity_checks=self.sanity_checks, sc_data='M')
+        
+        #print m.adot(r, M)
+        if self.sanity_checks:
+            y2 = M - sp.exp(+1.j * p) * tm.eps_l_noop(M, A_, A)
+            norm = la.norm(y.ravel())
+            if norm == 0:
+                norm = 1
+            tst = la.norm(y - y2) / norm
+            if tst > self.sanity_tol:
+                log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", tst)
+#        if pseudo:
+#            M = M - l * m.adot(r_, M)
+        Mh = M.conj().T.copy(order='C')
+        
+        res = 0
+        
+        if self.ham_sites == 3:
+            pass
+        else:
+            for al in xrange(len(Vri_o1c)):
+                res += l_sqrt.dot(tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_o2c[al]), B, Vri_o1c[al])) #1
+                res += sp.exp(+1.j * p) * l_sqrt.dot(tm.eps_r_noop(tm.eps_r_noop(r_, B, A_o2c[al]), A, Vri_o1c[al])) #3
+                        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
+        
+        exp = sp.exp
+        eye = m.eyemat(r_.shape[0], dtype=tdvp.typ)
+        if self.ham_sites == 3:
+            pass
+        else:
+            for al in xrange(len(AhlAo1)):
+                res += l_sqrt_i.dot(AhlAo1[al].dot(tm.eps_r_noop(eye, B, Vr_o2c[al]))) #2
+                res += exp(-1.j * p) * l_sqrt_i.dot(tm.eps_l_noop(l, Ao1c[al], B).dot(A_Vr_ho2[al])) #4
+                res += exp(-2.j * p) * l_sqrt_i.dot(tm.eps_l_noop(Mh, Ao1c[al], A_).dot(A_Vr_ho2[al])) #12
+                    
+        
+        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5
+        
+        res += l_sqrt_i.dot(K_l.dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
+        
+        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
+
+        y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
+        
+        if self.ham_sites == 3:
+            pass
+        elif self.ham_sites == 2:
+            tmp = 0
+            for al in xrange(len(A_A_o12c)):
+                tmp += sp.exp(+1.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_A_o12c[al][1]), B, A_A_o12c[al][0]) #9
+                tmp += sp.exp(+2.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, B, A_A_o12c[al][1]), A, A_A_o12c[al][0]) #11
+            y = y1 + tmp #7, 9, 11
+        
+        if pseudo:
+            y = y - m.adot(l, y) * r_
+        y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
+                        pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
+                        solver=pinv_solver, use_CUDA=self.pinv_CUDA,
+                        CUDA_use_batch=self.pinv_CUDA_batch,
+                        sanity_checks=self.sanity_checks, sc_data='y_pi')
+        #print m.adot(l, y_pi)
+        if self.sanity_checks:
+            z = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, A, A_)
+            tst = la.norm((y - z).ravel()) / la.norm(y.ravel())
+            if tst > self.sanity_tol:
+                log.warning("Sanity Fail in calc_BHB! Bad x_pi. Off by: %g", tst)
+        
+        res += l_sqrt.dot(tm.eps_r_noop(y_pi, A, Vri_))
+        
+        if self.sanity_checks:
+            expval = m.adot(x, res) / m.adot(x, x)
+            #print "expval = " + str(expval)
+            if expval < -self.sanity_tol:
+                log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
+            if abs(expval.imag) > self.sanity_tol:
+                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
+        
+        return res, M, y_pi   
+    
+    def matvec(self, v):
+        x = v.reshape((self.D, (self.q - 1)*self.D))
+        
+        self.calls += 1
+        log.debug("Calls: %u", self.calls)
+        
+        res, self.M_prev, self.y_pi_prev = self.calc_BHB(x, self.p, self.tdvp, 
+                                                         self.tdvp2, 
+                                                         self.prereq,
+                                                         M_prev=self.M_prev, 
+                                                         y_pi_prev=self.y_pi_prev,
+                                                         pinv_solver=self.pinv_solver)
+        
+        return res.ravel()
