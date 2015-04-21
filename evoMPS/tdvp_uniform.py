@@ -923,7 +923,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for k in xrange(L):
             #VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
             r_si = self.r_sqrt_i[(k + M - 1) % L]
-            VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
+            VRh = self.Vsh[(k + M - 1) % L]
+            VRr_si = sp.empty((VRh.shape[0], VRh.shape[2], VRh.shape[1]), dtype=VRh.dtype)
+            for s in xrange(len(VRr_si)):
+                VRr_si[s] = r_si.dot(VRh[s]).conj().T
+            #VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
             
             x[k] = [0] * q**(M - 1)
     
