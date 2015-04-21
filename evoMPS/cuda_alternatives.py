@@ -50,12 +50,55 @@ def sync_streams(streams):
     for s in xrange(len(streams)):
         streams.pop().synchronize()
 
+def cublasZgemm_dev(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc):
+    """
+    Matrix-matrix product for complex general matrix.
+
+    """
+
+    status = cb._libcublas.cublasZgemm_v2(handle,
+                                       cb._CUBLAS_OP[transa],
+                                       cb._CUBLAS_OP[transb], m, n, k,
+                                       int(alpha),
+                                       int(A), lda, int(B), ldb,
+                                       int(beta),
+                                       int(C), ldc)
+    cb.cublasCheckStatus(status)
+
+cb._libcublas.cublasSetPointerMode_v2.restype = int
+cb._libcublas.cublasSetPointerMode_v2.argtypes = [cb._types.handle,
+                                                  c_int]
+
+def eps_r_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle):
+    D = A1[0].shape[0]
+    Dm1 = D
+
+    cb._libcublas.cublasSetPointerMode_v2(handle, 1)
+ 
+    for s in xrange(len(A1)):
+        cb.cublasSetStream(handle, streams[s].handle)
+        cublasZgemm_dev(handle, 'N', 'N', D, Dm1, D, ones[s].gpudata, x.gpudata, D, 
+                       A1[s].gpudata, D, zeros[s].gpudata, tmp[s].gpudata, D)
+        cublasZgemm_dev(handle, 'C', 'N', Dm1, Dm1, D, ones[s].gpudata, A2[s].gpudata, D, 
+                       tmp[s].gpudata, D, zeros[s].gpudata, tmp2[s].gpudata, Dm1)
+        
+    for s in streams:
+        s.synchronize()
+
+    cb._libcublas.cublasSetPointerMode_v2(handle, 0)
+        
+    cb.cublasSetStream(handle, 0)
+    out.fill(0)
+    for s in xrange(len(A1)):
+        #cb.cublasZgeam(handle, 'N', 'N', Dm1, Dm1, 0. if s == 0 else 1., out.gpudata, Dm1, 1., tmp2[s].gpudata, Dm1, out.gpudata, Dm1)
+        cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+    	
+    return out
+
 def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
     Dm1 = D
-    
-    out.fill(0)
-    
+
     for s in xrange(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
         cb.cublasZgemm(handle, 'N', 'N', D, Dm1, D, 1., x.gpudata, D, 
@@ -65,17 +108,36 @@ def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
         
     for s in streams:
         s.synchronize()
-        
+
     cb.cublasSetStream(handle, 0)
+    out.fill(0)
     for s in xrange(len(A1)):
+        #cb.cublasZgeam(handle, 'N', 'N', Dm1, Dm1, 0. if s == 0 else 1., out.gpudata, Dm1, 1., tmp2[s].gpudata, Dm1, out.gpudata, Dm1)
         cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
-        
+    	
+    return out
+    
+def get_batch_ptrs(arrs):
+    return garr.to_gpu(sp.array(map(lambda x: int(x.gpudata), arrs)))
+    
+def eps_r_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, handle):
+    D = out.shape[0]
+    Dm1 = D
+    d = len(tmp2)
+    
+    cb.cublasZgemmBatched(handle, 'N', 'N', D, Dm1, D, 1., x_ptrs.gpudata, D, 
+                          A1_ptrs.gpudata, D, 0., tmp_ptrs.gpudata, D, d)
+    cb.cublasZgemmBatched(handle, 'C', 'N', Dm1, Dm1, D, 1., A2_ptrs.gpudata, D, 
+                          tmp_ptrs.gpudata, D, 0., tmp2_ptrs.gpudata, Dm1, d)
+                          
+    out.fill(0)
+    for s in xrange(d):
+        cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+    	
     return out
 
 def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
-    
-    out.fill(0)
     
     for s in xrange(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
@@ -88,11 +150,50 @@ def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
         s.synchronize()
         
     cb.cublasSetStream(handle, 0)
+    out.fill(0)
+    for s in xrange(len(A1)):
+        cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+        
+    return out
+    
+def eps_l_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle):
+    D = A1[0].shape[0]
+
+    cb._libcublas.cublasSetPointerMode_v2(handle, 1)
+ 
+    for s in xrange(len(A1)):
+        cb.cublasSetStream(handle, streams[s].handle)
+        cublasZgemm_dev(handle, 'N', 'C', D, D, D, ones[s].gpudata, x.gpudata, D, 
+                       A1[s].gpudata, D, zeros[s].gpudata, tmp[s].gpudata, D)
+        cublasZgemm_dev(handle, 'N', 'N', D, D, D, ones[s].gpudata, A2[s].gpudata, D, 
+                       tmp[s].gpudata, D, zeros[s].gpudata, tmp2[s].gpudata, D)
+        
+    for s in streams:
+        s.synchronize()
+
+    cb._libcublas.cublasSetPointerMode_v2(handle, 0)
+        
+    cb.cublasSetStream(handle, 0)
+    out.fill(0)
     for s in xrange(len(A1)):
         cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
         
     return out
  
+def eps_l_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, handle):
+    D = out.shape[0]
+    d = len(tmp2)
+    
+    cb.cublasZgemmBatched(handle, 'N', 'C', D, D, D, 1., x_ptrs.gpudata, D, 
+                          A1_ptrs.gpudata, D, 0., tmp_ptrs.gpudata, D, d)
+    cb.cublasZgemmBatched(handle, 'N', 'N', D, D, D, 1., A2_ptrs.gpudata, D, 
+                          tmp_ptrs.gpudata, D, 0., tmp2_ptrs.gpudata, D, d)
+                          
+    out.fill(0)
+    for s in xrange(d):
+        cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
+    	
+    return out
     
 def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     handle = cb.cublasCreate()
@@ -301,7 +402,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     return B
 
 class EOp_CUDA:
-    def __init__(self, A1, A2, left):
+    def __init__(self, A1, A2, left, use_batch=False):
         """Creates a new LinearOperator interface to the superoperator E.
         
         This is a wrapper to be used with SciPy's sparse linear algebra routines.
@@ -320,53 +421,74 @@ class EOp_CUDA:
         self.tmp = map(garr.empty_like, self.A1G[0])
         self.tmp2 = map(garr.empty_like, self.A1G[0])
         
-        self.D = A1[0].shape[1]
+        self.use_batch = use_batch
+        self.left = left
         
-        self.shape = (self.D**2, self.D**2)
-        
+        self.D = A1[0].shape[1]        
+        self.shape = (self.D**2, self.D**2)        
         self.dtype = sp.dtype(A1[0][0].dtype)
+        
+        self.calls = 0        
         
         self.out = garr.empty((self.D, self.D), dtype=self.dtype)        
         self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
 
-        self.calls = 0
-        
-        self.left = left
+        if use_batch:
+            self.A1G_p = map(get_batch_ptrs, self.A1G)
+            self.A2G_p = map(get_batch_ptrs, self.A2G)
+            self.tmp_p = get_batch_ptrs(self.tmp)
+            self.tmp2_p = get_batch_ptrs(self.tmp2)
+            self.xG_p = get_batch_ptrs([self.xG] * len(A1[0]))
+            self.out_p = get_batch_ptrs([self.out] * len(A1[0]))
+        else:
+            self.A1G_p = None
+            self.A2G_p = None
+            self.tmp_p = None
+            self.tmp2_p = None
+            self.xG_p = None
+            self.out_p = None
+
+            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.ones = [one.fill(1) for one in self.ones]
+            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            
+            self.streams = []
+            for s in xrange(A1[0].shape[0]):
+                self.streams.append(cd.Stream())
         
         self.hdl = cb.cublasCreate()
-        
-        self.streams = []
-        for s in xrange(A1[0].shape[0]):
-            self.streams.append(cd.Stream())
 
     def matvec(self, v):
         """Matrix-vector multiplication. 
         Result = Ev or vE (if self.left == True).
         """
-        x = v.reshape((self.D, self.D))
-
-        self.xG.set(x)
+        self.xG.set(v.reshape((self.D, self.D)))
         
-        #xG_ = [self.xG, self.out]
-        xG_ = self.xG
-        out_ = self.out
+        xnext = [self.xG, self.xG_p]
+        x = [self.out, self.out_p]
         
         if self.left:
             for k in xrange(len(self.A1G)):
-                out_ = eps_l_noop_strm(xG_, self.A1G[k], self.A2G[k], out_, 
-                                       self.tmp, self.tmp2, self.streams, self.hdl)
-                tmp = xG_
-                xG_ = out_
-                out_ = tmp
+                x, xnext = xnext, x
+                if self.use_batch:
+                    eps_l_noop_batch(x[1], self.A1G_p[k], self.A2G_p[k], xnext[0], 
+                                     self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)
+                else:
+                    eps_l_noop_strm_dev(x[0], self.A1G[k], self.A2G[k], xnext[0], 
+                                        self.tmp, self.tmp2, self.ones, self.zeros, 
+                                        self.streams, self.hdl)
         else:
             for k in xrange(len(self.A2G) - 1, -1, -1):
-                out_ = eps_r_noop_strm(xG_, self.A1G[k], self.A2G[k], out_, 
-                                       self.tmp, self.tmp2, self.streams, self.hdl)
-                tmp = xG_
-                xG_ = out_
-                out_ = tmp
+                x, xnext = xnext, x
+                if self.use_batch:
+                    eps_r_noop_batch(x[1], self.A1G_p[k], self.A2G_p[k], xnext[0], 
+                                     self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)
+                else:
+                    eps_r_noop_strm_dev(x[0], self.A1G[k], self.A2G[k], xnext[0], 
+                                        self.tmp, self.tmp2, self.ones, self.zeros, 
+                                        self.streams, self.hdl)
             
-        Ex = xG_
+        Ex = xnext[0]
         
         self.calls += 1
         
@@ -381,55 +503,80 @@ class EOp_CUDA:
         self.close_cuda()
         
 class PinvOp_CUDA:
-    def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True):
+    def __init__(self, p, A1, A2, l=None, r=None, left=False, pseudo=True, use_batch=False):
         assert not (pseudo and (l is None or r is None)), 'For pseudo-inverse l and r must be set!'
+        
+        self.use_batch = use_batch
+        self.p = p
+        self.left = left
+        self.pseudo = pseudo
+        self.D = A1[0].shape[1]
+        self.shape = (self.D**2, self.D**2)
+        self.dtype = A1[0].dtype
         
         self.A1G = [map(garr.to_gpu, A1k) for A1k in A1]
         self.A2G = [map(garr.to_gpu, A2k) for A2k in A2]
         self.tmp = map(garr.empty_like, self.A1G[0])
         self.tmp2 = map(garr.empty_like, self.A1G[0])
-        
+
         self.l = l
         self.r = r
-        
         self.lG = garr.to_gpu(sp.asarray(l))
         self.rG = garr.to_gpu(sp.asarray(r))
-        self.p = p
-        self.left = left
-        self.pseudo = pseudo
-        
-        self.D = A1[0].shape[1]
-        
-        self.shape = (self.D**2, self.D**2)
-        
-        self.dtype = A1[0].dtype
         
         self.out = garr.empty((self.D, self.D), dtype=self.dtype)
+        self.out2 = garr.empty((self.D, self.D), dtype=self.dtype)
         self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
         
-        self.hdl = cb.cublasCreate()
+        if use_batch:
+            self.A1G_p = map(get_batch_ptrs, self.A1G)
+            self.A2G_p = map(get_batch_ptrs, self.A2G)
+            self.tmp_p = get_batch_ptrs(self.tmp)
+            self.tmp2_p = get_batch_ptrs(self.tmp2)
+            self.xG_p = get_batch_ptrs([self.xG] * len(A1[0]))
+            self.out_p = get_batch_ptrs([self.out] * len(A1[0]))
+            self.out2_p = get_batch_ptrs([self.out2] * len(A1[0]))
+        else:
+            self.A1G_p = None
+            self.A2G_p = None
+            self.tmp_p = None
+            self.tmp2_p = None
+            self.xG_p = None
+            self.out_p = None
+            self.out2_p = None
+
+            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.ones = [one.fill(1) for one in self.ones]
+            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            
+            self.streams = []
+            for s in xrange(A1[0].shape[0]):
+                self.streams.append(cd.Stream())
         
-        self.streams = []
-        for s in xrange(A1[0].shape[0]):
-            self.streams.append(cd.Stream())
+        self.hdl = cb.cublasCreate()
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
         self.xG.set(x)
+        #self.out2.set(self.xG)
+        #self.out2[:] = self.xG
+        cd.memcpy_dtod(self.out2.gpudata, self.xG.gpudata, self.xG.nbytes)
         
-        xG_ = self.xG
-        out_ = self.out
-        out2_ = xG_.copy()
+        out = [self.out, self.out_p]
+        out2 = [self.out2, self.out2_p]
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
             for k in xrange(len(self.A1G)):
-                out_ = eps_l_noop_strm(out2_, self.A1G[k], self.A2G[k], out_,
-                                       self.tmp, self.tmp2, self.streams, self.hdl)
-                tmp = out2_
-                out2_ = out_
-                out_ = tmp
-            Ehx = out2_
+                if self.use_batch:
+                    eps_l_noop_batch(out2[1], self.A1G_p[k], self.A2G_p[k], out[0], 
+                                     self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)
+                else:
+                    eps_l_noop_strm_dev(out2[0], self.A1G[k], self.A2G[k], out[0],
+                                        self.tmp, self.tmp2, self.ones, self.zeros,
+                                        self.streams, self.hdl)
+                out, out2 = out2, out
+            Ehx = out2[0]
             
             if self.pseudo:
                 QEQhx = Ehx - self.lG * m.adot(self.r, x)
@@ -444,12 +591,15 @@ class PinvOp_CUDA:
                 res = self.xG
         else:
             for k in xrange(len(self.A2G) - 1, -1, -1):
-                out_ = eps_r_noop_strm(out2_, self.A1G[k], self.A2G[k], out_, 
-                                       self.tmp, self.tmp2, self.streams, self.hdl)
-                tmp = out2_
-                out2_ = out_
-                out_ = tmp
-            Ex = out2_
+                if self.use_batch:
+                    eps_r_noop_batch(out2[1], self.A1G_p[k], self.A2G_p[k], out[0], 
+                                     self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)
+                else:
+                    eps_r_noop_strm_dev(out2[0], self.A1G[k], self.A2G[k], out[0],
+                                        self.tmp, self.tmp2, self.ones, self.zeros,
+                                        self.streams, self.hdl)
+                out, out2 = out2, out
+            Ex = out2[0]
             
             if self.pseudo:
                 QEQx = Ex - self.rG * m.adot(self.l, x)

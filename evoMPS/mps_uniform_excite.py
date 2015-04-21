@@ -55,6 +55,7 @@ class Excite_H_Op:
         self.pinv_solver = None
         self.pinv_tol = pinv_tol
         self.pinv_CUDA = False
+        self.pinv_CUDA_batch = False
         
         d = (self.q - 1) * self.D**2
         self.shape = (d, d)
@@ -96,7 +97,7 @@ class Excite_H_Op:
         eyed = eyed.reshape(tuple([self.q] * self.ham_sites * 2))
         ham_ = self.ham - tdvp.h_expect.real * eyed
             
-        V_ = sp.transpose(tdvp2.Vsh[0], axes=(0, 2, 1)).conj()
+        V_ = sp.transpose(tdvp2.Vsh[0], axes=(0, 2, 1)).conj().copy(order='C')
         
         Vri_ = sp.zeros_like(V_)
         try:
@@ -117,21 +118,21 @@ class Excite_H_Op:
         Vri_A_ = tm.calc_AA(Vri_, A_)
                 
         if self.ham_sites == 2:
-            _C_AhlA = np.empty_like(tdvp.C[0])
+            _C_AhlA = np.empty((self.q, self.q, A.shape[2], A.shape[2]), dtype=tdvp.typ)
             for u in xrange(self.q):
                 for s in xrange(self.q):
                     _C_AhlA[u, s] = A[u].conj().T.dot(l.dot(A[s]))
             C_AhlA = sp.tensordot(ham_, _C_AhlA, ((0, 2), (0, 1)))
-            C_AhlA = sp.transpose(C_AhlA, axes=(1, 0, 2, 3)).copy()
+            C_AhlA = sp.transpose(C_AhlA, axes=(1, 0, 2, 3)).copy(order='C')
             
             _C_A_Vrh_ = tm.calc_AA(A_, sp.transpose(Vr_, axes=(0, 2, 1)).conj())
             C_A_Vrh_ = sp.tensordot(ham_, _C_A_Vrh_, ((3, 1), (0, 1)))
-            C_A_Vrh_ = sp.transpose(C_A_Vrh_, axes=(1, 0, 2, 3)).copy()
+            C_A_Vrh_ = sp.transpose(C_A_Vrh_, axes=(1, 0, 2, 3)).copy(order='C')
             
-            C_Vri_A_conj = tm.calc_C_conj_mat_op_AA(ham_, Vri_A_)
+            C_Vri_A_conj = tm.calc_C_conj_mat_op_AA(ham_, Vri_A_).copy(order='C')
     
-            C_ = tm.calc_C_mat_op_AA(ham_, AA_)
-            C_conj = tm.calc_C_conj_mat_op_AA(ham_, AA_)
+            C_ = tm.calc_C_mat_op_AA(ham_, AA_).copy(order='C')
+            C_conj = tm.calc_C_conj_mat_op_AA(ham_, AA_).copy(order='C')
             
             rhs10 = tm.eps_r_op_2s_AA12_C34(r_, AA_, C_Vri_A_conj)
             
@@ -142,7 +143,7 @@ class Excite_H_Op:
                 for t in xrange(self.q):
                     for u in xrange(self.q):
                         C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
-            C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2))).copy()
+            C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
             
             C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
                                         A_.shape[1], Vri_.shape[1]), 
@@ -153,7 +154,7 @@ class Excite_H_Op:
                         for k in xrange(self.q):
                             for j in xrange(self.q):
                                 C_AAA_r_Ah_Vrih[s, t, u, k, j] = AAA_[s, t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-            C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4))).copy()
+            C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4))).copy(order='C')
             
             C_AhAhlAA = np.empty((self.q, self.q, self.q, self.q,
                                   A_.shape[2], A.shape[2]), dtype=tdvp.typ)
@@ -162,7 +163,7 @@ class Excite_H_Op:
                     for i in xrange(self.q):
                         for s in xrange(self.q):
                             C_AhAhlAA[j, t, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
-            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (1, 0, 2, 3))).copy()
+            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (1, 0, 2, 3))).copy(order='C')
             
             C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
                                         A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -171,7 +172,7 @@ class Excite_H_Op:
                     for k in xrange(self.q):
                         for j in xrange(self.q):
                             C_AA_r_Ah_Vrih_[u, t, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (1, 0, 2, 3))).copy()
+            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (1, 0, 2, 3))).copy(order='C')
             
             C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
                                    A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -180,7 +181,7 @@ class Excite_H_Op:
                     for u in xrange(self.q):
                         for k in xrange(self.q):
                             C_AAA_Vrh_[s, t, u, k] = AAA_[s, t, u].dot(Vr_[k].conj().T)
-            C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3))).copy()
+            C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3))).copy(order='C')
             
             C_Vri_A_r_Ah_ = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
@@ -188,7 +189,7 @@ class Excite_H_Op:
                 for k in xrange(self.q):
                     for j in xrange(self.q):
                         C_Vri_A_r_Ah_[u, k, j] = Vri_[j].dot(A_[k]).dot(r_.dot(A_[u].conj().T))
-            C_Vri_A_r_Ah_ = sp.tensordot(ham_.conj(), C_Vri_A_r_Ah_, ((5, 2, 1), (0, 1, 2))).copy()
+            C_Vri_A_r_Ah_ = sp.tensordot(ham_.conj(), C_Vri_A_r_Ah_, ((5, 2, 1), (0, 1, 2))).copy(order='C')
             
             C_AhlAA = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], A.shape[2]), dtype=tdvp.typ)
@@ -196,9 +197,9 @@ class Excite_H_Op:
                 for i in xrange(self.q):
                     for s in xrange(self.q):
                         C_AhlAA[j, i, s] = A[s].conj().T.dot(l.dot(AA[i, j]))
-            C_AhlAA_conj = sp.tensordot(ham_.conj(), C_AhlAA, ((1, 0, 3), (0, 1, 2))).copy()
+            C_AhlAA_conj = sp.tensordot(ham_.conj(), C_AhlAA, ((1, 0, 3), (0, 1, 2))).copy(order='C')
             C_AhlAA = sp.tensordot(ham_, C_AhlAA, ((4, 3, 0), (0, 1, 2)))
-            C_AhlAA = sp.transpose(C_AhlAA, axes=(2, 0, 1, 3, 4)).copy()
+            C_AhlAA = sp.transpose(C_AhlAA, axes=(2, 0, 1, 3, 4)).copy(order='C')
             
             C_AA_Vrh = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], Vr_.shape[1]), dtype=tdvp.typ)
@@ -206,9 +207,9 @@ class Excite_H_Op:
                 for u in xrange(self.q):
                     for k in xrange(self.q):
                         C_AA_Vrh[k, u, t] = AA_[t, u].dot(Vr_[k].conj().T)
-            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0))).copy()
+            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0))).copy(order='C')
             
-            C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2))).copy()
+            C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
             
             rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
 
@@ -257,7 +258,8 @@ class Excite_H_Op:
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
             if not la.norm(tst) > self.sanity_tol:
-                log.warning("Sanity check failed: Gauge-fixing violation!")
+                log.warning("Sanity check failed: Gauge-fixing violation! " 
+                            + str(la.norm(tst)))
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
@@ -272,14 +274,14 @@ class Excite_H_Op:
             BAA_ = tm.calc_AAA_AA(BA_, A_)
             ABA_ = tm.calc_AAA_AA(AB, A_)
             AAB = tm.calc_AAA_AA(AA, B)
-        
+
         y = tm.eps_l_noop(l, B, A)
         
 #        if pseudo:
 #            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
         M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
-                     use_CUDA=self.pinv_CUDA,
+                     use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
                      sanity_checks=self.sanity_checks, sc_data='M')
         
         #print m.adot(r, M)
@@ -293,7 +295,7 @@ class Excite_H_Op:
                 log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", tst)
 #        if pseudo:
 #            M = M - l * m.adot(r_, M)
-        Mh = M.conj().T
+        Mh = M.conj().T.copy(order='C')
         
         if self.ham_sites == 3:
             tmp = BAA_ + sp.exp(+1.j * p) * ABA_ + sp.exp(+2.j * p) * AAB
@@ -301,7 +303,7 @@ class Excite_H_Op:
         else:
             tmp = BA_ + sp.exp(+1.j * p) * AB
             res = l_sqrt.dot(tm.eps_r_op_2s_AA12_C34(r_, tmp, C_Vri_A_conj)) #1, #3 OK
-        
+                    
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
         
         exp = sp.exp
@@ -350,16 +352,17 @@ class Excite_H_Op:
         
         if self.ham_sites == 3:
             tmp = sp.exp(+1.j * p) * BAA_ + sp.exp(+2.j * p) * ABA_ + sp.exp(+3.j * p) * AAB #9, #11, #11b
-            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_) #9
+            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_)
         elif self.ham_sites == 2:
             tmp = sp.exp(+1.j * p) * BA_ + sp.exp(+2.j * p) * AB #9, #11
-            y = y1 + tm.eps_r_op_2s_AA12_C34(r_, tmp, C_conj) #9
+            y = y1 + tm.eps_r_op_2s_AA12_C34(r_, tmp, C_conj)
         
         if pseudo:
             y = y - m.adot(l, y) * r_
         y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
                         pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
+                        CUDA_use_batch=self.pinv_CUDA_batch,
                         sanity_checks=self.sanity_checks, sc_data='y_pi')
         #print m.adot(l, y_pi)
         if self.sanity_checks:
