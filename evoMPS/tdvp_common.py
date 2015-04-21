@@ -30,14 +30,115 @@ from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, \
                                eps_r_op_2s_A, eps_r_op_2s_AA12, \
                                eps_r_op_2s_AA_func_op, \
                                eps_r_op_2s_C12, eps_r_op_2s_C34, \
-                               eps_r_op_2s_AA12_C34, eps_l_op_2s_AA12_C34, \
-                               eps_l_op_2s_A1_A2_C34, eps_r_op_3s_C123_AAA456, \
-                               eps_l_op_3s_AAA123_C456, calc_C_mat_op_AA, \
-                               calc_C_3s_mat_op_AAA, calc_C_conj_mat_op_AA, \
-                               calc_C_func_op, calc_C_func_op_AA, \
-                               calc_C_mat_op_tp
+                               calc_C_func_op, calc_C_func_op_AA
         
+def eps_r_op_2s_AA12_C34(x, AA12, C34):
+    d = C34.shape[0] * C34.shape[1]
+    S1 = (d, AA12.shape[2], AA12.shape[3])
+    S2 = (d, C34.shape[2], C34.shape[3])
+    return eps_r_noop(x, AA12.reshape(S1), C34.reshape(S2))
+
 eps_r_op_2s_C12_AA34 = eps_r_op_2s_AA12_C34
+
+def eps_l_op_2s_AA12_C34(x, AA12, C34):
+    d = AA12.shape[0] * AA12.shape[1]
+    S1 = (d, AA12.shape[2], AA12.shape[3])
+    S2 = (d, C34.shape[2], C34.shape[3])
+    return eps_l_noop(x, AA12.reshape(S1), C34.reshape(S2))
+
+def eps_l_op_2s_A1_A2_C34(x, A1, A2, C34):
+    res = np.zeros((A2.shape[2], C34.shape[3]), dtype=C34.dtype)
+    for u in xrange(C34.shape[0]):
+        for v in xrange(C34.shape[1]):
+            res += (A1[u].dot(A2[v])).conj().T.dot(x.dot(C34[u, v]))
+    return res
+
+def eps_r_op_3s_C123_AAA456(x, C123, AAA456):
+    d = C123.shape[0] * C123.shape[1] * C123.shape[2]
+    S1 = (d, C123.shape[3], C123.shape[4])
+    S2 = (d, AAA456.shape[3], AAA456.shape[4])
+    return eps_r_noop(x, C123.reshape(S1), AAA456.reshape(S2))
+
+def eps_l_op_3s_AAA123_C456(x, AAA123, C456):
+    d = C456.shape[0] * C456.shape[1] * C456.shape[2]
+    S1 = (d, AAA123.shape[3], AAA123.shape[4])
+    S2 = (d, C456.shape[3], C456.shape[4])
+    return eps_l_noop(x, AAA123.reshape(S1), C456.reshape(S2))
+
+def calc_C_mat_op_AA_tensordot(op, AA):
+    return np.tensordot(op, AA, ((2, 3), (0, 1)))
+
+def calc_C_mat_op_AA(op, AA):
+    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
+    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
+    C_ = op_.dot(AA_)
+    return C_.reshape(AA.shape)
+
+def calc_C_3s_mat_op_AAA(op, AAA):
+    AAA_ = AAA.reshape((AAA.shape[0] * AAA.shape[1] * AAA.shape[2],
+                        AAA.shape[3] * AAA.shape[4]))
+    op_ = op.reshape((op.shape[0] * op.shape[1] * op.shape[2],
+                      op.shape[3] * op.shape[4] * op.shape[5]))
+    C_ = op_.dot(AAA_)
+    return C_.reshape(AAA.shape)
+
+def calc_C_3s_mat_op_AAA_tensordot(op, AAA):
+    return np.tensordot(op, AAA, ((3, 4, 5), (0, 1, 2)))
+
+def calc_C_conj_mat_op_AA(op, AA):
+    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
+    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
+    C_ = op_.conj().T.dot(AA_)
+    return C_.reshape(AA.shape)
+
+def calc_C_conj_mat_op_AA_tensordot(op, AA):
+    return np.tensordot(op.conj(), AA, ((0, 1), (0, 1)))
+
+def calc_C_mat_op_tp(op_tp, A, Ap1):
+    """op_tp contains the terms of a tensor product decomposition of a
+       nearest-neighbour operator.
+    """
+    C = np.zeros((A.shape[0], Ap1.shape[0], A.shape[1], Ap1.shape[2]), dtype=A.dtype)
+    for op_tp_ in op_tp:
+        A_op0 = op_tp_[0].dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
+        Ap1_op1 = op_tp_[1].dot(Ap1.reshape((Ap1.shape[0], Ap1.shape[1] * Ap1.shape[2]))).reshape(Ap1.shape)
+
+        C += calc_AA(A_op0, Ap1_op1)
+
+    return C
+    
+def calc_C_tp(op_tp, A, Ap1):
+    C = []
+    
+    for op_tp_ in op_tp:
+        A_op0 = op_tp_[0].dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
+        Ap1_op1 = op_tp_[1].dot(Ap1.reshape((Ap1.shape[0], Ap1.shape[1] * Ap1.shape[2]))).reshape(Ap1.shape)
+        C.append([A_op0, Ap1_op1])
+    
+    return C
+
+def eps_l_op_2s_C34_tp(x, A1, A2, C34_tp):
+    res = 0
+    for al in xrange(len(C34_tp)):
+        res += eps_l_noop(eps_l_noop(x, A1, C34_tp[al][0]), A2, C34_tp[al][1])
+    return res
+    
+def eps_r_op_2s_C12_tp(x, C12_tp, A1, A2):
+    res = 0
+    for al in xrange(len(C12_tp)):
+        res += eps_r_noop(eps_r_noop(x, C12_tp[al][1], A2), C12_tp[al][0], A1)
+    return res
+
+def calc_K_tp(Kp1, lm1, rp1, A, Ap1, C_tp):
+    K = eps_r_noop(Kp1, A, A)
+    
+    Hr = eps_r_op_2s_C12_tp(rp1, C_tp, A, Ap1)
+
+    op_expect = mm.adot(lm1, Hr)
+        
+    K += Hr
+    
+    return K, op_expect
     
 def calc_K(Kp1, C, lm1, rp1, A, AAp1):    
     K = eps_r_noop(Kp1, A, A)
@@ -47,6 +148,17 @@ def calc_K(Kp1, C, lm1, rp1, A, AAp1):
     op_expect = mm.adot(lm1, Hr)
         
     K += Hr
+    
+    return K, op_expect
+    
+def calc_K_l_tp(Km1, lm2, r, Am1, A, Cm1_tp):
+    K = eps_l_noop(Km1, A, A)
+    
+    Hl = eps_l_op_2s_C34_tp(lm2, Am1, A, Cm1_tp)
+
+    op_expect = mm.adot_noconj(Hl, r)
+        
+    K += Hl
     
     return K, op_expect
     
@@ -238,7 +350,35 @@ def apply_MPO_local(Mn, An):
     MAn = MAn.reshape((q, Dm1 * len(Mn), D * len(Mn[0])))
     
     return MAn
-   
+
+def calc_x_tp(Kp1, C_tp, Cm1_tp, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    
+    x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
+
+    V = sp.transpose(Vsh, axes=(0, 2, 1)).conj().copy()
+    Vri = V.copy()
+    try:
+        for Vris in Vri:
+            Vris[:] = r_si.dot_left(Vris)
+    except AttributeError:
+        for Vris in Vri:
+            Vris[:] = Vris.dot(r_si)
+    
+    if not C_tp is None:
+        x += lm1_s.dot(eps_r_op_2s_C12_tp(rp1, C_tp, Vri, Ap1)) #1
+        
+    if not Cm1_tp is None:
+        for al in xrange(len(Cm1_tp)):
+            x += lm1_si.dot(eps_l_noop(lm2, Am1, Cm1_tp[al][0]).dot(eps_r_noop(r_s, Cm1_tp[al][1], V))) #2
+            
+    if not Kp1 is None:
+        x += lm1_s.dot(eps_r_noop(Kp1, A, Vri))
+
+    return x
+
 def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     D = A.shape[2]
     Dm1 = A.shape[1]
@@ -353,6 +493,18 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x += x_part.dot(r_s)
 
     return x
+
+def calc_BB_Y_2s_tp(C_tp, Vlh, Vrh_p1, l_s_m1, r_s_p1):
+    Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj().copy()
+    Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj().copy()
+
+    Y = 0
+    for al in xrange(len(C_tp)):
+        Y += eps_l_noop(l_s_m1, Vl, C_tp[al][0]).dot(eps_r_noop(r_s_p1, C_tp[al][1], Vr_p1))
+
+    etaBB_sq = mm.adot(Y, Y)
+    
+    return Y, etaBB_sq
 
 def calc_BB_Y_2s(C, Vlh, Vrh_p1, l_s_m1, r_s_p1):
     Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj()

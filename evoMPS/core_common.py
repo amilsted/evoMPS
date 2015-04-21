@@ -298,7 +298,7 @@ def eps_r_op_1s(x, A1, A2, op):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[1], A1.shape[1]), dtype=A1.dtype)
+    out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype)
     for s in xrange(A1.shape[0]):
         xA2s = x.dot(A2[s].conj().T)
         for t in xrange(A1.shape[0]):
@@ -458,79 +458,6 @@ def eps_r_op_2s_C34(x, A1, A2, C34):
             res += A1[u].dot(A2[v]).dot(x.dot(C34[u, v].conj().T))
     return res
     
-def eps_r_op_2s_AA12_C34(x, AA12, C34):
-    d = C34.shape[0] * C34.shape[1]
-    S1 = (d, AA12.shape[2], AA12.shape[3])
-    S2 = (d, C34.shape[2], C34.shape[3])
-    return eps_r_noop(x, AA12.reshape(S1), C34.reshape(S2))
-    
-def eps_l_op_2s_AA12_C34(x, AA12, C34):
-    d = AA12.shape[0] * AA12.shape[1]
-    S1 = (d, AA12.shape[2], AA12.shape[3])
-    S2 = (d, C34.shape[2], C34.shape[3])
-    return eps_l_noop(x, AA12.reshape(S1), C34.reshape(S2))
-    
-def eps_l_op_2s_A1_A2_C34(x, A1, A2, C34):
-    res = np.zeros((A2.shape[2], C34.shape[3]), dtype=C34.dtype)
-    for u in xrange(C34.shape[0]):
-        for v in xrange(C34.shape[1]):
-            res += (A1[u].dot(A2[v])).conj().T.dot(x.dot(C34[u, v]))
-    return res
-
-def eps_r_op_3s_C123_AAA456(x, C123, AAA456):
-    d = C123.shape[0] * C123.shape[1] * C123.shape[2]
-    S1 = (d, C123.shape[3], C123.shape[4])
-    S2 = (d, AAA456.shape[3], AAA456.shape[4])
-    return eps_r_noop(x, C123.reshape(S1), AAA456.reshape(S2))
-    
-def eps_l_op_3s_AAA123_C456(x, AAA123, C456):
-    d = C456.shape[0] * C456.shape[1] * C456.shape[2]
-    S1 = (d, AAA123.shape[3], AAA123.shape[4])
-    S2 = (d, C456.shape[3], C456.shape[4])
-    return eps_l_noop(x, AAA123.reshape(S1), C456.reshape(S2))
-
-def calc_C_mat_op_AA_tensordot(op, AA):
-    return np.tensordot(op, AA, ((2, 3), (0, 1)))
-
-def calc_C_mat_op_AA(op, AA):
-    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
-    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
-    C_ = op_.dot(AA_)
-    return C_.reshape(AA.shape)
-    
-def calc_C_3s_mat_op_AAA(op, AAA):
-    AAA_ = AAA.reshape((AAA.shape[0] * AAA.shape[1] * AAA.shape[2], 
-                        AAA.shape[3] * AAA.shape[4]))
-    op_ = op.reshape((op.shape[0] * op.shape[1] * op.shape[2], 
-                      op.shape[3] * op.shape[4] * op.shape[5]))
-    C_ = op_.dot(AAA_)
-    return C_.reshape(AAA.shape)
-    
-def calc_C_3s_mat_op_AAA_tensordot(op, AAA):
-    return np.tensordot(op, AAA, ((3, 4, 5), (0, 1, 2)))
-
-def calc_C_conj_mat_op_AA(op, AA):
-    AA_ = AA.reshape((AA.shape[0] * AA.shape[1], AA.shape[2] * AA.shape[3]))
-    op_ = op.reshape((op.shape[0] * op.shape[1], op.shape[2] * op.shape[3]))
-    C_ = op_.conj().T.dot(AA_)
-    return C_.reshape(AA.shape)
-    
-def calc_C_conj_mat_op_AA_tensordot(op, AA):
-    return np.tensordot(op.conj(), AA, ((0, 1), (0, 1)))
-    
-def calc_C_mat_op_tp(op_tp, A, Ap1):
-    """op_tp contains the terms of a tensor product decomposition of a
-       nearest-neighbour operator.
-    """
-    C = np.zeros((A.shape[0], Ap1.shape[0], A.shape[1], Ap1.shape[2]), dtype=A.dtype)
-    for op_tp_ in op_tp:
-        A_op0 = op_tp_[0].dot(A.reshape((A.shape[0], A.shape[1] * A.shape[2]))).reshape(A.shape)
-        Ap1_op1 = op_tp_[1].dot(Ap1.reshape((Ap1.shape[0], Ap1.shape[1] * Ap1.shape[2]))).reshape(Ap1.shape)
-        
-        C += calc_AA(A_op0, Ap1_op1)
-        
-    return C
-
 def calc_C_func_op(op, A, Ap1):
     q = A.shape[0]
     qp1 = Ap1.shape[0]
