@@ -242,7 +242,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         out = pinv_1mE(x, A1, A2, self.l[-1], rL, p=p, left=left, pseudo=pseudo, 
                        out=out, tol=tol, solver=solver, brute_check=brute_check,
                        sanity_checks=self.sanity_checks, sc_data=sc_data,
-                       use_CUDA=self.PPinv_use_CUDA)
+                       use_CUDA=self.PPinv_use_CUDA,
+                       CUDA_use_batch=(self.D <= self.CUDA_batch_maxD))
 
         return out
         

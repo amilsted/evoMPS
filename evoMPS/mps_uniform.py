@@ -138,6 +138,11 @@ class EvoMPS_MPS_Uniform(object):
         """Whether to use CUDA to implement the transfer matrix when calculating
            l and r. Requires pycuda and scikits.cuda and a working CUDA setup
            supporting double-precision arithmetic."""
+           
+        self.CUDA_batch_maxD = 128
+        """Maximum bond dimension for use of batched CUBLAS GEMM variants.
+        Above this bond dimension, streams will be used.
+        """
                 
         self.symm_gauge = True
         """Whether to use symmetric canonical form or (if False) right canonical form."""
@@ -282,7 +287,7 @@ class EvoMPS_MPS_Uniform(object):
     def _get_EOP(self, A1, A2, left):
         if self.ev_arpack_CUDA:
             import cuda_alternatives as tcu
-            opE = tcu.EOp_CUDA(A1, A2, left)
+            opE = tcu.EOp_CUDA(A1, A2, left, use_batch=(self.D <= self.CUDA_batch_maxD))
         else:
             opE = EOp(A1, A2, left)
             
