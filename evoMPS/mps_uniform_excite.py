@@ -703,3 +703,142 @@ class Excite_H_Op_tp:
                                                          pinv_solver=self.pinv_solver)
         
         return res.ravel()
+
+def excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
+    pseudo = AL is AR
+    
+    BBL = pinv_1mE(tm.eps_l_noop(lL, B, B), [AR], [AR], lL, rR, p=0, 
+                   left=True, pseudo=True)
+                   
+    B1L = pinv_1mE(tm.eps_l_noop(lL, B, AL), [AR], [AL], lL, rR, p=0, 
+                   left=True, pseudo=pseudo)
+                   
+    B2L = pinv_1mE(tm.eps_l_noop(lL, AL, B), [AL], [AR], lL, rR, p=0, 
+                   left=True, pseudo=pseudo)
+    
+    B1B2L = pinv_1mE(tm.eps_l_noop(B1L, AR, B), [AR], [AR], lL, rR, p=0, 
+                     left=True, pseudo=True)
+                     
+    B2B1L = pinv_1mE(tm.eps_l_noop(B2L, B, AR), [AR], [AR], lL, rR, p=0, 
+                     left=True, pseudo=True)
+    
+    BBR = pinv_1mE(tm.eps_r_noop(rR, B, B), [AL], [AL], lL, rR, p=0, 
+                   left=False, pseudo=True)
+                   
+    print "gauge fixing:", la.norm(tm.eps_r_noop(rR, B, AR))
+                   
+    res = [0.] * (d + 1)
+    
+    #B's on the left terms (0, 1, 2, 5)
+    res[0] += m.adot(tm.eps_l_op_1s(BBL + B1B2L + B2B1L, AR, AR, op1.dot(op2) - g[0] * sp.eye(len(op1))), rR)
+    res[0] += m.adot(tm.eps_l_op_1s(B1L, AR, B, op1.dot(op2)), rR)
+    res[0] += m.adot(tm.eps_l_op_1s(B2L, B, AR, op1.dot(op2)), rR)
+    res[0] += m.adot(tm.eps_l_op_1s(lL, B, B, op1.dot(op2) - g[0] * sp.eye(len(op1))), rR)
+    
+    l1 = tm.eps_l_op_1s(BBL + B1B2L + B2B1L, AR, AR, op1)
+    l1 += tm.eps_l_op_1s(B1L, AR, B, op1)
+    l1 += tm.eps_l_op_1s(B2L, B, AR, op1)
+    l1 += tm.eps_l_op_1s(lL, B, B, op1)
+    for n in xrange(1, d + 1):
+        res[n] += m.adot(l1, tm.eps_r_op_1s(rR, AR, AR, op2))
+        res[n] -= 2 * g[n]
+        if n == d:
+            break
+        l1 = tm.eps_l_noop(l1, AR, AR)
+        
+    print 1, res
+    
+    #Terms 3, 4, 6, 7, a
+    ls = [None] * (d + 1)
+    ls[0] = tm.eps_l_op_1s(B1L, AR, AL, op1) + tm.eps_l_op_1s(lL, B, AL, op1)
+    for k in xrange(1, d + 1):
+        ls[k] = tm.eps_l_noop(ls[k - 1], AR, AL)
+        
+    rs = [None] * (d + 1)
+    rs[d - 1] = tm.eps_r_op_1s(rR, AR, AR, op2)
+    for k in xrange(d - 1, 0, -1):
+        rs[k - 1] = tm.eps_r_noop(rs[k], AR, AR)
+        
+    for n in xrange(2, d + 1):
+        for k in xrange(2, n):
+            res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], AR, B))
+        
+        res[n] += m.adot(ls[n - 1], tm.eps_r_op_1s(rR, AR, B, op2))
+        
+    print 2, res
+        
+    #Terms 3, 4, 6, 7, b
+    ls = [None] * (d + 1)
+    ls[0] = tm.eps_l_op_1s(B2L, AL, AR, op1) + tm.eps_l_op_1s(lL, AL, B, op1)
+    for k in xrange(1, d + 1):
+        ls[k] = tm.eps_l_noop(ls[k - 1], AL, AR)
+        
+    for n in xrange(2, d + 1):
+        for k in xrange(2, n):
+            res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], B, AR))
+        
+        res[n] += m.adot(ls[n - 1], tm.eps_r_op_1s(rR, B, AR, op2))
+        
+    print 3, res
+    
+    #Term 8
+    ls = [None] * (d + 1)
+    ls[0] = tm.eps_l_op_1s(lL, AL, AL, op1)
+    for k in xrange(1, d + 1):
+        ls[k] = tm.eps_l_noop(ls[k - 1], AL, AL)
+        
+    for n in xrange(2, d + 1):
+        for k in xrange(2, n):
+            res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], B, B))
+            res[n] -= g[n]
+            
+    print 4, res
+            
+    #Terms 9 and 10
+    for n in xrange(2, d + 1):
+        for k in xrange(2, n):
+            lj = tm.eps_l_noop(ls[k - 1], AL, B)
+            for j in xrange(k + 1, n):
+                res[n] += m.adot(lj, tm.eps_r_noop(rs[-(n + 1):][j], B, AR))
+                lj = tm.eps_l_noop(lj, AL, AR)
+            res[n] += m.adot(lj, tm.eps_r_op_1s(rR, B, AR, op2))
+
+            lj = tm.eps_l_noop(ls[k - 1], B, AL)
+            for j in xrange(k + 1, n):
+                res[n] += m.adot(lj, tm.eps_r_noop(rs[-(n + 1):][j], AR, B))
+                lj = tm.eps_l_noop(lj, AL, AR)
+            res[n] += m.adot(lj, tm.eps_r_op_1s(rR, AR, B, op2))
+            
+    print 5, res
+    
+    #Term 11
+    res[0] += m.adot(tm.eps_l_op_1s(lL, AL, AL, op1.dot(op2) - g[0] * sp.eye(len(op1))), BBR)
+    for n in xrange(1, d + 1):
+        res[n] += m.adot(tm.eps_l_op_1s(ls[n - 1], AL, AL, op2), BBR)
+        res[n] -= g[n]
+    
+    return res
+    
+def excite_expect_2s_tp_sep(AL, AR, B, lL, rR, op, d, n1, n2):
+    ls = [None] * (d + 1)
+    ls[0] = lL
+    rs = [None] * (d + 1)
+    rs[-1] = rR
+    
+    As1 = [None] + [AL] * (n1 - 1) + [B] + [AR] * (d - n1 + 1)
+    As2 = [None] + [AL] * (n2 - 1) + [B] + [AR] * (d - n2 + 1)
+    
+    for n in xrange(1, d):
+        ls[n] = tm.eps_l_noop(ls[n - 1], As1[n], As2[n])
+        
+    for n in xrange(d, 0, -1):
+        rs[n - 1] = tm.eps_r_noop(rs[n], As1[n], As2[n])
+        
+    Cs1 = [None] * (d + 1)
+    for n in xrange(1, d):
+        Cs1[n] = tm.calc_C_tp(op, As1[n], As1[n + 1])
+        
+    res = [m.adot(ls[n - 1], tm.eps_r_op_2s_C12_tp(rs[n + 1], Cs1[n], As2[n], As2[n + 1]))
+           for n in xrange(1, d)]
+               
+    return sp.array(res)

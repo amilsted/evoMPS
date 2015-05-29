@@ -1507,7 +1507,101 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             return m.adot(self.l[(k - 1) % self.L], res)
         else:
             return super(EvoMPS_TDVP_Uniform, self).expect_3s(op, k=k)
+            
+    def _get_tangent_lr(self, B, d, nb=None, op1=None, s2=None):
+        if nb is None:
+            nb = d + 1
+        if s2 is None:
+            A2 = self.A[0]
+        else:
+            A2 = s2.A[0]
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+        
+        ls = [self.l[0]] * (2*d + 2)
+        ls[0] = self.l[0]
+        if op1 is None:
+            ls[0] = self.l[0]
+            ls[1] = tm.eps_l_noop(ls[0], As[1], As[1])
+        else:
+            ls[1] = tm.eps_l_op_1s(ls[0], As[1], As[1], op1)
+            
+        for n in xrange(2, 2 * d + 1):
+            ls[n] = tm.eps_l_noop(ls[n - 1], As[n], As[n])
+            
+        rs = [None] * (2*d + 2)
+        rs[-1] = self.r[0]
+        for n in xrange(2*d + 1, 0, -1):
+            rs[n - 1] = tm.eps_r_noop(rs[n], As[n], As[n])
+            
+        return ls, rs
+            
+    def expect_tangent_1s(self, B, op, d, nb=None, lrs=None, s2=None):
+        if nb is None:
+            nb = d + 1
+        if lrs is None:
+            ls, rs = self._get_tangent_lr(B, d, nb=nb, s2=s2)
+        else:
+            ls, rs = lrs
+            
+        if s2 is None:
+            A2 = self.A[0]
+        else:
+            A2 = s2.A[0]
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+            
+        exs = [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op)) 
+               for n in xrange(1, 2*d + 2)]
+                   
+        return sp.array(exs)
+        
+    def expect_tangent_2s(self, B, op, d):
+        AA = tm.calc_AA(self.A[0], self.A[0])
+        AB = tm.calc_AA(self.A[0], B)
+        BA = tm.calc_AA(B, self.A[0])
+        Cop = tm.calc_C_mat_op_AA(op, AA)
+        CopAB = tm.calc_C_mat_op_AA(op, AB)
+        CopBA = tm.calc_C_mat_op_AA(op, BA)
+        
+        nb = d + 1
+        ls, rs = self._get_tangent_lr(B, d)
+            
+        AAs = [AA] * (2*d + 2)
+        AAs[nb - 1] = AB 
+        AAs[nb] = BA
+        
+        Cs = [Cop] * (2*d + 2)
+        Cs[nb - 1] = CopAB
+        Cs[nb] = CopBA
+            
+        exs = [m.adot(ls[n - 1], tm.eps_r_op_2s_AA12_C34(rs[n + 1], Cs[n], AAs[n])) 
+               for n in xrange(1, 2*d + 1)]
+                   
+        return sp.array(exs)
+        
+    def correlation_tangent_1s_1s(self, B, op1, op2, d, nb=None, s2=None):
+        ls, rs = self._get_tangent_lr(B, d, nb=nb, s2=s2)
+        exs1 = self.expect_tangent_1s(B, op1, d, nb=nb, lrs=(ls, rs), s2=s2)
+        exs2 = self.expect_tangent_1s(B, op2, d, nb=nb, lrs=(ls, rs), s2=s2)
+        
+        if nb is None:
+            nb = d + 1
 
+        if s2 is None:
+            A2 = self.A[0]
+        else:
+            A2 = s2.A[0]
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+        
+        ls, rs = self._get_tangent_lr(B, d, op1=op1, nb=nb, s2=s2)
+        g = [m.adot(ls[0], tm.eps_r_op_1s(rs[1], As[1], As[1], op1.dot(op2)))]
+        g += [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op2)) 
+              for n in xrange(2, 2*d + 2)]
+        
+        g = sp.array(g)
+        
+        c = g - exs1 * exs2
+                   
+        return c, g
 
 class ls_wolfe_sat(Exception):
     def __init__(self, value):
