@@ -1338,7 +1338,7 @@ class EvoMPS_MPS_Uniform(object):
         lj = tm.eps_l_op_1s(self.l[(k - 1) % L], self.A[k], self.A[k], op1)
         
         if return_intermediates:
-            res[0] = self.expect_1s(op1.dot(op1), k=k)
+            res[0] = self.expect_1s(op1.dot(op2), k=k)
 
         for j in xrange(1, d + 1):
             if return_intermediates or j == d:
