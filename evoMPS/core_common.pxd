@@ -61,7 +61,7 @@ cpdef np.ndarray eps_r_op_2s_C12(x, np.ndarray C12, np.ndarray A3, np.ndarray A4
 
 @cython.locals(u = cython.int, v = cython.int, res = np.ndarray)
 cpdef np.ndarray eps_r_op_2s_C34(x, np.ndarray A1, np.ndarray A2, np.ndarray C34)
-    
+
 @cython.locals(Dp1 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, u = cython.int, v = cython.int, AA = np.ndarray)
 cpdef np.ndarray calc_AA(np.ndarray A, np.ndarray Ap1)
 
