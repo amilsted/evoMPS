@@ -909,20 +909,31 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15):
+    def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15,
+                           A2=None, l=None, r=None,):
         L = self.L
         BRr = [None] * L
         BR = [None] * L
         
+        if A2 is None:
+            A2 = self.A
+        if l is None:
+            l = self.l
+        if r is None:
+            r = self.r
+        
         M = len(B[0].shape) - 2
-        A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+        Ae = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+        A2e = list(A2) * int(sp.ceil((L - 1. + M) / L))
         
         #print "M=", M
         #print len(A)
         
         As = [None] * L
+        A2s = [None] * L
         for k in xrange(L):
-            As[k] = A[k:k + M]
+            As[k] = Ae[k:k + M]
+            A2s[k] = A2e[k:k + M]
         Bs = [None] * L
         for k in xrange(L):
             Bs[k] = [B[k]]
@@ -932,14 +943,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             X2 = Bs
         else:
             X1 = Bs
-            X2 = As
+            X2 = A2s
 
         BRblock = 0
         for k in xrange(L - 1, -1, -1):
-            BRr[k] = tm.eps_r_noop_multi(self.r[(k + M - 1) % L], X1[k], X2[k])
+            BRr[k] = tm.eps_r_noop_multi(r[(k + M - 1) % L], X1[k], X2[k])
             #BRr[k] = tm.eps_r_noop(self.r[k], X1[k][0], X2[k][0])
             if k < L - 1:
-                BRblock = sp.exp(1.j * p_) * tm.eps_r_noop(BRblock, self.A[k], self.A[k])
+                BRblock = sp.exp(1.j * p_) * tm.eps_r_noop(BRblock, Ae[k], A2e[k])
             BRblock += BRr[k]
                 
         #print "BRblock", la.norm(BRblock.ravel())
@@ -947,14 +958,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if sp.allclose(BRblock.ravel(), 0, rtol=GF_tol): #Skip the far connected contributions if we are approximately gauge-fixing
             BRblock_fid = 0
         else:
-            BRblock_fid = m.adot(self.l[-1], BRblock)
-            QBRblock = BRblock - self.r[-1] * BRblock_fid
+            BRblock_fid = m.adot(l[-1], BRblock)
+            QBRblock = BRblock - r[-1] * BRblock_fid
             BR[0] = QBRblock.copy()
             BR[0] = self.calc_PPinv(QBRblock, p=(L * p_), solver=las.lgmres, 
                                     tol=con_tol, out=BR[0])
                                                          
             for k in xrange(L - 1, 0, -1):
-                BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], self.A[k], self.A[k])
+                BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], Ae[k], A2e[k])
                 #BR[k] -= self.r[k - 1] *  m.adot(self.l[k - 1], BR[k]) NO
                 
             #BR0_ = BRr[0] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[1 % L], self.A[0], self.A[0])
@@ -1063,12 +1074,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
             print 
             
-    def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False):
+    def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
+                          A2=None, l=None, r=None):
         L = self.L
         M = len(B1[0].shape) - 2
         #print "M=", M
-        A = list(self.A) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
+        Ae = list(self.A) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
+        if A2 is None:
+            A2e = A
+        else:
+            A2e = list(A2) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
         #print len(A)
+        
+        if l is None:
+            l = self.l
+        if r is None:
+            r = self.r
         
         #ter = range(len(A))
         
@@ -1076,30 +1097,30 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         res12 = 0
         res21 = 0
         for k in xrange(L):
-            res += m.adot(self.l[k - 1], tm.eps_r_noop_multi(self.r[(k + M - 1) % L], [B1[k]], [B2[k]]))
+            res += m.adot(l[k - 1], tm.eps_r_noop_multi(r[(k + M - 1) % L], [B1[k]], [B2[k]]))
             
             #B1 right of B2
             if not B1_is_GF:
                 for j in xrange(1, M):
                     #print k, j, ter[k:k + j], ter[k + M:k + M + j]
-                    ket = A[k:k + j] + [B1[(k + j) % L]]
-                    bra = [B2[k]] + A[k + M:k + M + j]
-                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    ket = Ae[k:k + j] + [B1[(k + j) % L]]
+                    bra = [B2[k]] + A2e[k + M:k + M + j]
+                    R = tm.eps_r_noop_multi(r[(k + M + j - 1) % L], ket, bra)
                     #print la.norm(R), m.adot(self.l[k - 1], R)
-                    res21 += sp.exp((j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
+                    res21 += sp.exp((j + 1) * 1.j * p) * m.adot(l[k - 1], R)
             
             #B2 right of B1
             if not B2_is_GF:
                 for j in xrange(1, M):
-                    ket = [B1[k]] + A[k + M:k + M + j]
-                    bra = A[k:k + j] + [B2[(k + j) % L]]
-                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    ket = [B1[k]] + Ae[k + M:k + M + j]
+                    bra = A2e[k:k + j] + [B2[(k + j) % L]]
+                    R = tm.eps_r_noop_multi(r[(k + M + j - 1) % L], ket, bra)
                     #print la.norm(R), m.adot(self.l[k - 1], R)
-                    res12 += sp.exp(-(j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
+                    res12 += sp.exp(-(j + 1) * 1.j * p) * m.adot(l[k - 1], R)
                     
             if M == 1:
-                res21 += sp.exp(1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], B1[(k + 1) % L], self.A[(k + 1) % L]), self.A[k], B2[k]))
-                res12 += sp.exp(-1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], self.A[(k + 1) % L], B2[(k + 1) % L]), B1[k], self.A[k]))
+                res21 += sp.exp(1.j * p) * m.adot(l[k - 1], tm.eps_r_noop(tm.eps_r_noop(r[(k + 1) % L], B1[(k + 1) % L], A2e[(k + 1) % L]), Ae[k], B2[k]))
+                res12 += sp.exp(-1.j * p) * m.adot(l[k - 1], tm.eps_r_noop(tm.eps_r_noop(r[(k + 1) % L], Ae[(k + 1) % L], B2[(k + 1) % L]), B1[k], A2e[k]))
             
         if M == 1:
             #print "res12, res21", res12, res21
@@ -1109,10 +1130,36 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         
     def _B_overlap(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
-                   con_tol=None, GF_tol=1E-15):
+                   con_tol=None, GF_tol=1E-15, other=None):
         L = self.L
         
-        res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF)
+        if other is None:
+            l = self.l
+            r = self.r
+            A2 = self.A
+        else:
+            A2 = other.A
+            
+            d, ev, lL = self.fidelity_per_site(other, full_output=True, left=True)
+            d, ev, rL = self.fidelity_per_site(other, full_output=True, left=False)
+            if not abs(1 - d) < 1E-12:
+                log.warning("Warning! Attempt to calculate tangent vector overlap for non-equivalent states.", d)
+            l = [None] * L
+            r = [None] * L
+            nrm = abs(m.adot(lL, rL))
+            if not abs(nrm - 1) < 1E-12:
+                log.warning("Warning! Normalization error in _B_overlap.", nrm)
+            l[-1] = lL.reshape(self.l[-1].shape)
+            r[-1] = rL.reshape(self.r[-1].shape)
+
+            for k in xrange(len(self.A) - 1, 0, -1):
+                r[k - 1] = tm.eps_r_noop(r[k], self.A[k], A2[k])
+                
+            for k in xrange(0, len(self.A) - 1):
+                l[k] = tm.eps_l_noop(l[k - 1], self.A[k], A2[k])
+        
+        res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF, 
+                                                   A2=A2, l=l, r=r)
         #print "onsite = ", res, res12, res21
         
         res += res12 + res21
@@ -1120,22 +1167,27 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         def calc_con(BnoGF, BGF, p_, noGF_conj):
             if noGF_conj:
                 p_ = -p_
-            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=noGF_conj, con_tol=con_tol, GF_tol=GF_tol)
+            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=noGF_conj, 
+                                                   con_tol=con_tol, GF_tol=GF_tol,
+                                                   A2=A2, l=l, r=r)
 
             rescon = 0
             if not BR[0] is None:
                 M = len(BGF[0].shape) - 2
-                A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+                Ae = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+                A2e = list(A2) * int(sp.ceil((L - 1. + M) / L))
 
                 As = [None] * L
+                A2s = [None] * L
                 BGFs = [None] * L
                 for k in xrange(L):
-                    As[k] = A[k:k + M]
+                    As[k] = Ae[k:k + M]
+                    A2s[k] = A2e[k:k + M]
                     BGFs[k] = [BGF[k]]
                 
                 if noGF_conj:
                     Y1 = BGFs
-                    Y2 = As
+                    Y2 = A2s
                 else:
                     Y1 = As
                     Y2 = BGFs
@@ -1148,10 +1200,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                         #rescon_1 += m.adot(self.l[k - 1], R2)
                     else:
                         if noGF_conj:
-                            R = tm.eps_r_op_2s_C12(BR[(k + M) % L], BGF[k], self.A[k], self.A[(k + 1) % L])
+                            R = tm.eps_r_op_2s_C12(BR[(k + M) % L], BGF[k], A2e[k], A2e[(k + 1) % L])
                         else:
-                            R = tm.eps_r_op_2s_C34(BR[(k + M) % L], self.A[k], self.A[(k + 1) % L], BGF[k])
-                    rescon += m.adot(self.l[k - 1], R)
+                            R = tm.eps_r_op_2s_C34(BR[(k + M) % L], Ae[k], Ae[(k + 1) % L], BGF[k])
+                    rescon += m.adot(l[k - 1], R)
                 rescon *= sp.exp(M * 1.j * p_)
                 #rescon_1 *= sp.exp(M * 1.j * p_)
                 #print "rescon_1", rescon_1
