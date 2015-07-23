@@ -1565,8 +1565,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             nb = d + 1
         if s2 is None:
             A2 = self.A[0]
+            r = self.r
         else:
             A2 = s2.A[0]
+            r = s2.r
         As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
         
         ls = [self.l[0]] * (2*d + 2)
@@ -1581,7 +1583,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             ls[n] = tm.eps_l_noop(ls[n - 1], As[n], As[n])
             
         rs = [None] * (2*d + 2)
-        rs[-1] = self.r[0]
+        rs[-1] = r[0]
         for n in xrange(2*d + 1, 0, -1):
             rs[n - 1] = tm.eps_r_noop(rs[n], As[n], As[n])
             
