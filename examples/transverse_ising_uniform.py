@@ -180,9 +180,9 @@ if __name__ == '__main__':
             ex_p = []
             for p in sp.linspace(0, sp.pi, num=num_momenta):
                 print "p = ", p
-                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
+                ex_ev.append(s.excite_top_triv(p, nev=num_excitations, ncv=num_excitations * 4))
                 if top_non_triv:
-                    ex_ev_nt.append(s.excite_top_nontriv(s2, p, k=num_excitations, ncv=num_excitations * 4))
+                    ex_ev_nt.append(s.excite_top_nontriv(s2, p, nev=num_excitations, ncv=num_excitations * 4))
                 else:
                     ex_ev_nt.append([0])
                 ex_p.append([p] * num_excitations)
