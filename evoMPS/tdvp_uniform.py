@@ -750,6 +750,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol,
                                               pinv_solver=pinv_solver)
+                                              
+        if ncv is None:
+            ncv = max(20, 2 * nev + 1)
         
         for i in xrange(max_retries):
             try:
@@ -759,7 +762,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             except las.ArpackNoConvergence:
                 log.warning("excite_top_triv: Retry %u!", i)
                 v0 = None
-                ncv = nev * (3 + i)
+                ncv = max(20, nev * (3 + i))
                 if i == max_retries - 1:
                     log.error("excite_top_triv: Failed to converge!")
                     raise EvoMPSNoConvergence('excite_top_triv')
@@ -876,6 +879,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
                                                  pinv_solver=pinv_solver)
         
+        if ncv is None:
+            ncv = max(20, 2 * nev + 1)
+        
         for i in xrange(max_retries):
             try:
                 res = las.eigsh(op, sigma=sigma, which=which, k=nev, v0=v0,
@@ -884,7 +890,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             except las.ArpackNoConvergence:
                 log.warning("excite_top_nontriv: Retry %u!", i)
                 v0 = None
-                ncv = nev * (3 + i)
+                ncv = max(20, nev * (3 + i))
                 if i == max_retries - 1:
                     log.error("excite_top_nontriv: Failed to converge!")
                     raise EvoMPSNoConvergence('excite_top_nontriv')

@@ -124,14 +124,17 @@ class EvoMPS_MPS_Uniform(object):
            
         self.ev_use_arpack = True
         """Whether to use ARPACK (implicitly restarted Arnoldi iteration) to 
-           find l and r."""
+           find l and r. If False, use simple power-iteration instead. In most cases,
+           ARPACK should converge on the solution faster."""
            
         self.ev_arpack_nev = 1
-        """The number of eigenvalues to find when calculating l and r. If the
-           spectrum is approximately degenerate, this may need to be increased."""
+        """The number of eigenvalues to find when calculating l and r using ARPACK. 
+           If the spectrum is approximately degenerate, this may need to be increased."""
            
-        self.ev_arpack_ncv = None
-        """The number of intermediate vectors stored during arnoldi iteration.
+        self.ev_arpack_ncv = max(20, 2 * self.ev_arpack_nev + 1)
+        """The number of intermediate vectors stored during Arnoldi iteration.
+           If this parameter is too small, ARPACK sometimes converges to
+           the wrong solution.
            See the documentation for scipy.sparse.linalg.eig()."""
            
         self.ev_arpack_CUDA = False
@@ -141,7 +144,7 @@ class EvoMPS_MPS_Uniform(object):
            
         self.CUDA_batch_maxD = 128
         """Maximum bond dimension for use of batched CUBLAS GEMM variants.
-        Above this bond dimension, streams will be used.
+        Above this bond dimension, CUDA streams will be used.
         """
                 
         self.symm_gauge = True
@@ -177,7 +180,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         for Ak in self.A:
             m.randomize_cmplx(Ak)
-            #Ak /= la.norm(Ak)
+            Ak /= la.norm(Ak)
         
         if do_update:
             self.update()
@@ -294,44 +297,48 @@ class EvoMPS_MPS_Uniform(object):
         return opE
     
     def _calc_lr_ARPACK(self, x, tmp, calc_l=False, A1=None, A2=None, rescale=True,
-                        tol=1E-14, ncv=None, k=1, max_retries=3, which='LM'):
+                        tol=1E-14, ncv=None, nev=1, max_retries=4, which='LM'):
         if A1 is None:
             A1 = self.A
         if A2 is None:
             A2 = self.A
+            
+        if ncv is None:
+            ncv = max(20, 2 * nev + 1)
+            
+        symmetric = sp.all([A1[j] is A2[j] for j in xrange(len(A1))])
                         
-        try:
-            norm = la.get_blas_funcs("nrm2", [x])
-        except (ValueError, AttributeError):
-            norm = np.linalg.norm
-    
         n = x.size #we will scale x so that stuff doesn't get too small
         
         opE = self._get_EOP(A1, A2, calc_l)
-        x *= n / norm(x.ravel())
+        x *= n / la.norm(x.ravel())
         v0 = x.ravel()
         for i in xrange(max_retries):
+            if i > 0:
+                log.warning("_calc_lr_ARPACK: Retry #%u (%s)", i, "l" if calc_l else "r")
             try:
-                ev, eV = las.eigs(opE, which=which, k=k, v0=v0, tol=tol, ncv=ncv)
+                ev, eV = las.eigs(opE, which=which, k=nev, v0=v0, tol=tol, ncv=ncv)
                 conv = True
                 ind = abs(ev).argmax()
                 ev = np.real_if_close(ev[ind])
                 ev = np.asscalar(ev)
                 eV = eV[:, ind]
                 if abs(ev) < 1E-12:
-                    raise ValueError("Largest eigenvector too small!")
+                    raise ValueError("Largest eigenvalue too small!")
+                if symmetric and np.imag(ev) != 0:
+                    raise ValueError("Largest eigenvalue is not real! (ncv too small?)")
                 break
-            except (las.ArpackNoConvergence, ValueError):
-                log.warning("_calc_lr_ARPACK: Retry %u! (%s)", i, "l" if calc_l else "r")
+            except (las.ArpackNoConvergence, ValueError) as e:
+                log.warning("_calc_lr_ARPACK(nev=%u,ncv=%u): %s Try %u! (%s)", nev, ncv, e, i, "l" if calc_l else "r")
                 v0 = None
-                k += 1
-                ncv = k * 3
+                nev += 1
+                ncv = nev * 3
                 
         if i == max_retries - 1:
-            log.error("_calc_lr_ARPACK: Failed to converge! (%s)", "l" if calc_l else "r")
+            log.error("_calc_lr_ARPACK(nev=%u,ncv=%u): Failed to converge! (%s)", nev, ncv, "l" if calc_l else "r")
             raise EvoMPSNoConvergence("_calc_lr_ARPACK: Failed to converge!")
         
-        #remove any additional phase factor
+        #remove any additional phase factor on the eigenvector
         eVmean = eV.mean()
         eV *= sp.sqrt(sp.conj(eVmean) / eVmean)
         
@@ -339,24 +346,23 @@ class EvoMPS_MPS_Uniform(object):
             eV *= -1
 
         eV = eV.reshape(self.D, self.D)
-        #eV *= 1 / norm(eV.ravel())
         
         x[:] = eV
                     
-        if rescale: #and not abs(ev - 1) < tol:
+        if rescale: 
             fac = (1 / sp.sqrt(ev))**(1. / len(A1))
             for A in A1:
                 A *= fac
-            #A1[0] *= 1 / sp.sqrt(ev)
+                
             if self.sanity_checks:
-                if not A1[0] is A2[0]:
+                if not symmetric:
                     log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 tmp = opE.matvec(x.ravel())
                 ev = tmp.mean() / x.mean()
                 if not abs(ev - 1) < tol:
                     log.warning("Sanity check failed: Largest ev after re-scale = %s", ev)
         
-        return x, conv, opE.calls
+        return x, conv, opE.calls, nev, ncv
         
     def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
                                     left=False, max_retries=3, 
@@ -445,7 +451,7 @@ class EvoMPS_MPS_Uniform(object):
             return 0.
         
         if ncv is None:
-            ncv = nev * 4
+            ncv = max(20, 2 * nev + 1)
         
         ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
@@ -485,12 +491,9 @@ class EvoMPS_MPS_Uniform(object):
             A1 = self.A
         if A2 is None:
             A2 = self.A
+            
+        symmetric = sp.all([A1[j] is A2[j] for j in xrange(len(A1))])
                         
-        try:
-            norm = la.get_blas_funcs("nrm2", [x])
-        except (ValueError, AttributeError):
-            norm = np.linalg.norm
-
         n = x.size #we will scale x so that stuff doesn't get too small
         
         opE = self._get_EOP(A1, A2, calc_l)
@@ -498,25 +501,28 @@ class EvoMPS_MPS_Uniform(object):
         x = x.ravel()
         tmp = tmp.ravel()
 
-        x *= n / norm(x)
+        x *= n / la.norm(x)
         tmp[:] = x
         for i in xrange(max_itr):
             x[:] = tmp
             tmp[:] = opE.matvec(x)
                     
-            ev_mag = norm(tmp) / n
+            ev_mag = la.norm(tmp) / n
             ev = (tmp.mean() / x.mean()).real
             tmp *= (1 / ev_mag)
-            if norm(tmp - x) < atol + rtol * n:
+            if la.norm(tmp - x) < atol + rtol * n:
                 x[:] = tmp
                 break
         
         x = x.reshape((self.D, self.D))
                     
-        if rescale and not abs(ev - 1) < atol:
-            A1[0] *= 1 / sp.sqrt(ev)
+        if rescale: 
+            fac = (1 / sp.sqrt(ev))**(1. / len(A1))
+            for A in A1:
+                A *= fac
+                
             if self.sanity_checks:
-                if not A1[0] is A2[0]:
+                if not symmetric:
                     log.warning("Sanity check failed: Re-scaling with A1 <> A2!")
                 tmp = opE.matvec(x.ravel())
                 ev = tmp.mean() / x.mean()
@@ -545,75 +551,56 @@ class EvoMPS_MPS_Uniform(object):
         self.lL_before_CF = np.asarray(self.lL_before_CF)
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
-        if self.ev_brute or self.D <= 3:
-            self.l[-1], self.r[-1] = self._calc_lr_brute()
-        else:
-            if self.ev_use_arpack:
-                self.l[-1], self.conv_l, self.itr_l = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                                       calc_l=True, rescale=True,
-                                                       tol=self.itr_rtol,
-                                                       k=self.ev_arpack_nev,
-                                                       ncv=self.ev_arpack_ncv)
+        for retries in xrange(2):
+            if self.ev_brute or self.D <= 3:
+                self.l[-1], self.r[-1] = self._calc_lr_brute()
             else:
-                self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
-                                                        tmp, 
-                                                        calc_l=True,
-                                                        max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
-            
-            if self.ev_use_arpack:
-                self.r[-1], self.conv_r, self.itr_r = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
-                                                       calc_l=False, which='LR', rescale=False,
-                                                       tol=self.itr_rtol,
-                                                       k=self.ev_arpack_nev,
-                                                       ncv=self.ev_arpack_ncv)
+                if self.ev_use_arpack:
+                    self.l[-1], self.conv_l, self.itr_l, nev, ncv = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
+                                                                   calc_l=True, rescale=True,
+                                                                   tol=self.itr_rtol,
+                                                                   nev=self.ev_arpack_nev,
+                                                                   ncv=self.ev_arpack_ncv)
+                    self.r[-1], self.conv_r, self.itr_r, nev, ncv = self._calc_lr_ARPACK(self.rL_before_CF, tmp, 
+                                                                   calc_l=False, which='LR', rescale=False,
+                                                                   tol=self.itr_rtol,
+                                                                   nev=nev,
+                                                                   ncv=ncv)
+                else:
+                    self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
+                                                            tmp, 
+                                                            calc_l=True,
+                                                            max_itr=self.pow_itr_max,
+                                                            rtol=self.itr_rtol, 
+                                                            atol=self.itr_atol)
+                    self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
+                                                            tmp, 
+                                                            calc_l=False,
+                                                            max_itr=self.pow_itr_max,
+                                                            rtol=self.itr_rtol, 
+                                                            atol=self.itr_atol)
+                
+            norm = m.adot(self.l[-1], self.r[-1]).real
+            if abs(norm) < 1E-10:
+                log.warning("Left and right eigenvectors are orthogonal! (%g) Retrying with initial-vector reset...", norm)
+                self.lL_before_CF.fill(1)
+                self.rL_before_CF.fill(1)
             else:
-                self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
-                                                        tmp, 
-                                                        calc_l=False,
-                                                        max_itr=self.pow_itr_max,
-                                                        rtol=self.itr_rtol, 
-                                                        atol=self.itr_atol)
+                break
             
         self.lL_before_CF = self.l[-1].copy()
         self.rL_before_CF = self.r[-1].copy()
-            
+        
         #normalize eigenvectors:
-        try:
-            if self.symm_gauge:
-                norm = m.adot(self.l[-1], self.r[-1]).real
-                init_norm = norm
-                itr = 0 
-                while not abs(norm - 1) < 1E-13 and itr < 10:
-                    self.l[-1] *= 1. / ma.sqrt(norm)
-                    self.r[-1] *= 1. / ma.sqrt(norm)
-                    
-                    norm = m.adot(self.l[-1], self.r[-1]).real
-                    
-                    itr += 1
-                    
-                if itr == 10:
-                    log.warning("Warning: Max. iterations reached during normalization! %g", init_norm)
-            else:
-                fac = self.D / np.trace(self.r[-1]).real
-                self.l[-1] *= 1 / fac
-                self.r[-1] *= fac
-    
-                norm = m.adot(self.l[-1], self.r[-1]).real
-                init_norm = norm
-                itr = 0 
-                while not abs(norm - 1) < 1E-13 and itr < 10:
-                    self.l[-1] *= 1. / norm
-                    norm = m.adot(self.l[-1], self.r[-1]).real
-                    itr += 1
-                    
-                if itr == 10:
-                    log.warning("Warning: Max. iterations reached during normalization! %g", init_norm)
-        except ValueError:
-            log.error("calc_lr: Normalization of eigenvectors failed! %g", init_norm)
-            raise EvoMPSNormError("calc_lr")
+        self.l[-1] *= 1. / ma.sqrt(norm)
+        self.r[-1] *= 1. / ma.sqrt(norm)
 
+        if not self.symm_gauge:
+            fac = self.D / np.trace(self.r[-1]).real
+            self.l[-1] *= 1 / fac
+            self.r[-1] *= fac
+
+        #compute eigenvectors for other block boundaries
         for k in xrange(len(self.A) - 1, 0, -1):
             self.r[k - 1] = tm.eps_r_noop(self.r[k], self.A[k], self.A[k])
             
@@ -1106,7 +1093,7 @@ class EvoMPS_MPS_Uniform(object):
                 return abs(ev[ind])**(1./self.L), ev[ind]
         else:
             opE = self._get_EOP(As[0], As[1], left)
-            res = las.eigs(opE, which='LM', k=1, ncv=6, return_eigenvectors=full_output)
+            res = las.eigs(opE, which='LM', k=1, ncv=20, return_eigenvectors=full_output)
             if full_output:
                 ev, eV = res
                 return abs(ev[0])**(1./self.L), ev[0], eV[:, 0]
@@ -1557,7 +1544,7 @@ class EvoMPS_MPS_Uniform(object):
         if do_update:
             self.update()
 
-    def expect_string_1s_density_hc(self, op, k=0, ncv=6, return_g=False):
+    def expect_string_1s_density_hc(self, op, k=0, ncv=20, return_g=False):
         """Returns the expectation values of a string operator acting on the
            Schmidt vectors for the half-chain decomposition.
            
@@ -1629,7 +1616,7 @@ class EvoMPS_MPS_Uniform(object):
         else:
             return Or, abs(ev)**(1./self.L)
 
-    def expect_string_per_site_1s(self, op, ncv=6):
+    def expect_string_per_site_1s(self, op, ncv=20):
         """Calculates the per-site factor of a string expectation value.
         
         The string operator is the product over all sites of a single-site
