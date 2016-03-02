@@ -83,7 +83,7 @@ class EvoMPSNormError(Exception):
 
 class EvoMPS_MPS_Uniform(object):   
         
-    def __init__(self, D, q, L=1, dtype=None):
+    def __init__(self, D, q, L=1, dtype=None, do_update=True):
         """Creates a new EvoMPS_MPS_Uniform object.
         
         This class implements basic operations on a uniform 
@@ -168,7 +168,7 @@ class EvoMPS_MPS_Uniform(object):
                 
         self._init_arrays(D, q, L)
                     
-        self.randomize()
+        self.randomize(do_update=do_update)
 
     def randomize(self, do_update=True):
         """Randomizes the parameter tensors self.A.

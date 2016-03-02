@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
         
 class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
-    def __init__(self, D, q, ham, ham_sites=None, L=1, dtype=None):
+    def __init__(self, D, q, ham, ham_sites=None, L=1, dtype=None, do_update=True):
         """Implements the TDVP algorithm for uniform MPS.
         
         Parameters
@@ -64,7 +64,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """The energy density expectation value, available only after calling
            update() or calc_K()."""
         
-        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L=L, dtype=dtype)
+        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L=L, dtype=dtype, do_update=do_update)
     
     def _init_arrays(self, D, q, L):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q, L)
