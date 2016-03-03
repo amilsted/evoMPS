@@ -331,8 +331,7 @@ class EvoMPS_MPS_Uniform(object):
             except (las.ArpackNoConvergence, ValueError) as e:
                 log.warning("_calc_lr_ARPACK(nev=%u,ncv=%u): %s Try %u! (%s)", nev, ncv, e, i, "l" if calc_l else "r")
                 v0 = None
-                nev += 1
-                ncv = nev * 3
+                ncv += 5
                 
         if i == max_retries - 1:
             log.error("_calc_lr_ARPACK(nev=%u,ncv=%u): Failed to converge! (%s)", nev, ncv, "l" if calc_l else "r")
