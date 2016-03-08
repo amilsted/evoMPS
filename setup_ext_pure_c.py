@@ -11,5 +11,7 @@ from distutils.extension import Extension
 setup(
     name='evoMPS-ext-pure-c',
     ext_modules = [Extension("evoMPS.eps_maps_c", ["evoMPS/eps_maps_c.c"], 
-                             libraries=["cblas"])]
+                             libraries=["cblas"],
+                             extra_compile_args=['-fopenmp'],
+                             extra_link_args=['-fopenmp'])] #for openmp with gcc
 )
