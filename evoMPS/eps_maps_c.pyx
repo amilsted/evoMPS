@@ -38,18 +38,6 @@ cdef extern from "cblas.h":
     void cblas_zscal(int N, double *alpha, double *X, int incX) nogil
     
     void cblas_zaxpy(int n, double *a, double *x, int incx, double *y, int incy) nogil
-    
-#cdef extern from "capsule.h":
-#    void* SMCapsule_AsVoidPtr(object ptr)
-#
-#from blas_lapack cimport dgemm_t, zgemm_t, ddot_t, dgemv_t, zgemv_t, zdotu_t
-#
-#cdef dgemm_t *dgemm = <dgemm_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('gemm', dtype=float64)._cpointer)
-#cdef zgemm_t *zgemm = <zgemm_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('gemm', dtype=complex128)._cpointer)
-#cdef ddot_t *ddot = <ddot_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('dot', dtype=float64)._cpointer)
-#cdef dgemv_t *dgemv = <dgemv_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('gemv', dtype=float64)._cpointer)
-#cdef zdotu_t *zdotu = <zdotu_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('dotu', dtype=complex128)._cpointer)
-#cdef zgemv_t *zgemv = <zgemv_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('gemv', dtype=complex128)._cpointer)
 
 cdef inline int int_min(int a, int b) nogil: return a if a <= b else b
 cdef inline int int_max(int a, int b) nogil: return a if a > b else b
@@ -100,7 +88,7 @@ cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         if num_chunks == 1:
             eps_l_noop_id(A1_, A2_, out)
         else:
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
@@ -113,7 +101,7 @@ cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         if num_chunks == 1:
             eps_l_noop_diag(xd_, A1_, A2_, A1Hx[0,:,:], out)
         else:
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
@@ -128,7 +116,7 @@ cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
             eps_l_noop_dense(x_, A1_, A2_, A1Hx[0,:,:], out)
         else:
             outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128) 
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
@@ -180,7 +168,7 @@ cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         if num_chunks == 1:
             eps_r_noop_id(A1_, A2_, out)
         else:
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
@@ -193,7 +181,7 @@ cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         if num_chunks == 1:
             eps_r_noop_diag(xd_, A1_, A2_, A1x[0,:,:], out)
         else:
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
@@ -206,7 +194,7 @@ cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         if num_chunks == 1:
             eps_r_noop_dense(x_, A1_, A2_, A1x[0,:,:], out)
         else:
-            for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+            for i in prange(num_chunks, nogil=True):
                 si = i * lpc
                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])

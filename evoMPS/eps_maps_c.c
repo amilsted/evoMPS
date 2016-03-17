@@ -841,7 +841,7 @@ typedef PyArrayObject *__pyx_t_6evoMPS_10eps_maps_c_ndcmp2d;
  */
 typedef PyArrayObject *__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d;
 
-/* "evoMPS\eps_maps_c.pyx":58
+/* "evoMPS\eps_maps_c.pyx":46
  * 
  * ctypedef np.complex128_t cplx
  * ctypedef np.complex128_t[::1] cmp1d             # <<<<<<<<<<<<<<
@@ -850,7 +850,7 @@ typedef PyArrayObject *__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d;
  */
 typedef __Pyx_memviewslice __pyx_t_6evoMPS_10eps_maps_c_cmp1d;
 
-/* "evoMPS\eps_maps_c.pyx":59
+/* "evoMPS\eps_maps_c.pyx":47
  * ctypedef np.complex128_t cplx
  * ctypedef np.complex128_t[::1] cmp1d
  * ctypedef np.complex128_t[:, ::1] cmp2d             # <<<<<<<<<<<<<<
@@ -859,7 +859,7 @@ typedef __Pyx_memviewslice __pyx_t_6evoMPS_10eps_maps_c_cmp1d;
  */
 typedef __Pyx_memviewslice __pyx_t_6evoMPS_10eps_maps_c_cmp2d;
 
-/* "evoMPS\eps_maps_c.pyx":60
+/* "evoMPS\eps_maps_c.pyx":48
  * ctypedef np.complex128_t[::1] cmp1d
  * ctypedef np.complex128_t[:, ::1] cmp2d
  * ctypedef np.complex128_t[:, :, ::1] cmp3d             # <<<<<<<<<<<<<<
@@ -868,7 +868,7 @@ typedef __Pyx_memviewslice __pyx_t_6evoMPS_10eps_maps_c_cmp2d;
  */
 typedef __Pyx_memviewslice __pyx_t_6evoMPS_10eps_maps_c_cmp3d;
 
-/* "evoMPS\eps_maps_c.pyx":61
+/* "evoMPS\eps_maps_c.pyx":49
  * ctypedef np.complex128_t[:, ::1] cmp2d
  * ctypedef np.complex128_t[:, :, ::1] cmp3d
  * ctypedef np.complex128_t[:, :, :, ::1] cmp4d             # <<<<<<<<<<<<<<
@@ -1884,8 +1884,8 @@ static PyObject *__pyx_tuple__26;
 static PyObject *__pyx_tuple__27;
 static PyObject *__pyx_tuple__28;
 
-/* "evoMPS\eps_maps_c.pyx":54
- * #cdef zgemv_t *zgemv = <zgemv_t*>SMCapsule_AsVoidPtr(scipy.linalg.blas.get_blas_funcs('gemv', dtype=complex128)._cpointer)
+/* "evoMPS\eps_maps_c.pyx":42
+ *     void cblas_zaxpy(int n, double *a, double *x, int incx, double *y, int incy) nogil
  * 
  * cdef inline int int_min(int a, int b) nogil: return a if a <= b else b             # <<<<<<<<<<<<<<
  * cdef inline int int_max(int a, int b) nogil: return a if a > b else b
@@ -1908,7 +1908,7 @@ static CYTHON_INLINE int __pyx_f_6evoMPS_10eps_maps_c_int_min(int __pyx_v_a, int
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":55
+/* "evoMPS\eps_maps_c.pyx":43
  * 
  * cdef inline int int_min(int a, int b) nogil: return a if a <= b else b
  * cdef inline int int_max(int a, int b) nogil: return a if a > b else b             # <<<<<<<<<<<<<<
@@ -1932,7 +1932,7 @@ static CYTHON_INLINE int __pyx_f_6evoMPS_10eps_maps_c_int_max(int __pyx_v_a, int
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":63
+/* "evoMPS\eps_maps_c.pyx":51
  * ctypedef np.complex128_t[:, :, :, ::1] cmp4d
  * 
  * cpdef np.ndarray eps_l_noop(x, ndcmp3d A1, ndcmp3d A2):             # <<<<<<<<<<<<<<
@@ -1955,23 +1955,23 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop(PyObject *__pyx_v_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_l_noop", 0);
 
-  /* "evoMPS\eps_maps_c.pyx":64
+  /* "evoMPS\eps_maps_c.pyx":52
  * 
  * cpdef np.ndarray eps_l_noop(x, ndcmp3d A1, ndcmp3d A2):
  *     cdef np.ndarray ndout = np.empty((A1.shape[2], A2.shape[2]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  *     return eps_l_noop_inplace(x, A1, A2, ndout)
  * 
  */
-  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_empty); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_empty); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[2])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[2])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_3 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[2])); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_3 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[2])); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_GIVEREF(__pyx_t_1);
   PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_1);
@@ -1979,30 +1979,30 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop(PyObject *__pyx_v_
   PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_3);
   __pyx_t_1 = 0;
   __pyx_t_3 = 0;
-  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_GIVEREF(__pyx_t_4);
   PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4);
   __pyx_t_4 = 0;
-  __pyx_t_4 = PyDict_New(); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyDict_New(); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_5) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_5) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 64; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 52; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_ndout = ((PyArrayObject *)__pyx_t_5);
   __pyx_t_5 = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":65
+  /* "evoMPS\eps_maps_c.pyx":53
  * cpdef np.ndarray eps_l_noop(x, ndcmp3d A1, ndcmp3d A2):
  *     cdef np.ndarray ndout = np.empty((A1.shape[2], A2.shape[2]), dtype=np.complex128)
  *     return eps_l_noop_inplace(x, A1, A2, ndout)             # <<<<<<<<<<<<<<
@@ -2010,13 +2010,13 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop(PyObject *__pyx_v_
  * @cy.boundscheck(False)
  */
   __Pyx_XDECREF(((PyObject *)__pyx_r));
-  __pyx_t_5 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp2d)__pyx_v_ndout), 0)); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 65; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp2d)__pyx_v_ndout), 0)); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 53; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __pyx_r = ((PyArrayObject *)__pyx_t_5);
   __pyx_t_5 = 0;
   goto __pyx_L0;
 
-  /* "evoMPS\eps_maps_c.pyx":63
+  /* "evoMPS\eps_maps_c.pyx":51
  * ctypedef np.complex128_t[:, :, :, ::1] cmp4d
  * 
  * cpdef np.ndarray eps_l_noop(x, ndcmp3d A1, ndcmp3d A2):             # <<<<<<<<<<<<<<
@@ -2073,16 +2073,16 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_1eps_l_noop(PyObject *__pyx_self,
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A1)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A2)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_l_noop") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_l_noop") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
       }
     } else if (PyTuple_GET_SIZE(__pyx_args) != 3) {
       goto __pyx_L5_argtuple_error;
@@ -2097,14 +2097,14 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_1eps_l_noop(PyObject *__pyx_self,
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+  __Pyx_RaiseArgtupleInvalid("eps_l_noop", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
   __pyx_L3_error:;
   __Pyx_AddTraceback("evoMPS.eps_maps_c.eps_l_noop", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_r = __pyx_pf_6evoMPS_10eps_maps_c_eps_l_noop(__pyx_self, __pyx_v_x, __pyx_v_A1, __pyx_v_A2);
 
   /* function exit code */
@@ -2125,7 +2125,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_eps_l_noop(CYTHON_UNUSED PyObject
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_l_noop", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 63; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 51; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -2142,7 +2142,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_eps_l_noop(CYTHON_UNUSED PyObject
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":69
+/* "evoMPS\eps_maps_c.pyx":57
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):             # <<<<<<<<<<<<<<
@@ -2200,21 +2200,21 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
   __Pyx_INCREF((PyObject *)__pyx_v_A1);
   __Pyx_INCREF((PyObject *)__pyx_v_A2);
 
-  /* "evoMPS\eps_maps_c.pyx":70
+  /* "evoMPS\eps_maps_c.pyx":58
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)             # <<<<<<<<<<<<<<
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_ndout), __pyx_n_s_fill); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_ndout), __pyx_n_s_fill); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 58; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_tuple_, NULL); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_tuple_, NULL); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 58; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":71
+  /* "evoMPS\eps_maps_c.pyx":59
  * cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)
  *     cdef cmp2d out = ndout             # <<<<<<<<<<<<<<
@@ -2222,12 +2222,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  *     cdef int Nout = out.shape[0] * out.shape[1]
  */
   __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_ndout));
-  if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 71; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 59; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_out = __pyx_t_3;
   __pyx_t_3.memview = NULL;
   __pyx_t_3.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":73
+  /* "evoMPS\eps_maps_c.pyx":61
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  *     cdef int Nout = out.shape[0] * out.shape[1]             # <<<<<<<<<<<<<<
@@ -2236,7 +2236,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   __pyx_v_Nout = ((__pyx_v_out.shape[0]) * (__pyx_v_out.shape[1]));
 
-  /* "evoMPS\eps_maps_c.pyx":74
+  /* "evoMPS\eps_maps_c.pyx":62
  *     cdef cmp3d outs
  *     cdef int Nout = out.shape[0] * out.shape[1]
  *     cdef complex alpha = 1.0             # <<<<<<<<<<<<<<
@@ -2245,7 +2245,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1.0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":76
+  /* "evoMPS\eps_maps_c.pyx":64
  *     cdef complex alpha = 1.0
  * 
  *     cdef int d = A1.shape[0]             # <<<<<<<<<<<<<<
@@ -2254,7 +2254,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   __pyx_v_d = (__pyx_v_A1->dimensions[0]);
 
-  /* "evoMPS\eps_maps_c.pyx":78
+  /* "evoMPS\eps_maps_c.pyx":66
  *     cdef int d = A1.shape[0]
  *     cdef int i, si, sf
  *     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)             # <<<<<<<<<<<<<<
@@ -2263,7 +2263,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   __pyx_v_num_chunks = __pyx_f_6evoMPS_10eps_maps_c_int_min(omp_get_max_threads(), __pyx_v_d);
 
-  /* "evoMPS\eps_maps_c.pyx":79
+  /* "evoMPS\eps_maps_c.pyx":67
  *     cdef int i, si, sf
  *     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk             # <<<<<<<<<<<<<<
@@ -2272,41 +2272,41 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   if (unlikely(__pyx_v_num_chunks == 0)) {
     PyErr_SetString(PyExc_ZeroDivisionError, "integer division or modulo by zero");
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 79; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 67; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   }
   else if (sizeof(int) == sizeof(long) && (!(((int)-1) > 0)) && unlikely(__pyx_v_num_chunks == (int)-1)  && unlikely(UNARY_NEG_WOULD_OVERFLOW(__pyx_v_d))) {
     PyErr_SetString(PyExc_OverflowError, "value too large to perform division");
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 79; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 67; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   }
   __pyx_v_lpc = __pyx_f_6evoMPS_10eps_maps_c_int_max(1, __Pyx_div_int(__pyx_v_d, __pyx_v_num_chunks));
 
-  /* "evoMPS\eps_maps_c.pyx":81
+  /* "evoMPS\eps_maps_c.pyx":69
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
  * 
  *     if not A1.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A1), __pyx_n_s_flags); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A1), __pyx_n_s_flags); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_1 = PyObject_GetItem(__pyx_t_2, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_1 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+  __pyx_t_1 = PyObject_GetItem(__pyx_t_2, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_1 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_t_5 = ((!__pyx_t_4) != 0);
   if (__pyx_t_5) {
 
-    /* "evoMPS\eps_maps_c.pyx":82
+    /* "evoMPS\eps_maps_c.pyx":70
  * 
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)             # <<<<<<<<<<<<<<
  *     if not A2.flags['C_CONTIGUOUS']:
  *         A2 = np.ascontiguousarray(A2)
  */
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_t_2 = NULL;
@@ -2320,25 +2320,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
       }
     }
     if (!__pyx_t_2) {
-      __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_t_6, ((PyObject *)__pyx_v_A1)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_t_6, ((PyObject *)__pyx_v_A1)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
     } else {
-      __pyx_t_7 = PyTuple_New(1+1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = PyTuple_New(1+1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
       __Pyx_GIVEREF(__pyx_t_2); PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_2); __pyx_t_2 = NULL;
       __Pyx_INCREF(((PyObject *)__pyx_v_A1));
       __Pyx_GIVEREF(((PyObject *)__pyx_v_A1));
       PyTuple_SET_ITEM(__pyx_t_7, 0+1, ((PyObject *)__pyx_v_A1));
-      __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, NULL); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, NULL); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     }
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF_SET(__pyx_v_A1, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d)__pyx_t_1));
     __pyx_t_1 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":81
+    /* "evoMPS\eps_maps_c.pyx":69
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
  * 
  *     if not A1.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -2347,33 +2347,33 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":83
+  /* "evoMPS\eps_maps_c.pyx":71
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *         A2 = np.ascontiguousarray(A2)
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A2), __pyx_n_s_flags); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 83; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A2), __pyx_n_s_flags); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 71; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_6 = PyObject_GetItem(__pyx_t_1, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 83; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+  __pyx_t_6 = PyObject_GetItem(__pyx_t_1, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 71; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_5 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 83; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_5 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 71; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __pyx_t_4 = ((!__pyx_t_5) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":84
+    /* "evoMPS\eps_maps_c.pyx":72
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:
  *         A2 = np.ascontiguousarray(A2)             # <<<<<<<<<<<<<<
  * 
  *     cdef cmp3d A1_ = A1
  */
-    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __pyx_t_1 = NULL;
@@ -2387,25 +2387,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
       }
     }
     if (!__pyx_t_1) {
-      __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_7, ((PyObject *)__pyx_v_A2)); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_7, ((PyObject *)__pyx_v_A2)); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
     } else {
-      __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_GIVEREF(__pyx_t_1); PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_1); __pyx_t_1 = NULL;
       __Pyx_INCREF(((PyObject *)__pyx_v_A2));
       __Pyx_GIVEREF(((PyObject *)__pyx_v_A2));
       PyTuple_SET_ITEM(__pyx_t_2, 0+1, ((PyObject *)__pyx_v_A2));
-      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     }
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (!(likely(((__pyx_t_6) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_6, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 84; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (!(likely(((__pyx_t_6) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_6, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 72; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF_SET(__pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d)__pyx_t_6));
     __pyx_t_6 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":83
+    /* "evoMPS\eps_maps_c.pyx":71
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -2414,7 +2414,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":86
+  /* "evoMPS\eps_maps_c.pyx":74
  *         A2 = np.ascontiguousarray(A2)
  * 
  *     cdef cmp3d A1_ = A1             # <<<<<<<<<<<<<<
@@ -2422,12 +2422,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  *     cdef cmp2d x_
  */
   __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_A1));
-  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 86; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 74; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_A1_ = __pyx_t_8;
   __pyx_t_8.memview = NULL;
   __pyx_t_8.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":87
+  /* "evoMPS\eps_maps_c.pyx":75
  * 
  *     cdef cmp3d A1_ = A1
  *     cdef cmp3d A2_ = A2             # <<<<<<<<<<<<<<
@@ -2435,12 +2435,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  *     cdef cmp1d xd_
  */
   __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_A2));
-  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 87; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 75; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_A2_ = __pyx_t_8;
   __pyx_t_8.memview = NULL;
   __pyx_t_8.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":92
+  /* "evoMPS\eps_maps_c.pyx":80
  *     cdef cmp3d A1Hx
  * 
  *     assert A1_.shape[0] == A2_.shape[0], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -2451,12 +2451,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
   if (unlikely(!Py_OptimizeFlag)) {
     if (unlikely(!(((__pyx_v_A1_.shape[0]) == (__pyx_v_A2_.shape[0])) != 0))) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 92; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 80; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":93
+  /* "evoMPS\eps_maps_c.pyx":81
  * 
  *     assert A1_.shape[0] == A2_.shape[0], "dimension mismatch"
  *     assert A1_.shape[1] == x.shape[0], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -2465,26 +2465,26 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (unlikely(!__pyx_t_4)) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 93; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 81; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":94
+  /* "evoMPS\eps_maps_c.pyx":82
  *     assert A1_.shape[0] == A2_.shape[0], "dimension mismatch"
  *     assert A1_.shape[1] == x.shape[0], "dimension mismatch"
  *     assert x.shape[1] == A2_.shape[1], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -2493,26 +2493,26 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = PyInt_FromSsize_t((__pyx_v_A2_.shape[1])); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyInt_FromSsize_t((__pyx_v_A2_.shape[1])); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_6 = PyObject_RichCompare(__pyx_t_2, __pyx_t_7, Py_EQ); __Pyx_XGOTREF(__pyx_t_6); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyObject_RichCompare(__pyx_t_2, __pyx_t_7, Py_EQ); __Pyx_XGOTREF(__pyx_t_6); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (unlikely(!__pyx_t_4)) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 82; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":96
+  /* "evoMPS\eps_maps_c.pyx":84
  *     assert x.shape[1] == A2_.shape[1], "dimension mismatch"
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads             # <<<<<<<<<<<<<<
@@ -2522,25 +2522,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
   __pyx_t_4 = ((__pyx_v_num_chunks > 1) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":97
+    /* "evoMPS\eps_maps_c.pyx":85
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  * 
  *     if isinstance(x, mm.eyemat):
  */
-    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_9 = PyTuple_New(3); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyTuple_New(3); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_GIVEREF(__pyx_t_6);
     PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_6);
@@ -2551,33 +2551,33 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
     __pyx_t_6 = 0;
     __pyx_t_2 = 0;
     __pyx_t_1 = 0;
-    __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_GIVEREF(__pyx_t_9);
     PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_9);
     __pyx_t_9 = 0;
-    __pyx_t_9 = PyDict_New(); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyDict_New(); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (PyDict_SetItem(__pyx_t_9, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_9, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_6);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 85; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_outs = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":96
+    /* "evoMPS\eps_maps_c.pyx":84
  *     assert x.shape[1] == A2_.shape[1], "dimension mismatch"
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads             # <<<<<<<<<<<<<<
@@ -2586,24 +2586,24 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":99
+  /* "evoMPS\eps_maps_c.pyx":87
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
  * 
  *     if isinstance(x, mm.eyemat):             # <<<<<<<<<<<<<<
  *         if num_chunks == 1:
  *             eps_l_noop_id(A1_, A2_, out)
  */
-  __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 87; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_eyemat); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_eyemat); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 87; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_4 = PyObject_IsInstance(__pyx_v_x, __pyx_t_9); if (unlikely(__pyx_t_4 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyObject_IsInstance(__pyx_v_x, __pyx_t_9); if (unlikely(__pyx_t_4 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 87; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   __pyx_t_5 = (__pyx_t_4 != 0);
   if (__pyx_t_5) {
 
-    /* "evoMPS\eps_maps_c.pyx":100
+    /* "evoMPS\eps_maps_c.pyx":88
  * 
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -2613,16 +2613,16 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
     __pyx_t_5 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_5) {
 
-      /* "evoMPS\eps_maps_c.pyx":101
+      /* "evoMPS\eps_maps_c.pyx":89
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:
  *             eps_l_noop_id(A1_, A2_, out)             # <<<<<<<<<<<<<<
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  */
       __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_v_A1_, __pyx_v_A2_, __pyx_v_out);
 
-      /* "evoMPS\eps_maps_c.pyx":100
+      /* "evoMPS\eps_maps_c.pyx":88
  * 
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -2632,10 +2632,10 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
       goto __pyx_L7;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":103
+    /* "evoMPS\eps_maps_c.pyx":91
  *             eps_l_noop_id(A1_, A2_, out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -2666,7 +2666,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
                 if (__pyx_t_12 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_14, __pyx_t_17, __pyx_t_16) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -2676,7 +2676,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_sf) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_si)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
@@ -2686,17 +2686,17 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
                                 __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":104
+                                /* "evoMPS\eps_maps_c.pyx":92
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":105
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":93
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
@@ -2709,7 +2709,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":106
+                                /* "evoMPS\eps_maps_c.pyx":94
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -2734,7 +2734,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(PyObject *
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 106; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A1_.shape[1];
@@ -2763,7 +2763,7 @@ __pyx_t_16.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 106; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A2_.shape[1];
@@ -2791,7 +2791,7 @@ __pyx_t_17.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 106; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 94; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -2834,8 +2834,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                                 #endif /* _OPENMP */
                                 {
                                     __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_si;
                                 }
                                 __pyx_L16:;
                                 #ifdef _OPENMP
@@ -2852,9 +2852,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         #ifdef WITH_THREAD
                         PyGILState_Release(__pyx_gilstate_save);
                         #endif
@@ -2869,8 +2869,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                 }
                 if (__pyx_parallel_why) {
                   __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_si = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L8_return;
                         case 4:
@@ -2897,10 +2897,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":103
+          /* "evoMPS\eps_maps_c.pyx":91
  *             eps_l_noop_id(A1_, A2_, out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -2929,7 +2929,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     }
     __pyx_L7:;
 
-    /* "evoMPS\eps_maps_c.pyx":99
+    /* "evoMPS\eps_maps_c.pyx":87
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
  * 
  *     if isinstance(x, mm.eyemat):             # <<<<<<<<<<<<<<
@@ -2939,59 +2939,59 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     goto __pyx_L6;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":107
+  /* "evoMPS\eps_maps_c.pyx":95
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):             # <<<<<<<<<<<<<<
  *         if x.diag.flags['C_CONTIGUOUS']:
  *             xd_ = x.diag
  */
-  __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 95; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_9);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_simple_diag_matrix); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_simple_diag_matrix); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 95; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-  __pyx_t_5 = PyObject_IsInstance(__pyx_v_x, __pyx_t_6); if (unlikely(__pyx_t_5 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = PyObject_IsInstance(__pyx_v_x, __pyx_t_6); if (unlikely(__pyx_t_5 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 95; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __pyx_t_4 = (__pyx_t_5 != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":108
+    /* "evoMPS\eps_maps_c.pyx":96
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *             xd_ = x.diag
  *         else:
  */
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 108; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 96; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flags); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 108; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flags); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 96; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = PyObject_GetItem(__pyx_t_9, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 108; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_6 = PyObject_GetItem(__pyx_t_9, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 96; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 108; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 96; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":109
+      /* "evoMPS\eps_maps_c.pyx":97
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:
  *             xd_ = x.diag             # <<<<<<<<<<<<<<
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)
  */
-      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 109; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
       __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dc___pyx_t_double_complex(__pyx_t_6);
-      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 109; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 97; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_v_xd_ = __pyx_t_18;
       __pyx_t_18.memview = NULL;
       __pyx_t_18.data = NULL;
 
-      /* "evoMPS\eps_maps_c.pyx":108
+      /* "evoMPS\eps_maps_c.pyx":96
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -3001,7 +3001,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
       goto __pyx_L17;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":111
+    /* "evoMPS\eps_maps_c.pyx":99
  *             xd_ = x.diag
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)             # <<<<<<<<<<<<<<
@@ -3009,12 +3009,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
  *         if num_chunks == 1:
  */
     /*else*/ {
-      __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
-      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
       __pyx_t_7 = NULL;
       if (CYTHON_COMPILING_IN_CPYTHON && unlikely(PyMethod_Check(__pyx_t_1))) {
@@ -3027,23 +3027,23 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
         }
       }
       if (!__pyx_t_7) {
-        __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
         __Pyx_GOTREF(__pyx_t_6);
       } else {
-        __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_2);
         __Pyx_GIVEREF(__pyx_t_7); PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_7); __pyx_t_7 = NULL;
         __Pyx_GIVEREF(__pyx_t_9);
         PyTuple_SET_ITEM(__pyx_t_2, 0+1, __pyx_t_9);
         __pyx_t_9 = 0;
-        __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_6);
         __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       }
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dc___pyx_t_double_complex(__pyx_t_6);
-      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 111; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 99; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_v_xd_ = __pyx_t_18;
       __pyx_t_18.memview = NULL;
@@ -3051,25 +3051,25 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     }
     __pyx_L17:;
 
-    /* "evoMPS\eps_maps_c.pyx":112
+    /* "evoMPS\eps_maps_c.pyx":100
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], xd_.shape[0]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  *         if num_chunks == 1:
  *             eps_l_noop_diag(xd_, A1_, A2_, A1Hx[0,:,:], out)
  */
-    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_A1_.shape[2])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_A1_.shape[2])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_xd_.shape[0])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_xd_.shape[0])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
-    __pyx_t_7 = PyTuple_New(3); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyTuple_New(3); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_GIVEREF(__pyx_t_6);
     PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_6);
@@ -3080,33 +3080,33 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     __pyx_t_6 = 0;
     __pyx_t_2 = 0;
     __pyx_t_9 = 0;
-    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_7);
     __pyx_t_7 = 0;
-    __pyx_t_7 = PyDict_New(); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyDict_New(); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_9, __pyx_t_7); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_9, __pyx_t_7); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_6);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 100; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_A1Hx = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":113
+    /* "evoMPS\eps_maps_c.pyx":101
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -3116,12 +3116,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     __pyx_t_4 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":114
+      /* "evoMPS\eps_maps_c.pyx":102
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:
  *             eps_l_noop_diag(xd_, A1_, A2_, A1Hx[0,:,:], out)             # <<<<<<<<<<<<<<
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  */
       __pyx_t_17.data = __pyx_v_A1Hx.data;
       __pyx_t_17.memview = __pyx_v_A1Hx.memview;
@@ -3134,7 +3134,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
         __pyx_tmp_idx += __pyx_tmp_shape;
     if (0 && (__pyx_tmp_idx < 0 || __pyx_tmp_idx >= __pyx_tmp_shape)) {
         PyErr_SetString(PyExc_IndexError, "Index out of bounds (axis 0)");
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 114; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 102; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3150,7 +3150,7 @@ __pyx_t_17.strides[1] = __pyx_v_A1Hx.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A2_, __pyx_t_17, __pyx_v_out);
       __PYX_XDEC_MEMVIEW(&__pyx_t_17, 1);
 
-      /* "evoMPS\eps_maps_c.pyx":113
+      /* "evoMPS\eps_maps_c.pyx":101
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -3160,10 +3160,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
       goto __pyx_L18;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":116
+    /* "evoMPS\eps_maps_c.pyx":104
  *             eps_l_noop_diag(xd_, A1_, A2_, A1Hx[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -3194,7 +3194,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                 if (__pyx_t_10 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_16, __pyx_t_17, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -3204,7 +3204,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_sf) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_si)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_10; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
@@ -3214,17 +3214,17 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                                 __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":117
+                                /* "evoMPS\eps_maps_c.pyx":105
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":118
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":106
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
@@ -3237,7 +3237,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":119
+                                /* "evoMPS\eps_maps_c.pyx":107
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -3262,7 +3262,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 119; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A1_.shape[1];
@@ -3291,7 +3291,7 @@ __pyx_t_14.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 119; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A2_.shape[1];
@@ -3319,7 +3319,7 @@ __pyx_t_17.data = __pyx_v_A1Hx.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 119; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3349,7 +3349,7 @@ __pyx_t_19.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 119; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 107; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3393,8 +3393,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                                 #endif /* _OPENMP */
                                 {
                                     __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_si;
                                 }
                                 __pyx_L27:;
                                 #ifdef _OPENMP
@@ -3411,8 +3411,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_19, 0);
                         #ifdef WITH_THREAD
@@ -3429,8 +3429,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                 }
                 if (__pyx_parallel_why) {
                   __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_si = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L19_return;
                         case 4:
@@ -3457,10 +3457,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":116
+          /* "evoMPS\eps_maps_c.pyx":104
  *             eps_l_noop_diag(xd_, A1_, A2_, A1Hx[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -3489,7 +3489,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     }
     __pyx_L18:;
 
-    /* "evoMPS\eps_maps_c.pyx":107
+    /* "evoMPS\eps_maps_c.pyx":95
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):             # <<<<<<<<<<<<<<
@@ -3499,7 +3499,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     goto __pyx_L6;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":121
+  /* "evoMPS\eps_maps_c.pyx":109
  *                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  *     else:
  *         if x.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -3507,16 +3507,16 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  *         else:
  */
   /*else*/ {
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_flags); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 121; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_flags); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 109; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = PyObject_GetItem(__pyx_t_6, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_7 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 121; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_7 = PyObject_GetItem(__pyx_t_6, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_7 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 109; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 121; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 109; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":122
+      /* "evoMPS\eps_maps_c.pyx":110
  *     else:
  *         if x.flags['C_CONTIGUOUS']:
  *             x_ = x             # <<<<<<<<<<<<<<
@@ -3524,12 +3524,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  *             x_ = np.ascontiguousarray(x)
  */
       __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(__pyx_v_x);
-      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 122; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 110; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __pyx_v_x_ = __pyx_t_3;
       __pyx_t_3.memview = NULL;
       __pyx_t_3.data = NULL;
 
-      /* "evoMPS\eps_maps_c.pyx":121
+      /* "evoMPS\eps_maps_c.pyx":109
  *                 eps_l_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  *     else:
  *         if x.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -3539,7 +3539,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
       goto __pyx_L28;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":124
+    /* "evoMPS\eps_maps_c.pyx":112
  *             x_ = x
  *         else:
  *             x_ = np.ascontiguousarray(x)             # <<<<<<<<<<<<<<
@@ -3547,9 +3547,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  * 
  */
     /*else*/ {
-      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_t_6 = NULL;
@@ -3563,22 +3563,22 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
         }
       }
       if (!__pyx_t_6) {
-        __pyx_t_7 = __Pyx_PyObject_CallOneArg(__pyx_t_9, __pyx_v_x); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_7 = __Pyx_PyObject_CallOneArg(__pyx_t_9, __pyx_v_x); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_7);
       } else {
-        __pyx_t_1 = PyTuple_New(1+1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_1 = PyTuple_New(1+1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_1);
         __Pyx_GIVEREF(__pyx_t_6); PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_6); __pyx_t_6 = NULL;
         __Pyx_INCREF(__pyx_v_x);
         __Pyx_GIVEREF(__pyx_v_x);
         PyTuple_SET_ITEM(__pyx_t_1, 0+1, __pyx_v_x);
-        __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_1, NULL); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_1, NULL); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_7);
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       }
       __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
       __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(__pyx_t_7);
-      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 124; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 112; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
       __pyx_v_x_ = __pyx_t_3;
       __pyx_t_3.memview = NULL;
@@ -3586,25 +3586,25 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     }
     __pyx_L28:;
 
-    /* "evoMPS\eps_maps_c.pyx":125
+    /* "evoMPS\eps_maps_c.pyx":113
  *         else:
  *             x_ = np.ascontiguousarray(x)
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], x_.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  * 
  *         if num_chunks == 1:
  */
-    __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_A1_.shape[2])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_A1_.shape[2])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_x_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_x_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_7);
@@ -3615,33 +3615,33 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     __pyx_t_7 = 0;
     __pyx_t_1 = 0;
     __pyx_t_6 = 0;
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_2);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_2);
     __pyx_t_2 = 0;
-    __pyx_t_2 = PyDict_New(); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyDict_New(); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    if (PyDict_SetItem(__pyx_t_2, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_2, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_6, __pyx_t_2); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_6, __pyx_t_2); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_7);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 125; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 113; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_A1Hx = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":127
+    /* "evoMPS\eps_maps_c.pyx":115
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], x_.shape[1]), dtype=np.complex128)
  * 
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -3651,7 +3651,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     __pyx_t_4 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":128
+      /* "evoMPS\eps_maps_c.pyx":116
  * 
  *         if num_chunks == 1:
  *             eps_l_noop_dense(x_, A1_, A2_, A1Hx[0,:,:], out)             # <<<<<<<<<<<<<<
@@ -3669,7 +3669,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
         __pyx_tmp_idx += __pyx_tmp_shape;
     if (0 && (__pyx_tmp_idx < 0 || __pyx_tmp_idx >= __pyx_tmp_shape)) {
         PyErr_SetString(PyExc_IndexError, "Index out of bounds (axis 0)");
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 128; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 116; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3685,7 +3685,7 @@ __pyx_t_19.strides[1] = __pyx_v_A1Hx.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A2_, __pyx_t_19, __pyx_v_out);
       __PYX_XDEC_MEMVIEW(&__pyx_t_19, 1);
 
-      /* "evoMPS\eps_maps_c.pyx":127
+      /* "evoMPS\eps_maps_c.pyx":115
  *         A1Hx = np.zeros((num_chunks, A1_.shape[2], x_.shape[1]), dtype=np.complex128)
  * 
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -3695,26 +3695,26 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
       goto __pyx_L29;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":130
+    /* "evoMPS\eps_maps_c.pyx":118
  *             eps_l_noop_dense(x_, A1_, A2_, A1Hx[0,:,:], out)
  *         else:
  *             outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  */
     /*else*/ {
-      __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
-      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-      __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
-      __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
-      __pyx_t_1 = PyTuple_New(3); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = PyTuple_New(3); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_GIVEREF(__pyx_t_7);
       PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_7);
@@ -3725,37 +3725,37 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
       __pyx_t_7 = 0;
       __pyx_t_6 = 0;
       __pyx_t_9 = 0;
-      __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
       __Pyx_GIVEREF(__pyx_t_1);
       PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_1);
       __pyx_t_1 = 0;
-      __pyx_t_1 = PyDict_New(); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = PyDict_New(); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
-      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-      if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (PyDict_SetItem(__pyx_t_1, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-      __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_9, __pyx_t_1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_9, __pyx_t_1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_7);
-      if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 130; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 118; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
       __PYX_XDEC_MEMVIEW(&__pyx_v_outs, 1);
       __pyx_v_outs = __pyx_t_8;
       __pyx_t_8.memview = NULL;
       __pyx_t_8.data = NULL;
 
-      /* "evoMPS\eps_maps_c.pyx":131
+      /* "evoMPS\eps_maps_c.pyx":119
  *         else:
  *             outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -3785,7 +3785,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                 if (__pyx_t_12 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_16, __pyx_t_17, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -3795,7 +3795,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_sf) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_si)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
@@ -3805,17 +3805,17 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                                 __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":132
+                                /* "evoMPS\eps_maps_c.pyx":120
  *             outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":133
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":121
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
@@ -3828,7 +3828,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":134
+                                /* "evoMPS\eps_maps_c.pyx":122
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -3853,7 +3853,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 134; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 122; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A1_.shape[1];
@@ -3882,7 +3882,7 @@ __pyx_t_16.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 134; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 122; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A2_.shape[1];
@@ -3910,7 +3910,7 @@ __pyx_t_19.data = __pyx_v_A1Hx.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 134; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 122; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3940,7 +3940,7 @@ __pyx_t_17.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 134; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 122; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -3984,8 +3984,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                                 #endif /* _OPENMP */
                                 {
                                     __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_si;
                                 }
                                 __pyx_L38:;
                                 #ifdef _OPENMP
@@ -4002,8 +4002,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_19, 0);
                         #ifdef WITH_THREAD
@@ -4020,8 +4020,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                 }
                 if (__pyx_parallel_why) {
                   __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_si = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L30_return;
                         case 4:
@@ -4048,10 +4048,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":131
+          /* "evoMPS\eps_maps_c.pyx":119
  *         else:
  *             outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -4082,7 +4082,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   }
   __pyx_L6:;
 
-  /* "evoMPS\eps_maps_c.pyx":136
+  /* "evoMPS\eps_maps_c.pyx":124
  *                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads             # <<<<<<<<<<<<<<
@@ -4092,7 +4092,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   __pyx_t_4 = ((__pyx_v_num_chunks > 1) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":137
+    /* "evoMPS\eps_maps_c.pyx":125
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:             # <<<<<<<<<<<<<<
@@ -4106,7 +4106,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
         #endif
         /*try:*/ {
 
-          /* "evoMPS\eps_maps_c.pyx":138
+          /* "evoMPS\eps_maps_c.pyx":126
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:
  *             for i in xrange(0, num_chunks):             # <<<<<<<<<<<<<<
@@ -4117,7 +4117,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
           for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11+=1) {
             __pyx_v_i = __pyx_t_11;
 
-            /* "evoMPS\eps_maps_c.pyx":139
+            /* "evoMPS\eps_maps_c.pyx":127
  *         with nogil:
  *             for i in xrange(0, num_chunks):
  *                 cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)             # <<<<<<<<<<<<<<
@@ -4133,7 +4133,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
           }
         }
 
-        /* "evoMPS\eps_maps_c.pyx":137
+        /* "evoMPS\eps_maps_c.pyx":125
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:             # <<<<<<<<<<<<<<
@@ -4151,7 +4151,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
         }
     }
 
-    /* "evoMPS\eps_maps_c.pyx":136
+    /* "evoMPS\eps_maps_c.pyx":124
  *                 eps_l_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1Hx[i,:,:], outs[i,:,:])
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads             # <<<<<<<<<<<<<<
@@ -4160,7 +4160,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":141
+  /* "evoMPS\eps_maps_c.pyx":129
  *                 cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)
  * 
  *     return ndout             # <<<<<<<<<<<<<<
@@ -4172,7 +4172,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   __pyx_r = ((PyArrayObject *)__pyx_v_ndout);
   goto __pyx_L0;
 
-  /* "evoMPS\eps_maps_c.pyx":69
+  /* "evoMPS\eps_maps_c.pyx":57
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):             # <<<<<<<<<<<<<<
@@ -4246,21 +4246,21 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_3eps_l_noop_inplace(PyObject *__p
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A1)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A2)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  3:
         if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_ndout)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 3); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, 3); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_l_noop_inplace") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_l_noop_inplace") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
       }
     } else if (PyTuple_GET_SIZE(__pyx_args) != 4) {
       goto __pyx_L5_argtuple_error;
@@ -4277,15 +4277,15 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_3eps_l_noop_inplace(PyObject *__p
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+  __Pyx_RaiseArgtupleInvalid("eps_l_noop_inplace", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
   __pyx_L3_error:;
   __Pyx_AddTraceback("evoMPS.eps_maps_c.eps_l_noop_inplace", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_ndout), __pyx_ptype_5numpy_ndarray, 1, "ndout", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_ndout), __pyx_ptype_5numpy_ndarray, 1, "ndout", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_r = __pyx_pf_6evoMPS_10eps_maps_c_2eps_l_noop_inplace(__pyx_self, __pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout);
 
   /* function exit code */
@@ -4306,7 +4306,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_2eps_l_noop_inplace(CYTHON_UNUSED
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_l_noop_inplace", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 69; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 57; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4323,7 +4323,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_2eps_l_noop_inplace(CYTHON_UNUSED
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":143
+/* "evoMPS\eps_maps_c.pyx":131
  *     return ndout
  * 
  * cpdef np.ndarray eps_r_noop(x, ndcmp3d A1, ndcmp3d A2):             # <<<<<<<<<<<<<<
@@ -4346,23 +4346,23 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop(PyObject *__pyx_v_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_r_noop", 0);
 
-  /* "evoMPS\eps_maps_c.pyx":144
+  /* "evoMPS\eps_maps_c.pyx":132
  * 
  * cpdef np.ndarray eps_r_noop(x, ndcmp3d A1, ndcmp3d A2):
  *     cdef np.ndarray ndout = np.empty((A1.shape[1], A2.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  *     return eps_r_noop_inplace(x, A1, A2, ndout)
  * 
  */
-  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_empty); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_empty); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_3 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[1])); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_3 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[1])); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyTuple_New(2); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_GIVEREF(__pyx_t_1);
   PyTuple_SET_ITEM(__pyx_t_4, 0, __pyx_t_1);
@@ -4370,30 +4370,30 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop(PyObject *__pyx_v_
   PyTuple_SET_ITEM(__pyx_t_4, 1, __pyx_t_3);
   __pyx_t_1 = 0;
   __pyx_t_3 = 0;
-  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_3 = PyTuple_New(1); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_3);
   __Pyx_GIVEREF(__pyx_t_4);
   PyTuple_SET_ITEM(__pyx_t_3, 0, __pyx_t_4);
   __pyx_t_4 = 0;
-  __pyx_t_4 = PyDict_New(); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyDict_New(); if (unlikely(!__pyx_t_4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_4);
-  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_5) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (PyDict_SetItem(__pyx_t_4, __pyx_n_s_dtype, __pyx_t_5) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_Call(__pyx_t_2, __pyx_t_3, __pyx_t_4); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (!(likely(((__pyx_t_5) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_5, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 132; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_ndout = ((PyArrayObject *)__pyx_t_5);
   __pyx_t_5 = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":145
+  /* "evoMPS\eps_maps_c.pyx":133
  * cpdef np.ndarray eps_r_noop(x, ndcmp3d A1, ndcmp3d A2):
  *     cdef np.ndarray ndout = np.empty((A1.shape[1], A2.shape[1]), dtype=np.complex128)
  *     return eps_r_noop_inplace(x, A1, A2, ndout)             # <<<<<<<<<<<<<<
@@ -4401,13 +4401,13 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop(PyObject *__pyx_v_
  * @cy.boundscheck(False)
  */
   __Pyx_XDECREF(((PyObject *)__pyx_r));
-  __pyx_t_5 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp2d)__pyx_v_ndout), 0)); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 145; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp2d)__pyx_v_ndout), 0)); if (unlikely(!__pyx_t_5)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 133; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_5);
   __pyx_r = ((PyArrayObject *)__pyx_t_5);
   __pyx_t_5 = 0;
   goto __pyx_L0;
 
-  /* "evoMPS\eps_maps_c.pyx":143
+  /* "evoMPS\eps_maps_c.pyx":131
  *     return ndout
  * 
  * cpdef np.ndarray eps_r_noop(x, ndcmp3d A1, ndcmp3d A2):             # <<<<<<<<<<<<<<
@@ -4464,16 +4464,16 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_5eps_r_noop(PyObject *__pyx_self,
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A1)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A2)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_r_noop") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_r_noop") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
       }
     } else if (PyTuple_GET_SIZE(__pyx_args) != 3) {
       goto __pyx_L5_argtuple_error;
@@ -4488,14 +4488,14 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_5eps_r_noop(PyObject *__pyx_self,
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+  __Pyx_RaiseArgtupleInvalid("eps_r_noop", 1, 3, 3, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
   __pyx_L3_error:;
   __Pyx_AddTraceback("evoMPS.eps_maps_c.eps_r_noop", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_r = __pyx_pf_6evoMPS_10eps_maps_c_4eps_r_noop(__pyx_self, __pyx_v_x, __pyx_v_A1, __pyx_v_A2);
 
   /* function exit code */
@@ -4516,7 +4516,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_4eps_r_noop(CYTHON_UNUSED PyObjec
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_r_noop", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 143; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 131; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -4533,7 +4533,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_4eps_r_noop(CYTHON_UNUSED PyObjec
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":149
+/* "evoMPS\eps_maps_c.pyx":137
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):             # <<<<<<<<<<<<<<
@@ -4591,21 +4591,21 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
   __Pyx_INCREF((PyObject *)__pyx_v_A1);
   __Pyx_INCREF((PyObject *)__pyx_v_A2);
 
-  /* "evoMPS\eps_maps_c.pyx":150
+  /* "evoMPS\eps_maps_c.pyx":138
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)             # <<<<<<<<<<<<<<
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_ndout), __pyx_n_s_fill); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_ndout), __pyx_n_s_fill); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 138; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_tuple__2, NULL); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_tuple__2, NULL); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 138; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":151
+  /* "evoMPS\eps_maps_c.pyx":139
  * cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)
  *     cdef cmp2d out = ndout             # <<<<<<<<<<<<<<
@@ -4613,12 +4613,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  *     cdef int Nout = out.shape[0] * out.shape[1]
  */
   __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_ndout));
-  if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 151; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 139; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_out = __pyx_t_3;
   __pyx_t_3.memview = NULL;
   __pyx_t_3.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":153
+  /* "evoMPS\eps_maps_c.pyx":141
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  *     cdef int Nout = out.shape[0] * out.shape[1]             # <<<<<<<<<<<<<<
@@ -4627,7 +4627,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   __pyx_v_Nout = ((__pyx_v_out.shape[0]) * (__pyx_v_out.shape[1]));
 
-  /* "evoMPS\eps_maps_c.pyx":154
+  /* "evoMPS\eps_maps_c.pyx":142
  *     cdef cmp3d outs
  *     cdef int Nout = out.shape[0] * out.shape[1]
  *     cdef complex alpha = 1.0             # <<<<<<<<<<<<<<
@@ -4636,7 +4636,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1.0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":156
+  /* "evoMPS\eps_maps_c.pyx":144
  *     cdef complex alpha = 1.0
  * 
  *     cdef int d = A1.shape[0]             # <<<<<<<<<<<<<<
@@ -4645,7 +4645,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   __pyx_v_d = (__pyx_v_A1->dimensions[0]);
 
-  /* "evoMPS\eps_maps_c.pyx":158
+  /* "evoMPS\eps_maps_c.pyx":146
  *     cdef int d = A1.shape[0]
  *     cdef int i, si, sf
  *     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)             # <<<<<<<<<<<<<<
@@ -4654,7 +4654,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   __pyx_v_num_chunks = __pyx_f_6evoMPS_10eps_maps_c_int_min(omp_get_max_threads(), __pyx_v_d);
 
-  /* "evoMPS\eps_maps_c.pyx":159
+  /* "evoMPS\eps_maps_c.pyx":147
  *     cdef int i, si, sf
  *     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk             # <<<<<<<<<<<<<<
@@ -4663,41 +4663,41 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   if (unlikely(__pyx_v_num_chunks == 0)) {
     PyErr_SetString(PyExc_ZeroDivisionError, "integer division or modulo by zero");
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 159; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 147; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   }
   else if (sizeof(int) == sizeof(long) && (!(((int)-1) > 0)) && unlikely(__pyx_v_num_chunks == (int)-1)  && unlikely(UNARY_NEG_WOULD_OVERFLOW(__pyx_v_d))) {
     PyErr_SetString(PyExc_OverflowError, "value too large to perform division");
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 159; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 147; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   }
   __pyx_v_lpc = __pyx_f_6evoMPS_10eps_maps_c_int_max(1, __Pyx_div_int(__pyx_v_d, __pyx_v_num_chunks));
 
-  /* "evoMPS\eps_maps_c.pyx":161
+  /* "evoMPS\eps_maps_c.pyx":149
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
  * 
  *     if not A1.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:
  */
-  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A1), __pyx_n_s_flags); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_2 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A1), __pyx_n_s_flags); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_2);
-  __pyx_t_1 = PyObject_GetItem(__pyx_t_2, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_1 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+  __pyx_t_1 = PyObject_GetItem(__pyx_t_2, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_1 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
   __Pyx_GOTREF(__pyx_t_1);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_t_5 = ((!__pyx_t_4) != 0);
   if (__pyx_t_5) {
 
-    /* "evoMPS\eps_maps_c.pyx":162
+    /* "evoMPS\eps_maps_c.pyx":150
  * 
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)             # <<<<<<<<<<<<<<
  *     if not A2.flags['C_CONTIGUOUS']:
  *         A2 = np.ascontiguousarray(A2)
  */
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_t_2 = NULL;
@@ -4711,25 +4711,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
       }
     }
     if (!__pyx_t_2) {
-      __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_t_6, ((PyObject *)__pyx_v_A1)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_CallOneArg(__pyx_t_6, ((PyObject *)__pyx_v_A1)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
     } else {
-      __pyx_t_7 = PyTuple_New(1+1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_7 = PyTuple_New(1+1); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_7);
       __Pyx_GIVEREF(__pyx_t_2); PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_2); __pyx_t_2 = NULL;
       __Pyx_INCREF(((PyObject *)__pyx_v_A1));
       __Pyx_GIVEREF(((PyObject *)__pyx_v_A1));
       PyTuple_SET_ITEM(__pyx_t_7, 0+1, ((PyObject *)__pyx_v_A1));
-      __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, NULL); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_Call(__pyx_t_6, __pyx_t_7, NULL); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     }
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF_SET(__pyx_v_A1, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d)__pyx_t_1));
     __pyx_t_1 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":161
+    /* "evoMPS\eps_maps_c.pyx":149
  *     cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
  * 
  *     if not A1.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -4738,33 +4738,33 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":163
+  /* "evoMPS\eps_maps_c.pyx":151
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *         A2 = np.ascontiguousarray(A2)
  * 
  */
-  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A2), __pyx_n_s_flags); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 163; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = __Pyx_PyObject_GetAttrStr(((PyObject *)__pyx_v_A2), __pyx_n_s_flags); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 151; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_t_6 = PyObject_GetItem(__pyx_t_1, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 163; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+  __pyx_t_6 = PyObject_GetItem(__pyx_t_1, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 151; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_5 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 163; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_5 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 151; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __pyx_t_4 = ((!__pyx_t_5) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":164
+    /* "evoMPS\eps_maps_c.pyx":152
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:
  *         A2 = np.ascontiguousarray(A2)             # <<<<<<<<<<<<<<
  * 
  *     cdef cmp3d A1_ = A1
  */
-    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __pyx_t_1 = NULL;
@@ -4778,25 +4778,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
       }
     }
     if (!__pyx_t_1) {
-      __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_7, ((PyObject *)__pyx_v_A2)); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_7, ((PyObject *)__pyx_v_A2)); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
     } else {
-      __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_2);
       __Pyx_GIVEREF(__pyx_t_1); PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_1); __pyx_t_1 = NULL;
       __Pyx_INCREF(((PyObject *)__pyx_v_A2));
       __Pyx_GIVEREF(((PyObject *)__pyx_v_A2));
       PyTuple_SET_ITEM(__pyx_t_2, 0+1, ((PyObject *)__pyx_v_A2));
-      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     }
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    if (!(likely(((__pyx_t_6) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_6, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 164; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (!(likely(((__pyx_t_6) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_6, __pyx_ptype_5numpy_ndarray))))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 152; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF_SET(__pyx_v_A2, ((__pyx_t_6evoMPS_10eps_maps_c_ndcmp3d)__pyx_t_6));
     __pyx_t_6 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":163
+    /* "evoMPS\eps_maps_c.pyx":151
  *     if not A1.flags['C_CONTIGUOUS']:
  *         A1 = np.ascontiguousarray(A1)
  *     if not A2.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -4805,7 +4805,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":166
+  /* "evoMPS\eps_maps_c.pyx":154
  *         A2 = np.ascontiguousarray(A2)
  * 
  *     cdef cmp3d A1_ = A1             # <<<<<<<<<<<<<<
@@ -4813,12 +4813,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  *     cdef cmp2d x_
  */
   __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_A1));
-  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 166; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 154; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_A1_ = __pyx_t_8;
   __pyx_t_8.memview = NULL;
   __pyx_t_8.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":167
+  /* "evoMPS\eps_maps_c.pyx":155
  * 
  *     cdef cmp3d A1_ = A1
  *     cdef cmp3d A2_ = A2             # <<<<<<<<<<<<<<
@@ -4826,12 +4826,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  *     cdef cmp1d xd_
  */
   __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(((PyObject *)__pyx_v_A2));
-  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 167; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 155; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_v_A2_ = __pyx_t_8;
   __pyx_t_8.memview = NULL;
   __pyx_t_8.data = NULL;
 
-  /* "evoMPS\eps_maps_c.pyx":172
+  /* "evoMPS\eps_maps_c.pyx":160
  *     cdef cmp3d A1x
  * 
  *     assert A1.shape[0] == A2.shape[0], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -4842,12 +4842,12 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
   if (unlikely(!Py_OptimizeFlag)) {
     if (unlikely(!(((__pyx_v_A1->dimensions[0]) == (__pyx_v_A2->dimensions[0])) != 0))) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 172; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 160; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":173
+  /* "evoMPS\eps_maps_c.pyx":161
  * 
  *     assert A1.shape[0] == A2.shape[0], "dimension mismatch"
  *     assert A1.shape[2] == x.shape[0], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -4856,26 +4856,26 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_6 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[2])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A1->dimensions[2])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 0, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyObject_RichCompare(__pyx_t_6, __pyx_t_2, Py_EQ); __Pyx_XGOTREF(__pyx_t_7); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (unlikely(!__pyx_t_4)) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 173; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 161; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":174
+  /* "evoMPS\eps_maps_c.pyx":162
  *     assert A1.shape[0] == A2.shape[0], "dimension mismatch"
  *     assert A1.shape[2] == x.shape[0], "dimension mismatch"
  *     assert x.shape[1] == A2.shape[2], "dimension mismatch"             # <<<<<<<<<<<<<<
@@ -4884,26 +4884,26 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   #ifndef CYTHON_WITHOUT_ASSERTIONS
   if (unlikely(!Py_OptimizeFlag)) {
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_shape); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_2 = __Pyx_GetItemInt(__pyx_t_7, 1, long, 1, __Pyx_PyInt_From_long, 0, 0, 0); if (unlikely(__pyx_t_2 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[2])); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyInt_From_Py_intptr_t((__pyx_v_A2->dimensions[2])); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_6 = PyObject_RichCompare(__pyx_t_2, __pyx_t_7, Py_EQ); __Pyx_XGOTREF(__pyx_t_6); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyObject_RichCompare(__pyx_t_2, __pyx_t_7, Py_EQ); __Pyx_XGOTREF(__pyx_t_6); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (unlikely(!__pyx_t_4)) {
       PyErr_SetObject(PyExc_AssertionError, __pyx_kp_s_dimension_mismatch);
-      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      {__pyx_filename = __pyx_f[0]; __pyx_lineno = 162; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
   }
   #endif
 
-  /* "evoMPS\eps_maps_c.pyx":176
+  /* "evoMPS\eps_maps_c.pyx":164
  *     assert x.shape[1] == A2.shape[2], "dimension mismatch"
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads             # <<<<<<<<<<<<<<
@@ -4913,25 +4913,25 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
   __pyx_t_4 = ((__pyx_v_num_chunks > 1) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":177
+    /* "evoMPS\eps_maps_c.pyx":165
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  * 
  *     if isinstance(x, mm.eyemat):
  */
-    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_out.shape[0])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_out.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_9 = PyTuple_New(3); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyTuple_New(3); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_GIVEREF(__pyx_t_6);
     PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_6);
@@ -4942,33 +4942,33 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
     __pyx_t_6 = 0;
     __pyx_t_2 = 0;
     __pyx_t_1 = 0;
-    __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyTuple_New(1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_GIVEREF(__pyx_t_9);
     PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_9);
     __pyx_t_9 = 0;
-    __pyx_t_9 = PyDict_New(); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyDict_New(); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (PyDict_SetItem(__pyx_t_9, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_9, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_7, __pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_6);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 165; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_outs = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":176
+    /* "evoMPS\eps_maps_c.pyx":164
  *     assert x.shape[1] == A2.shape[2], "dimension mismatch"
  * 
  *     if num_chunks > 1: #only allocate extra memory if we spawn extra threads             # <<<<<<<<<<<<<<
@@ -4977,24 +4977,24 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":179
+  /* "evoMPS\eps_maps_c.pyx":167
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
  * 
  *     if isinstance(x, mm.eyemat):             # <<<<<<<<<<<<<<
  *         if num_chunks == 1:
  *             eps_r_noop_id(A1_, A2_, out)
  */
-  __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 167; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_6);
-  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_eyemat); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_eyemat); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 167; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_9);
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-  __pyx_t_4 = PyObject_IsInstance(__pyx_v_x, __pyx_t_9); if (unlikely(__pyx_t_4 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_4 = PyObject_IsInstance(__pyx_v_x, __pyx_t_9); if (unlikely(__pyx_t_4 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 167; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
   __pyx_t_5 = (__pyx_t_4 != 0);
   if (__pyx_t_5) {
 
-    /* "evoMPS\eps_maps_c.pyx":180
+    /* "evoMPS\eps_maps_c.pyx":168
  * 
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -5004,16 +5004,16 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
     __pyx_t_5 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_5) {
 
-      /* "evoMPS\eps_maps_c.pyx":181
+      /* "evoMPS\eps_maps_c.pyx":169
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:
  *             eps_r_noop_id(A1_, A2_, out)             # <<<<<<<<<<<<<<
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  */
       __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_v_A1_, __pyx_v_A2_, __pyx_v_out);
 
-      /* "evoMPS\eps_maps_c.pyx":180
+      /* "evoMPS\eps_maps_c.pyx":168
  * 
  *     if isinstance(x, mm.eyemat):
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -5023,10 +5023,10 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
       goto __pyx_L7;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":183
+    /* "evoMPS\eps_maps_c.pyx":171
  *             eps_r_noop_id(A1_, A2_, out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -5057,7 +5057,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
                 if (__pyx_t_12 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_14, __pyx_t_17, __pyx_t_16) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -5067,27 +5067,27 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_sf)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
                             {
                                 __pyx_v_i = 0 + 1 * __pyx_t_11;
                                 /* Initialize private variables to invalid values */
-                                __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
+                                __pyx_v_sf = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":184
+                                /* "evoMPS\eps_maps_c.pyx":172
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":185
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":173
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
@@ -5100,7 +5100,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":186
+                                /* "evoMPS\eps_maps_c.pyx":174
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -5125,7 +5125,7 @@ static PyArrayObject *__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(PyObject *
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 186; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A1_.shape[1];
@@ -5154,7 +5154,7 @@ __pyx_t_16.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 186; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A2_.shape[1];
@@ -5182,7 +5182,7 @@ __pyx_t_17.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 186; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 174; __pyx_clineno = __LINE__; goto __pyx_L13_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -5224,9 +5224,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                                 #pragma omp critical(__pyx_parallel_lastprivates3)
                                 #endif /* _OPENMP */
                                 {
-                                    __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp0 = __pyx_v_si;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_sf;
                                 }
                                 __pyx_L16:;
                                 #ifdef _OPENMP
@@ -5243,9 +5243,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         #ifdef WITH_THREAD
                         PyGILState_Release(__pyx_gilstate_save);
                         #endif
@@ -5259,9 +5259,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
                   __pyx_parallel_why = 4;
                 }
                 if (__pyx_parallel_why) {
-                  __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_si = __pyx_parallel_temp0;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_sf = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L8_return;
                         case 4:
@@ -5288,10 +5288,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":183
+          /* "evoMPS\eps_maps_c.pyx":171
  *             eps_r_noop_id(A1_, A2_, out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -5320,7 +5320,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     }
     __pyx_L7:;
 
-    /* "evoMPS\eps_maps_c.pyx":179
+    /* "evoMPS\eps_maps_c.pyx":167
  *         outs = np.zeros((num_chunks, out.shape[0], out.shape[1]), dtype=np.complex128)
  * 
  *     if isinstance(x, mm.eyemat):             # <<<<<<<<<<<<<<
@@ -5330,59 +5330,59 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     goto __pyx_L6;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":187
+  /* "evoMPS\eps_maps_c.pyx":175
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):             # <<<<<<<<<<<<<<
  *         if x.diag.flags['C_CONTIGUOUS']:
  *             xd_ = x.diag
  */
-  __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_mm); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 175; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_9);
-  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_simple_diag_matrix); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_simple_diag_matrix); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 175; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_6);
   __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-  __pyx_t_5 = PyObject_IsInstance(__pyx_v_x, __pyx_t_6); if (unlikely(__pyx_t_5 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_5 = PyObject_IsInstance(__pyx_v_x, __pyx_t_6); if (unlikely(__pyx_t_5 == -1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 175; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
   __pyx_t_4 = (__pyx_t_5 != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":188
+    /* "evoMPS\eps_maps_c.pyx":176
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
  *             xd_ = x.diag
  *         else:
  */
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 188; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 176; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flags); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 188; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_flags); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 176; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = PyObject_GetItem(__pyx_t_9, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 188; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_6 = PyObject_GetItem(__pyx_t_9, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_6 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 176; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 188; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_6); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 176; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":189
+      /* "evoMPS\eps_maps_c.pyx":177
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:
  *             xd_ = x.diag             # <<<<<<<<<<<<<<
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)
  */
-      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 189; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
       __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dc___pyx_t_double_complex(__pyx_t_6);
-      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 189; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 177; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_v_xd_ = __pyx_t_18;
       __pyx_t_18.memview = NULL;
       __pyx_t_18.data = NULL;
 
-      /* "evoMPS\eps_maps_c.pyx":188
+      /* "evoMPS\eps_maps_c.pyx":176
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):
  *         if x.diag.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -5392,7 +5392,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
       goto __pyx_L17;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":191
+    /* "evoMPS\eps_maps_c.pyx":179
  *             xd_ = x.diag
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)             # <<<<<<<<<<<<<<
@@ -5400,12 +5400,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
  *         if num_chunks == 1:
  */
     /*else*/ {
-      __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
-      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_9, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
-      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_diag); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
       __pyx_t_7 = NULL;
       if (CYTHON_COMPILING_IN_CPYTHON && unlikely(PyMethod_Check(__pyx_t_1))) {
@@ -5418,23 +5418,23 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
         }
       }
       if (!__pyx_t_7) {
-        __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_6 = __Pyx_PyObject_CallOneArg(__pyx_t_1, __pyx_t_9); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
         __Pyx_GOTREF(__pyx_t_6);
       } else {
-        __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_2 = PyTuple_New(1+1); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_2);
         __Pyx_GIVEREF(__pyx_t_7); PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_7); __pyx_t_7 = NULL;
         __Pyx_GIVEREF(__pyx_t_9);
         PyTuple_SET_ITEM(__pyx_t_2, 0+1, __pyx_t_9);
         __pyx_t_9 = 0;
-        __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_2, NULL); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_6);
         __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       }
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       __pyx_t_18 = __Pyx_PyObject_to_MemoryviewSlice_dc___pyx_t_double_complex(__pyx_t_6);
-      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 191; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_18.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 179; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_v_xd_ = __pyx_t_18;
       __pyx_t_18.memview = NULL;
@@ -5442,25 +5442,25 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     }
     __pyx_L17:;
 
-    /* "evoMPS\eps_maps_c.pyx":192
+    /* "evoMPS\eps_maps_c.pyx":180
  *         else:
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], xd_.shape[0]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  *         if num_chunks == 1:
  *             eps_r_noop_diag(xd_, A1_, A2_, A1x[0,:,:], out)
  */
-    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_zeros); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_xd_.shape[0])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyInt_FromSsize_t((__pyx_v_xd_.shape[0])); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
-    __pyx_t_7 = PyTuple_New(3); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyTuple_New(3); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_GIVEREF(__pyx_t_6);
     PyTuple_SET_ITEM(__pyx_t_7, 0, __pyx_t_6);
@@ -5471,33 +5471,33 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     __pyx_t_6 = 0;
     __pyx_t_2 = 0;
     __pyx_t_9 = 0;
-    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = PyTuple_New(1); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_9, 0, __pyx_t_7);
     __pyx_t_7 = 0;
-    __pyx_t_7 = PyDict_New(); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = PyDict_New(); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_n_s_complex128); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
-    if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_7, __pyx_n_s_dtype, __pyx_t_6) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_9, __pyx_t_7); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_Call(__pyx_t_1, __pyx_t_9, __pyx_t_7); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_6);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 180; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __pyx_v_A1x = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":193
+    /* "evoMPS\eps_maps_c.pyx":181
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -5507,12 +5507,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
     __pyx_t_4 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":194
+      /* "evoMPS\eps_maps_c.pyx":182
  *         A1x = np.zeros((num_chunks, A1_.shape[1], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:
  *             eps_r_noop_diag(xd_, A1_, A2_, A1x[0,:,:], out)             # <<<<<<<<<<<<<<
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  */
       __pyx_t_17.data = __pyx_v_A1x.data;
       __pyx_t_17.memview = __pyx_v_A1x.memview;
@@ -5525,7 +5525,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_14, __pyx_t_16, __pyx_t_17);
         __pyx_tmp_idx += __pyx_tmp_shape;
     if (0 && (__pyx_tmp_idx < 0 || __pyx_tmp_idx >= __pyx_tmp_shape)) {
         PyErr_SetString(PyExc_IndexError, "Index out of bounds (axis 0)");
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 194; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 182; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -5541,7 +5541,7 @@ __pyx_t_17.strides[1] = __pyx_v_A1x.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A2_, __pyx_t_17, __pyx_v_out);
       __PYX_XDEC_MEMVIEW(&__pyx_t_17, 1);
 
-      /* "evoMPS\eps_maps_c.pyx":193
+      /* "evoMPS\eps_maps_c.pyx":181
  *             xd_ = np.ascontiguousarray(x.diag)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], xd_.shape[0]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -5551,10 +5551,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
       goto __pyx_L18;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":196
+    /* "evoMPS\eps_maps_c.pyx":184
  *             eps_r_noop_diag(xd_, A1_, A2_, A1x[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -5585,7 +5585,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                 if (__pyx_t_10 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_16, __pyx_t_17, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -5595,27 +5595,27 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_sf)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_10; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
                             {
                                 __pyx_v_i = 0 + 1 * __pyx_t_11;
                                 /* Initialize private variables to invalid values */
-                                __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
+                                __pyx_v_sf = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":197
+                                /* "evoMPS\eps_maps_c.pyx":185
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":198
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":186
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
@@ -5628,7 +5628,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":199
+                                /* "evoMPS\eps_maps_c.pyx":187
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -5653,7 +5653,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_v_A1_, __pyx_v_A
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 199; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A1_.shape[1];
@@ -5682,7 +5682,7 @@ __pyx_t_14.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 199; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A2_.shape[1];
@@ -5710,7 +5710,7 @@ __pyx_t_17.data = __pyx_v_A1x.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 199; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -5740,7 +5740,7 @@ __pyx_t_19.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 199; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 187; __pyx_clineno = __LINE__; goto __pyx_L24_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -5783,9 +5783,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                                 #pragma omp critical(__pyx_parallel_lastprivates4)
                                 #endif /* _OPENMP */
                                 {
-                                    __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp0 = __pyx_v_si;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_sf;
                                 }
                                 __pyx_L27:;
                                 #ifdef _OPENMP
@@ -5802,8 +5802,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_19, 0);
                         #ifdef WITH_THREAD
@@ -5819,9 +5819,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
                   __pyx_parallel_why = 4;
                 }
                 if (__pyx_parallel_why) {
-                  __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_si = __pyx_parallel_temp0;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_sf = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L19_return;
                         case 4:
@@ -5848,10 +5848,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":196
+          /* "evoMPS\eps_maps_c.pyx":184
  *             eps_r_noop_diag(xd_, A1_, A2_, A1x[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -5880,7 +5880,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     }
     __pyx_L18:;
 
-    /* "evoMPS\eps_maps_c.pyx":187
+    /* "evoMPS\eps_maps_c.pyx":175
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_id(A1_[si:sf,:,:], A2_[si:sf,:,:], outs[i,:,:])
  *     elif isinstance(x, mm.simple_diag_matrix):             # <<<<<<<<<<<<<<
@@ -5890,7 +5890,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     goto __pyx_L6;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":201
+  /* "evoMPS\eps_maps_c.pyx":189
  *                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  *     else:
  *         if x.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -5898,16 +5898,16 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  *         else:
  */
   /*else*/ {
-    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_flags); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 201; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = __Pyx_PyObject_GetAttrStr(__pyx_v_x, __pyx_n_s_flags); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 189; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_7 = PyObject_GetItem(__pyx_t_6, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_7 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 201; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
+    __pyx_t_7 = PyObject_GetItem(__pyx_t_6, __pyx_n_s_C_CONTIGUOUS); if (unlikely(__pyx_t_7 == NULL)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 189; __pyx_clineno = __LINE__; goto __pyx_L1_error;};
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
-    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 201; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_4 = __Pyx_PyObject_IsTrue(__pyx_t_7); if (unlikely(__pyx_t_4 < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 189; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":202
+      /* "evoMPS\eps_maps_c.pyx":190
  *     else:
  *         if x.flags['C_CONTIGUOUS']:
  *             x_ = x             # <<<<<<<<<<<<<<
@@ -5915,12 +5915,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  *             x_ = np.ascontiguousarray(x)
  */
       __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(__pyx_v_x);
-      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 202; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 190; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __pyx_v_x_ = __pyx_t_3;
       __pyx_t_3.memview = NULL;
       __pyx_t_3.data = NULL;
 
-      /* "evoMPS\eps_maps_c.pyx":201
+      /* "evoMPS\eps_maps_c.pyx":189
  *                 eps_r_noop_diag(xd_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  *     else:
  *         if x.flags['C_CONTIGUOUS']:             # <<<<<<<<<<<<<<
@@ -5930,7 +5930,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
       goto __pyx_L28;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":204
+    /* "evoMPS\eps_maps_c.pyx":192
  *             x_ = x
  *         else:
  *             x_ = np.ascontiguousarray(x)             # <<<<<<<<<<<<<<
@@ -5938,9 +5938,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
  *         if num_chunks == 1:
  */
     /*else*/ {
-      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_6 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_6);
-      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_6, __pyx_n_s_ascontiguousarray); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_GOTREF(__pyx_t_9);
       __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
       __pyx_t_6 = NULL;
@@ -5954,22 +5954,22 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
         }
       }
       if (!__pyx_t_6) {
-        __pyx_t_7 = __Pyx_PyObject_CallOneArg(__pyx_t_9, __pyx_v_x); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_7 = __Pyx_PyObject_CallOneArg(__pyx_t_9, __pyx_v_x); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_7);
       } else {
-        __pyx_t_1 = PyTuple_New(1+1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_1 = PyTuple_New(1+1); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_1);
         __Pyx_GIVEREF(__pyx_t_6); PyTuple_SET_ITEM(__pyx_t_1, 0, __pyx_t_6); __pyx_t_6 = NULL;
         __Pyx_INCREF(__pyx_v_x);
         __Pyx_GIVEREF(__pyx_v_x);
         PyTuple_SET_ITEM(__pyx_t_1, 0+1, __pyx_v_x);
-        __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_1, NULL); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_1, NULL); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
         __Pyx_GOTREF(__pyx_t_7);
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       }
       __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
       __pyx_t_3 = __Pyx_PyObject_to_MemoryviewSlice_d_dc___pyx_t_double_complex(__pyx_t_7);
-      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 204; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+      if (unlikely(!__pyx_t_3.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 192; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
       __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
       __pyx_v_x_ = __pyx_t_3;
       __pyx_t_3.memview = NULL;
@@ -5977,25 +5977,25 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     }
     __pyx_L28:;
 
-    /* "evoMPS\eps_maps_c.pyx":205
+    /* "evoMPS\eps_maps_c.pyx":193
  *         else:
  *             x_ = np.ascontiguousarray(x)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], x_.shape[1]), dtype=np.complex128)             # <<<<<<<<<<<<<<
  *         if num_chunks == 1:
  *             eps_r_noop_dense(x_, A1_, A2_, A1x[0,:,:], out)
  */
-    __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_9 = __Pyx_PyObject_GetAttrStr(__pyx_t_7, __pyx_n_s_zeros); if (unlikely(!__pyx_t_9)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_9);
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyInt_From_int(__pyx_v_num_chunks); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
-    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = PyInt_FromSsize_t((__pyx_v_A1_.shape[1])); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_x_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyInt_FromSsize_t((__pyx_v_x_.shape[1])); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
-    __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyTuple_New(3); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
     __Pyx_GIVEREF(__pyx_t_7);
     PyTuple_SET_ITEM(__pyx_t_2, 0, __pyx_t_7);
@@ -6006,33 +6006,33 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     __pyx_t_7 = 0;
     __pyx_t_1 = 0;
     __pyx_t_6 = 0;
-    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_6 = PyTuple_New(1); if (unlikely(!__pyx_t_6)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_6);
     __Pyx_GIVEREF(__pyx_t_2);
     PyTuple_SET_ITEM(__pyx_t_6, 0, __pyx_t_2);
     __pyx_t_2 = 0;
-    __pyx_t_2 = PyDict_New(); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_2 = PyDict_New(); if (unlikely(!__pyx_t_2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_2);
-    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_1 = __Pyx_GetModuleGlobalName(__pyx_n_s_np); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_1);
-    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_GetAttrStr(__pyx_t_1, __pyx_n_s_complex128); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    if (PyDict_SetItem(__pyx_t_2, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (PyDict_SetItem(__pyx_t_2, __pyx_n_s_dtype, __pyx_t_7) < 0) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
-    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_6, __pyx_t_2); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    __pyx_t_7 = __Pyx_PyObject_Call(__pyx_t_9, __pyx_t_6, __pyx_t_2); if (unlikely(!__pyx_t_7)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_GOTREF(__pyx_t_7);
     __Pyx_DECREF(__pyx_t_9); __pyx_t_9 = 0;
     __Pyx_DECREF(__pyx_t_6); __pyx_t_6 = 0;
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __pyx_t_8 = __Pyx_PyObject_to_MemoryviewSlice_d_d_dc___pyx_t_double_complex(__pyx_t_7);
-    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 205; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+    if (unlikely(!__pyx_t_8.memview)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 193; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     __Pyx_DECREF(__pyx_t_7); __pyx_t_7 = 0;
     __pyx_v_A1x = __pyx_t_8;
     __pyx_t_8.memview = NULL;
     __pyx_t_8.data = NULL;
 
-    /* "evoMPS\eps_maps_c.pyx":206
+    /* "evoMPS\eps_maps_c.pyx":194
  *             x_ = np.ascontiguousarray(x)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], x_.shape[1]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -6042,12 +6042,12 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
     __pyx_t_4 = ((__pyx_v_num_chunks == 1) != 0);
     if (__pyx_t_4) {
 
-      /* "evoMPS\eps_maps_c.pyx":207
+      /* "evoMPS\eps_maps_c.pyx":195
  *         A1x = np.zeros((num_chunks, A1_.shape[1], x_.shape[1]), dtype=np.complex128)
  *         if num_chunks == 1:
  *             eps_r_noop_dense(x_, A1_, A2_, A1x[0,:,:], out)             # <<<<<<<<<<<<<<
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  */
       __pyx_t_19.data = __pyx_v_A1x.data;
       __pyx_t_19.memview = __pyx_v_A1x.memview;
@@ -6060,7 +6060,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_v_xd_, __pyx_t_16, __pyx_t_14
         __pyx_tmp_idx += __pyx_tmp_shape;
     if (0 && (__pyx_tmp_idx < 0 || __pyx_tmp_idx >= __pyx_tmp_shape)) {
         PyErr_SetString(PyExc_IndexError, "Index out of bounds (axis 0)");
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 207; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 195; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -6076,7 +6076,7 @@ __pyx_t_19.strides[1] = __pyx_v_A1x.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A2_, __pyx_t_19, __pyx_v_out);
       __PYX_XDEC_MEMVIEW(&__pyx_t_19, 1);
 
-      /* "evoMPS\eps_maps_c.pyx":206
+      /* "evoMPS\eps_maps_c.pyx":194
  *             x_ = np.ascontiguousarray(x)
  *         A1x = np.zeros((num_chunks, A1_.shape[1], x_.shape[1]), dtype=np.complex128)
  *         if num_chunks == 1:             # <<<<<<<<<<<<<<
@@ -6086,10 +6086,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
       goto __pyx_L29;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":209
+    /* "evoMPS\eps_maps_c.pyx":197
  *             eps_r_noop_dense(x_, A1_, A2_, A1x[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -6120,7 +6120,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                 if (__pyx_t_12 > 0)
                 {
                     #ifdef _OPENMP
-                    #pragma omp parallel num_threads(__pyx_v_num_chunks) private(__pyx_t_15, __pyx_t_13) firstprivate(__pyx_t_17, __pyx_t_16, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
+                    #pragma omp parallel private(__pyx_t_13, __pyx_t_15) firstprivate(__pyx_t_16, __pyx_t_17, __pyx_t_14, __pyx_t_19) private(__pyx_filename, __pyx_lineno, __pyx_clineno) shared(__pyx_parallel_why, __pyx_parallel_exc_type, __pyx_parallel_exc_value, __pyx_parallel_exc_tb)
                     #endif /* _OPENMP */
                     {
                         #ifdef _OPENMP
@@ -6130,27 +6130,27 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                         Py_BEGIN_ALLOW_THREADS
                         #endif /* _OPENMP */
                         #ifdef _OPENMP
-                        #pragma omp for lastprivate(__pyx_v_sf) lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i)
+                        #pragma omp for lastprivate(__pyx_v_si) firstprivate(__pyx_v_i) lastprivate(__pyx_v_i) lastprivate(__pyx_v_sf)
                         #endif /* _OPENMP */
                         for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11++){
                             if (__pyx_parallel_why < 2)
                             {
                                 __pyx_v_i = 0 + 1 * __pyx_t_11;
                                 /* Initialize private variables to invalid values */
-                                __pyx_v_sf = ((int)0xbad0bad0);
                                 __pyx_v_si = ((int)0xbad0bad0);
+                                __pyx_v_sf = ((int)0xbad0bad0);
 
-                                /* "evoMPS\eps_maps_c.pyx":210
+                                /* "evoMPS\eps_maps_c.pyx":198
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc             # <<<<<<<<<<<<<<
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  */
                                 __pyx_v_si = (__pyx_v_i * __pyx_v_lpc);
 
-                                /* "evoMPS\eps_maps_c.pyx":211
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):
+                                /* "evoMPS\eps_maps_c.pyx":199
+ *             for i in prange(num_chunks, nogil=True):
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc             # <<<<<<<<<<<<<<
  *                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
@@ -6163,7 +6163,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
                                 }
                                 __pyx_v_sf = __pyx_t_13;
 
-                                /* "evoMPS\eps_maps_c.pyx":212
+                                /* "evoMPS\eps_maps_c.pyx":200
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  *                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])             # <<<<<<<<<<<<<<
@@ -6188,7 +6188,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_v_A1_, __pyx_v_A
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 212; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 200; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
 }
 
 __pyx_t_14.shape[1] = __pyx_v_A1_.shape[1];
@@ -6217,7 +6217,7 @@ __pyx_t_16.data = __pyx_v_A2_.data;
     0,
     1) < 0))
 {
-    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 212; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+    {__pyx_filename = __pyx_f[0]; __pyx_lineno = 200; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
 }
 
 __pyx_t_16.shape[1] = __pyx_v_A2_.shape[1];
@@ -6245,7 +6245,7 @@ __pyx_t_19.data = __pyx_v_A1x.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 212; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 200; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
     }
         __pyx_t_19.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -6275,7 +6275,7 @@ __pyx_t_17.data = __pyx_v_outs.data;
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 212; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 200; __pyx_clineno = __LINE__; goto __pyx_L35_error;}
     }
         __pyx_t_17.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -6318,9 +6318,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                                 #pragma omp critical(__pyx_parallel_lastprivates5)
                                 #endif /* _OPENMP */
                                 {
-                                    __pyx_parallel_temp0 = __pyx_v_sf;
-                                    __pyx_parallel_temp1 = __pyx_v_si;
-                                    __pyx_parallel_temp2 = __pyx_v_i;
+                                    __pyx_parallel_temp0 = __pyx_v_si;
+                                    __pyx_parallel_temp1 = __pyx_v_i;
+                                    __pyx_parallel_temp2 = __pyx_v_sf;
                                 }
                                 __pyx_L38:;
                                 #ifdef _OPENMP
@@ -6337,8 +6337,8 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                         #endif
                         #endif /* _OPENMP */
                         /* Clean up any temporaries */
-                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_16, 0);
+                        __PYX_XDEC_MEMVIEW(&__pyx_t_17, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_14, 0);
                         __PYX_XDEC_MEMVIEW(&__pyx_t_19, 0);
                         #ifdef WITH_THREAD
@@ -6354,9 +6354,9 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
                   __pyx_parallel_why = 4;
                 }
                 if (__pyx_parallel_why) {
-                  __pyx_v_sf = __pyx_parallel_temp0;
-                  __pyx_v_si = __pyx_parallel_temp1;
-                  __pyx_v_i = __pyx_parallel_temp2;
+                  __pyx_v_si = __pyx_parallel_temp0;
+                  __pyx_v_i = __pyx_parallel_temp1;
+                  __pyx_v_sf = __pyx_parallel_temp2;
                   switch (__pyx_parallel_why) {
                         case 3: goto __pyx_L30_return;
                         case 4:
@@ -6383,10 +6383,10 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
             #endif
           }
 
-          /* "evoMPS\eps_maps_c.pyx":209
+          /* "evoMPS\eps_maps_c.pyx":197
  *             eps_r_noop_dense(x_, A1_, A2_, A1x[0,:,:], out)
  *         else:
- *             for i in prange(num_chunks, nogil=True, num_threads=num_chunks):             # <<<<<<<<<<<<<<
+ *             for i in prange(num_chunks, nogil=True):             # <<<<<<<<<<<<<<
  *                 si = i * lpc
  *                 sf = d if i == num_chunks - 1 else (i + 1) * lpc
  */
@@ -6417,7 +6417,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   }
   __pyx_L6:;
 
-  /* "evoMPS\eps_maps_c.pyx":214
+  /* "evoMPS\eps_maps_c.pyx":202
  *                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads             # <<<<<<<<<<<<<<
@@ -6427,7 +6427,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   __pyx_t_4 = ((__pyx_v_num_chunks > 1) != 0);
   if (__pyx_t_4) {
 
-    /* "evoMPS\eps_maps_c.pyx":215
+    /* "evoMPS\eps_maps_c.pyx":203
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:             # <<<<<<<<<<<<<<
@@ -6441,7 +6441,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
         #endif
         /*try:*/ {
 
-          /* "evoMPS\eps_maps_c.pyx":216
+          /* "evoMPS\eps_maps_c.pyx":204
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:
  *             for i in xrange(0, num_chunks):             # <<<<<<<<<<<<<<
@@ -6452,7 +6452,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
           for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_12; __pyx_t_11+=1) {
             __pyx_v_i = __pyx_t_11;
 
-            /* "evoMPS\eps_maps_c.pyx":217
+            /* "evoMPS\eps_maps_c.pyx":205
  *         with nogil:
  *             for i in xrange(0, num_chunks):
  *                 cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)             # <<<<<<<<<<<<<<
@@ -6468,7 +6468,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
           }
         }
 
-        /* "evoMPS\eps_maps_c.pyx":215
+        /* "evoMPS\eps_maps_c.pyx":203
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads
  *         with nogil:             # <<<<<<<<<<<<<<
@@ -6486,7 +6486,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
         }
     }
 
-    /* "evoMPS\eps_maps_c.pyx":214
+    /* "evoMPS\eps_maps_c.pyx":202
  *                 eps_r_noop_dense(x_, A1_[si:sf,:,:], A2_[si:sf,:,:], A1x[i,:,:], outs[i,:,:])
  * 
  *     if num_chunks > 1: #add thread results up in case we used threads             # <<<<<<<<<<<<<<
@@ -6495,7 +6495,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
  */
   }
 
-  /* "evoMPS\eps_maps_c.pyx":219
+  /* "evoMPS\eps_maps_c.pyx":207
  *                 cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)
  * 
  *     return ndout             # <<<<<<<<<<<<<<
@@ -6507,7 +6507,7 @@ __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_v_x_, __pyx_t_14, __pyx_t_16
   __pyx_r = ((PyArrayObject *)__pyx_v_ndout);
   goto __pyx_L0;
 
-  /* "evoMPS\eps_maps_c.pyx":149
+  /* "evoMPS\eps_maps_c.pyx":137
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):             # <<<<<<<<<<<<<<
@@ -6581,21 +6581,21 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_7eps_r_noop_inplace(PyObject *__p
         case  1:
         if (likely((values[1] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A1)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 1); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  2:
         if (likely((values[2] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_A2)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 2); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
         case  3:
         if (likely((values[3] = PyDict_GetItem(__pyx_kwds, __pyx_n_s_ndout)) != 0)) kw_args--;
         else {
-          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 3); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+          __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, 3); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
         }
       }
       if (unlikely(kw_args > 0)) {
-        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_r_noop_inplace") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+        if (unlikely(__Pyx_ParseOptionalKeywords(__pyx_kwds, __pyx_pyargnames, 0, values, pos_args, "eps_r_noop_inplace") < 0)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
       }
     } else if (PyTuple_GET_SIZE(__pyx_args) != 4) {
       goto __pyx_L5_argtuple_error;
@@ -6612,15 +6612,15 @@ static PyObject *__pyx_pw_6evoMPS_10eps_maps_c_7eps_r_noop_inplace(PyObject *__p
   }
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
+  __Pyx_RaiseArgtupleInvalid("eps_r_noop_inplace", 1, 4, 4, PyTuple_GET_SIZE(__pyx_args)); {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L3_error;}
   __pyx_L3_error:;
   __Pyx_AddTraceback("evoMPS.eps_maps_c.eps_r_noop_inplace", __pyx_clineno, __pyx_lineno, __pyx_filename);
   __Pyx_RefNannyFinishContext();
   return NULL;
   __pyx_L4_argument_unpacking_done:;
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
-  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_ndout), __pyx_ptype_5numpy_ndarray, 1, "ndout", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A1), __pyx_ptype_5numpy_ndarray, 1, "A1", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_A2), __pyx_ptype_5numpy_ndarray, 1, "A2", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  if (unlikely(!__Pyx_ArgTypeTest(((PyObject *)__pyx_v_ndout), __pyx_ptype_5numpy_ndarray, 1, "ndout", 0))) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_r = __pyx_pf_6evoMPS_10eps_maps_c_6eps_r_noop_inplace(__pyx_self, __pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout);
 
   /* function exit code */
@@ -6641,7 +6641,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_6eps_r_noop_inplace(CYTHON_UNUSED
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("eps_r_noop_inplace", 0);
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 149; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_t_1 = ((PyObject *)__pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_inplace(__pyx_v_x, __pyx_v_A1, __pyx_v_A2, __pyx_v_ndout, 0)); if (unlikely(!__pyx_t_1)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 137; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
@@ -6658,7 +6658,7 @@ static PyObject *__pyx_pf_6evoMPS_10eps_maps_c_6eps_r_noop_inplace(CYTHON_UNUSED
   return __pyx_r;
 }
 
-/* "evoMPS\eps_maps_c.pyx":223
+/* "evoMPS\eps_maps_c.pyx":211
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -6704,7 +6704,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
   #endif
   __Pyx_RefNannySetupContext("gdmm", 1);
 
-  /* "evoMPS\eps_maps_c.pyx":224
+  /* "evoMPS\eps_maps_c.pyx":212
  * @cy.wraparound(False)
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:
  *     cdef int i, j             # <<<<<<<<<<<<<<
@@ -6713,7 +6713,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
  */
   /*try:*/ {
 
-    /* "evoMPS\eps_maps_c.pyx":225
+    /* "evoMPS\eps_maps_c.pyx":213
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:
  *     cdef int i, j
  *     if HX:             # <<<<<<<<<<<<<<
@@ -6723,7 +6723,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
     __pyx_t_1 = (__pyx_v_HX != 0);
     if (__pyx_t_1) {
 
-      /* "evoMPS\eps_maps_c.pyx":226
+      /* "evoMPS\eps_maps_c.pyx":214
  *     cdef int i, j
  *     if HX:
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]             # <<<<<<<<<<<<<<
@@ -6737,7 +6737,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
         goto __pyx_L8_bool_binop_done;
       }
 
-      /* "evoMPS\eps_maps_c.pyx":227
+      /* "evoMPS\eps_maps_c.pyx":215
  *     if HX:
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]
  *             or not Y.shape[0] == out.shape[1]):             # <<<<<<<<<<<<<<
@@ -6754,7 +6754,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
       __pyx_t_1 = __pyx_t_2;
       __pyx_L8_bool_binop_done:;
 
-      /* "evoMPS\eps_maps_c.pyx":226
+      /* "evoMPS\eps_maps_c.pyx":214
  *     cdef int i, j
  *     if HX:
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]             # <<<<<<<<<<<<<<
@@ -6763,7 +6763,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
  */
       if (__pyx_t_1) {
 
-        /* "evoMPS\eps_maps_c.pyx":228
+        /* "evoMPS\eps_maps_c.pyx":216
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:             # <<<<<<<<<<<<<<
@@ -6776,21 +6776,21 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
             #endif
             /*try:*/ {
 
-              /* "evoMPS\eps_maps_c.pyx":229
+              /* "evoMPS\eps_maps_c.pyx":217
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")             # <<<<<<<<<<<<<<
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  */
-              __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 229; __pyx_clineno = __LINE__; goto __pyx_L12_error;}
+              __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__3, NULL); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 217; __pyx_clineno = __LINE__; goto __pyx_L12_error;}
               __Pyx_GOTREF(__pyx_t_3);
               __Pyx_Raise(__pyx_t_3, 0, 0, 0);
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-              {__pyx_filename = __pyx_f[0]; __pyx_lineno = 229; __pyx_clineno = __LINE__; goto __pyx_L12_error;}
+              {__pyx_filename = __pyx_f[0]; __pyx_lineno = 217; __pyx_clineno = __LINE__; goto __pyx_L12_error;}
             }
 
-            /* "evoMPS\eps_maps_c.pyx":228
+            /* "evoMPS\eps_maps_c.pyx":216
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:             # <<<<<<<<<<<<<<
@@ -6807,7 +6807,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
             }
         }
 
-        /* "evoMPS\eps_maps_c.pyx":226
+        /* "evoMPS\eps_maps_c.pyx":214
  *     cdef int i, j
  *     if HX:
  *         if (not out.shape[0] == X.shape[1] or not out.shape[1] == X.shape[0]             # <<<<<<<<<<<<<<
@@ -6816,7 +6816,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
  */
       }
 
-      /* "evoMPS\eps_maps_c.pyx":230
+      /* "evoMPS\eps_maps_c.pyx":218
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")
  *         for i in xrange(X.shape[0]):             # <<<<<<<<<<<<<<
@@ -6827,7 +6827,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
       for (__pyx_t_5 = 0; __pyx_t_5 < __pyx_t_4; __pyx_t_5+=1) {
         __pyx_v_i = __pyx_t_5;
 
-        /* "evoMPS\eps_maps_c.pyx":231
+        /* "evoMPS\eps_maps_c.pyx":219
  *                     raise ValueError("gdmm: Invalid array dimensions!")
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):             # <<<<<<<<<<<<<<
@@ -6838,7 +6838,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
         for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
           __pyx_v_j = __pyx_t_7;
 
-          /* "evoMPS\eps_maps_c.pyx":232
+          /* "evoMPS\eps_maps_c.pyx":220
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  *                 out[j, i].real = X[i, j].real             # <<<<<<<<<<<<<<
@@ -6852,7 +6852,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
           __pyx_t_12 = __pyx_v_i;
           __Pyx_SET_CREAL((*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_11 * __pyx_v_out.strides[0]) )) + __pyx_t_12)) ))), __pyx_t_10);
 
-          /* "evoMPS\eps_maps_c.pyx":233
+          /* "evoMPS\eps_maps_c.pyx":221
  *             for j in xrange(X.shape[1]):
  *                 out[j, i].real = X[i, j].real
  *                 out[j, i].imag = -X[i, j].imag             # <<<<<<<<<<<<<<
@@ -6865,7 +6865,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
           __pyx_t_16 = __pyx_v_i;
           __Pyx_SET_CIMAG((*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_15 * __pyx_v_out.strides[0]) )) + __pyx_t_16)) ))), (-__Pyx_CIMAG((*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_X.data + __pyx_t_13 * __pyx_v_X.strides[0]) )) + __pyx_t_14)) ))))));
 
-          /* "evoMPS\eps_maps_c.pyx":234
+          /* "evoMPS\eps_maps_c.pyx":222
  *                 out[j, i].real = X[i, j].real
  *                 out[j, i].imag = -X[i, j].imag
  *                 out[j, i] = out[j, i] * Y[i]             # <<<<<<<<<<<<<<
@@ -6881,7 +6881,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
         }
       }
 
-      /* "evoMPS\eps_maps_c.pyx":225
+      /* "evoMPS\eps_maps_c.pyx":213
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:
  *     cdef int i, j
  *     if HX:             # <<<<<<<<<<<<<<
@@ -6891,7 +6891,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
       goto __pyx_L6;
     }
 
-    /* "evoMPS\eps_maps_c.pyx":236
+    /* "evoMPS\eps_maps_c.pyx":224
  *                 out[j, i] = out[j, i] * Y[i]
  *     else:
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]             # <<<<<<<<<<<<<<
@@ -6906,7 +6906,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
         goto __pyx_L19_bool_binop_done;
       }
 
-      /* "evoMPS\eps_maps_c.pyx":237
+      /* "evoMPS\eps_maps_c.pyx":225
  *     else:
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]
  *             or not Y.shape[0] == out.shape[1]):             # <<<<<<<<<<<<<<
@@ -6923,7 +6923,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
       __pyx_t_1 = __pyx_t_2;
       __pyx_L19_bool_binop_done:;
 
-      /* "evoMPS\eps_maps_c.pyx":236
+      /* "evoMPS\eps_maps_c.pyx":224
  *                 out[j, i] = out[j, i] * Y[i]
  *     else:
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]             # <<<<<<<<<<<<<<
@@ -6932,7 +6932,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
  */
       if (__pyx_t_1) {
 
-        /* "evoMPS\eps_maps_c.pyx":238
+        /* "evoMPS\eps_maps_c.pyx":226
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:             # <<<<<<<<<<<<<<
@@ -6945,21 +6945,21 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
             #endif
             /*try:*/ {
 
-              /* "evoMPS\eps_maps_c.pyx":239
+              /* "evoMPS\eps_maps_c.pyx":227
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")             # <<<<<<<<<<<<<<
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  */
-              __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__4, NULL); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 239; __pyx_clineno = __LINE__; goto __pyx_L23_error;}
+              __pyx_t_3 = __Pyx_PyObject_Call(__pyx_builtin_ValueError, __pyx_tuple__4, NULL); if (unlikely(!__pyx_t_3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 227; __pyx_clineno = __LINE__; goto __pyx_L23_error;}
               __Pyx_GOTREF(__pyx_t_3);
               __Pyx_Raise(__pyx_t_3, 0, 0, 0);
               __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-              {__pyx_filename = __pyx_f[0]; __pyx_lineno = 239; __pyx_clineno = __LINE__; goto __pyx_L23_error;}
+              {__pyx_filename = __pyx_f[0]; __pyx_lineno = 227; __pyx_clineno = __LINE__; goto __pyx_L23_error;}
             }
 
-            /* "evoMPS\eps_maps_c.pyx":238
+            /* "evoMPS\eps_maps_c.pyx":226
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:             # <<<<<<<<<<<<<<
@@ -6976,7 +6976,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
             }
         }
 
-        /* "evoMPS\eps_maps_c.pyx":236
+        /* "evoMPS\eps_maps_c.pyx":224
  *                 out[j, i] = out[j, i] * Y[i]
  *     else:
  *         if (not out.shape[0] == X.shape[0] or not out.shape[1] == X.shape[1]             # <<<<<<<<<<<<<<
@@ -6985,7 +6985,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
  */
       }
 
-      /* "evoMPS\eps_maps_c.pyx":240
+      /* "evoMPS\eps_maps_c.pyx":228
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")
  *         for i in xrange(X.shape[0]):             # <<<<<<<<<<<<<<
@@ -6996,7 +6996,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
       for (__pyx_t_5 = 0; __pyx_t_5 < __pyx_t_4; __pyx_t_5+=1) {
         __pyx_v_i = __pyx_t_5;
 
-        /* "evoMPS\eps_maps_c.pyx":241
+        /* "evoMPS\eps_maps_c.pyx":229
  *                     raise ValueError("gdmm: Invalid array dimensions!")
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):             # <<<<<<<<<<<<<<
@@ -7007,7 +7007,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
         for (__pyx_t_7 = 0; __pyx_t_7 < __pyx_t_6; __pyx_t_7+=1) {
           __pyx_v_j = __pyx_t_7;
 
-          /* "evoMPS\eps_maps_c.pyx":242
+          /* "evoMPS\eps_maps_c.pyx":230
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  *                 out[i, j] = X[i, j] * Y[j]             # <<<<<<<<<<<<<<
@@ -7026,7 +7026,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
     __pyx_L6:;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":224
+  /* "evoMPS\eps_maps_c.pyx":212
  * @cy.wraparound(False)
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:
  *     cdef int i, j             # <<<<<<<<<<<<<<
@@ -7049,7 +7049,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
     __pyx_L5:;
   }
 
-  /* "evoMPS\eps_maps_c.pyx":223
+  /* "evoMPS\eps_maps_c.pyx":211
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void gdmm(bint HX, cmp2d X, cmp1d Y, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7068,7 +7068,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_gdmm(int __pyx_v_HX, __pyx_t_6evoMPS_10
   #endif
 }
 
-/* "evoMPS\eps_maps_c.pyx":246
+/* "evoMPS\eps_maps_c.pyx":234
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7097,7 +7097,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":248
+  /* "evoMPS\eps_maps_c.pyx":236
  * cdef void eps_l_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:
  *     cdef int s, M, N, K
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7106,7 +7106,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":249
+  /* "evoMPS\eps_maps_c.pyx":237
  *     cdef int s, M, N, K
  *     cdef complex alpha = 1
  *     cdef complex beta = 0             # <<<<<<<<<<<<<<
@@ -7115,7 +7115,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":251
+  /* "evoMPS\eps_maps_c.pyx":239
  *     cdef complex beta = 0
  * 
  *     M = A1Hx.shape[0]             # <<<<<<<<<<<<<<
@@ -7124,7 +7124,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_M = (__pyx_v_A1Hx.shape[0]);
 
-  /* "evoMPS\eps_maps_c.pyx":252
+  /* "evoMPS\eps_maps_c.pyx":240
  * 
  *     M = A1Hx.shape[0]
  *     N = A2.shape[2]             # <<<<<<<<<<<<<<
@@ -7133,7 +7133,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_N = (__pyx_v_A2.shape[2]);
 
-  /* "evoMPS\eps_maps_c.pyx":253
+  /* "evoMPS\eps_maps_c.pyx":241
  *     M = A1Hx.shape[0]
  *     N = A2.shape[2]
  *     K = A1Hx.shape[1]             # <<<<<<<<<<<<<<
@@ -7142,7 +7142,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_K = (__pyx_v_A1Hx.shape[1]);
 
-  /* "evoMPS\eps_maps_c.pyx":254
+  /* "evoMPS\eps_maps_c.pyx":242
  *     N = A2.shape[2]
  *     K = A1Hx.shape[1]
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7153,7 +7153,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":255
+    /* "evoMPS\eps_maps_c.pyx":243
  *     K = A1Hx.shape[1]
  *     for s in xrange(A1.shape[0]):
  *         gdmm(True, A1[s, :, :], x, A1Hx)             # <<<<<<<<<<<<<<
@@ -7177,7 +7177,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_diag(__pyx_t_6evoMPS_10eps_m
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 255; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 243; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_3.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -7193,7 +7193,7 @@ __pyx_t_3.strides[1] = __pyx_v_A1.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
     __PYX_XDEC_MEMVIEW(&__pyx_t_3, 0);
 
-    /* "evoMPS\eps_maps_c.pyx":258
+    /* "evoMPS\eps_maps_c.pyx":246
  * 
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], K,             # <<<<<<<<<<<<<<
@@ -7203,7 +7203,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":259
+    /* "evoMPS\eps_maps_c.pyx":247
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], K,
  *                     <double *>&A2[s, 0, 0], N, <double *>&alpha, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7214,7 +7214,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
     __pyx_t_7 = 0;
     __pyx_t_8 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":260
+    /* "evoMPS\eps_maps_c.pyx":248
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], K,
  *                     <double *>&A2[s, 0, 0], N, <double *>&alpha, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], N)             # <<<<<<<<<<<<<<
@@ -7224,7 +7224,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
     __pyx_t_9 = 0;
     __pyx_t_10 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":257
+    /* "evoMPS\eps_maps_c.pyx":245
  *         gdmm(True, A1[s, :, :], x, A1Hx)
  * 
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,             # <<<<<<<<<<<<<<
@@ -7234,7 +7234,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, __pyx_v_M, __pyx_v_N, __pyx_v_K, ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1Hx.data + __pyx_t_4 * __pyx_v_A1Hx.strides[0]) )) + __pyx_t_5)) ))))), __pyx_v_K, ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_6 * __pyx_v_A2.strides[0]) ) + __pyx_t_7 * __pyx_v_A2.strides[1]) )) + __pyx_t_8)) ))))), __pyx_v_N, ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_9 * __pyx_v_out.strides[0]) )) + __pyx_t_10)) ))))), __pyx_v_N);
   }
 
-  /* "evoMPS\eps_maps_c.pyx":246
+  /* "evoMPS\eps_maps_c.pyx":234
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7250,7 +7250,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(1, __pyx_t_3, __pyx_v_x, __pyx_v_A1Hx);
   __pyx_L0:;
 }
 
-/* "evoMPS\eps_maps_c.pyx":264
+/* "evoMPS\eps_maps_c.pyx":252
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7280,7 +7280,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
 
-  /* "evoMPS\eps_maps_c.pyx":266
+  /* "evoMPS\eps_maps_c.pyx":254
  * cdef void eps_r_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:
  *     cdef int s, M, N, K, L
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7289,7 +7289,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":267
+  /* "evoMPS\eps_maps_c.pyx":255
  *     cdef int s, M, N, K, L
  *     cdef complex alpha = 1
  *     cdef complex beta = 0             # <<<<<<<<<<<<<<
@@ -7298,7 +7298,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":268
+  /* "evoMPS\eps_maps_c.pyx":256
  *     cdef complex alpha = 1
  *     cdef complex beta = 0
  *     M = A1x.shape[0]             # <<<<<<<<<<<<<<
@@ -7307,7 +7307,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_M = (__pyx_v_A1x.shape[0]);
 
-  /* "evoMPS\eps_maps_c.pyx":269
+  /* "evoMPS\eps_maps_c.pyx":257
  *     cdef complex beta = 0
  *     M = A1x.shape[0]
  *     K = A1x.shape[1]             # <<<<<<<<<<<<<<
@@ -7316,7 +7316,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_K = (__pyx_v_A1x.shape[1]);
 
-  /* "evoMPS\eps_maps_c.pyx":270
+  /* "evoMPS\eps_maps_c.pyx":258
  *     M = A1x.shape[0]
  *     K = A1x.shape[1]
  *     N = A2.shape[1]             # <<<<<<<<<<<<<<
@@ -7325,7 +7325,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_N = (__pyx_v_A2.shape[1]);
 
-  /* "evoMPS\eps_maps_c.pyx":271
+  /* "evoMPS\eps_maps_c.pyx":259
  *     K = A1x.shape[1]
  *     N = A2.shape[1]
  *     L = A2.shape[2]             # <<<<<<<<<<<<<<
@@ -7334,7 +7334,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
  */
   __pyx_v_L = (__pyx_v_A2.shape[2]);
 
-  /* "evoMPS\eps_maps_c.pyx":273
+  /* "evoMPS\eps_maps_c.pyx":261
  *     L = A2.shape[2]
  * 
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7345,7 +7345,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":274
+    /* "evoMPS\eps_maps_c.pyx":262
  * 
  *     for s in xrange(A1.shape[0]):
  *         gdmm(False, A1[s, :, :], x, A1x)             # <<<<<<<<<<<<<<
@@ -7369,7 +7369,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_diag(__pyx_t_6evoMPS_10eps_m
             #ifdef WITH_THREAD
             PyGILState_Release(__pyx_gilstate_save);
             #endif
-        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 274; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+        {__pyx_filename = __pyx_f[0]; __pyx_lineno = 262; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
     }
         __pyx_t_3.data += __pyx_tmp_idx * __pyx_tmp_stride;
 }
@@ -7385,7 +7385,7 @@ __pyx_t_3.strides[1] = __pyx_v_A1.strides[2];
 __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
     __PYX_XDEC_MEMVIEW(&__pyx_t_3, 0);
 
-    /* "evoMPS\eps_maps_c.pyx":277
+    /* "evoMPS\eps_maps_c.pyx":265
  * 
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, M, N, K,
  *                     <double *>&alpha, <double *>&A1x[0, 0], K,             # <<<<<<<<<<<<<<
@@ -7395,7 +7395,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":278
+    /* "evoMPS\eps_maps_c.pyx":266
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, M, N, K,
  *                     <double *>&alpha, <double *>&A1x[0, 0], K,
  *                     <double *>&A2[s, 0, 0], L, <double *>&alpha, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7406,7 +7406,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
     __pyx_t_7 = 0;
     __pyx_t_8 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":279
+    /* "evoMPS\eps_maps_c.pyx":267
  *                     <double *>&alpha, <double *>&A1x[0, 0], K,
  *                     <double *>&A2[s, 0, 0], L, <double *>&alpha, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], N)             # <<<<<<<<<<<<<<
@@ -7416,7 +7416,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
     __pyx_t_9 = 0;
     __pyx_t_10 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":276
+    /* "evoMPS\eps_maps_c.pyx":264
  *         gdmm(False, A1[s, :, :], x, A1x)
  * 
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, M, N, K,             # <<<<<<<<<<<<<<
@@ -7426,7 +7426,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, __pyx_v_M, __pyx_v_N, __pyx_v_K, ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1x.data + __pyx_t_4 * __pyx_v_A1x.strides[0]) )) + __pyx_t_5)) ))))), __pyx_v_K, ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_6 * __pyx_v_A2.strides[0]) ) + __pyx_t_7 * __pyx_v_A2.strides[1]) )) + __pyx_t_8)) ))))), __pyx_v_L, ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_9 * __pyx_v_out.strides[0]) )) + __pyx_t_10)) ))))), __pyx_v_N);
   }
 
-  /* "evoMPS\eps_maps_c.pyx":264
+  /* "evoMPS\eps_maps_c.pyx":252
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7442,7 +7442,7 @@ __pyx_f_6evoMPS_10eps_maps_c_gdmm(0, __pyx_t_3, __pyx_v_x, __pyx_v_A1x);
   __pyx_L0:;
 }
 
-/* "evoMPS\eps_maps_c.pyx":283
+/* "evoMPS\eps_maps_c.pyx":271
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7471,7 +7471,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
   Py_ssize_t __pyx_t_15;
   Py_ssize_t __pyx_t_16;
 
-  /* "evoMPS\eps_maps_c.pyx":285
+  /* "evoMPS\eps_maps_c.pyx":273
  * cdef void eps_l_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:
  *     cdef int s
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7480,7 +7480,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":286
+  /* "evoMPS\eps_maps_c.pyx":274
  *     cdef int s
  *     cdef complex alpha = 1
  *     cdef complex beta = 0             # <<<<<<<<<<<<<<
@@ -7489,7 +7489,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":288
+  /* "evoMPS\eps_maps_c.pyx":276
  *     cdef complex beta = 0
  * 
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7500,7 +7500,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":291
+    /* "evoMPS\eps_maps_c.pyx":279
  *         cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,
  *                     A1.shape[2], x.shape[1], A1.shape[1],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],             # <<<<<<<<<<<<<<
@@ -7511,7 +7511,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":292
+    /* "evoMPS\eps_maps_c.pyx":280
  *                     A1.shape[2], x.shape[1], A1.shape[1],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&x[0, 0], x.shape[1], <double *>&beta,             # <<<<<<<<<<<<<<
@@ -7521,7 +7521,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_6 = 0;
     __pyx_t_7 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":293
+    /* "evoMPS\eps_maps_c.pyx":281
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&x[0, 0], x.shape[1], <double *>&beta,
  *                     <double *>&A1Hx[0, 0], A1Hx.shape[1])             # <<<<<<<<<<<<<<
@@ -7531,7 +7531,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_8 = 0;
     __pyx_t_9 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":289
+    /* "evoMPS\eps_maps_c.pyx":277
  * 
  *     for s in xrange(A1.shape[0]):
  *         cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,             # <<<<<<<<<<<<<<
@@ -7540,7 +7540,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
  */
     cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, (__pyx_v_A1.shape[2]), (__pyx_v_x.shape[1]), (__pyx_v_A1.shape[1]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A1.data + __pyx_t_3 * __pyx_v_A1.strides[0]) ) + __pyx_t_4 * __pyx_v_A1.strides[1]) )) + __pyx_t_5)) ))))), (__pyx_v_A1.shape[2]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_x.data + __pyx_t_6 * __pyx_v_x.strides[0]) )) + __pyx_t_7)) ))))), (__pyx_v_x.shape[1]), ((double *)(&__pyx_v_beta)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1Hx.data + __pyx_t_8 * __pyx_v_A1Hx.strides[0]) )) + __pyx_t_9)) ))))), (__pyx_v_A1Hx.shape[1]));
 
-    /* "evoMPS\eps_maps_c.pyx":300
+    /* "evoMPS\eps_maps_c.pyx":288
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
  *                     A1Hx.shape[0], A2.shape[2], A1Hx.shape[1],
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], A1Hx.shape[1],             # <<<<<<<<<<<<<<
@@ -7550,7 +7550,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_10 = 0;
     __pyx_t_11 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":301
+    /* "evoMPS\eps_maps_c.pyx":289
  *                     A1Hx.shape[0], A2.shape[2], A1Hx.shape[1],
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], A1Hx.shape[1],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7561,7 +7561,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_13 = 0;
     __pyx_t_14 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":302
+    /* "evoMPS\eps_maps_c.pyx":290
  *                     <double *>&alpha, <double *>&A1Hx[0, 0], A1Hx.shape[1],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], out.shape[1])             # <<<<<<<<<<<<<<
@@ -7571,7 +7571,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_15 = 0;
     __pyx_t_16 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":298
+    /* "evoMPS\eps_maps_c.pyx":286
  *         #N = A2.shape[2]
  *         #K = A1Hx.shape[1]
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,             # <<<<<<<<<<<<<<
@@ -7581,7 +7581,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (__pyx_v_A1Hx.shape[0]), (__pyx_v_A2.shape[2]), (__pyx_v_A1Hx.shape[1]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1Hx.data + __pyx_t_10 * __pyx_v_A1Hx.strides[0]) )) + __pyx_t_11)) ))))), (__pyx_v_A1Hx.shape[1]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_12 * __pyx_v_A2.strides[0]) ) + __pyx_t_13 * __pyx_v_A2.strides[1]) )) + __pyx_t_14)) ))))), (__pyx_v_A2.shape[2]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_15 * __pyx_v_out.strides[0]) )) + __pyx_t_16)) ))))), (__pyx_v_out.shape[1]));
   }
 
-  /* "evoMPS\eps_maps_c.pyx":283
+  /* "evoMPS\eps_maps_c.pyx":271
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7592,7 +7592,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_dense(__pyx_t_6evoMPS_10eps_
   /* function exit code */
 }
 
-/* "evoMPS\eps_maps_c.pyx":306
+/* "evoMPS\eps_maps_c.pyx":294
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7621,7 +7621,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
   Py_ssize_t __pyx_t_15;
   Py_ssize_t __pyx_t_16;
 
-  /* "evoMPS\eps_maps_c.pyx":308
+  /* "evoMPS\eps_maps_c.pyx":296
  * cdef void eps_r_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:
  *     cdef int s
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7630,7 +7630,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":309
+  /* "evoMPS\eps_maps_c.pyx":297
  *     cdef int s
  *     cdef complex alpha = 1
  *     cdef complex beta = 0             # <<<<<<<<<<<<<<
@@ -7639,7 +7639,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(0, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":311
+  /* "evoMPS\eps_maps_c.pyx":299
  *     cdef complex beta = 0
  * 
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7650,7 +7650,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":314
+    /* "evoMPS\eps_maps_c.pyx":302
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
  *                     A1.shape[1], x.shape[1], A1.shape[2],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],             # <<<<<<<<<<<<<<
@@ -7661,7 +7661,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":315
+    /* "evoMPS\eps_maps_c.pyx":303
  *                     A1.shape[1], x.shape[1], A1.shape[2],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&x[0, 0], x.shape[1], <double *>&beta,             # <<<<<<<<<<<<<<
@@ -7671,7 +7671,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_6 = 0;
     __pyx_t_7 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":316
+    /* "evoMPS\eps_maps_c.pyx":304
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&x[0, 0], x.shape[1], <double *>&beta,
  *                     <double *>&A1x[0, 0], A1x.shape[1])             # <<<<<<<<<<<<<<
@@ -7681,7 +7681,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_8 = 0;
     __pyx_t_9 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":312
+    /* "evoMPS\eps_maps_c.pyx":300
  * 
  *     for s in xrange(A1.shape[0]):
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,             # <<<<<<<<<<<<<<
@@ -7690,7 +7690,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
  */
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (__pyx_v_A1.shape[1]), (__pyx_v_x.shape[1]), (__pyx_v_A1.shape[2]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A1.data + __pyx_t_3 * __pyx_v_A1.strides[0]) ) + __pyx_t_4 * __pyx_v_A1.strides[1]) )) + __pyx_t_5)) ))))), (__pyx_v_A1.shape[2]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_x.data + __pyx_t_6 * __pyx_v_x.strides[0]) )) + __pyx_t_7)) ))))), (__pyx_v_x.shape[1]), ((double *)(&__pyx_v_beta)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1x.data + __pyx_t_8 * __pyx_v_A1x.strides[0]) )) + __pyx_t_9)) ))))), (__pyx_v_A1x.shape[1]));
 
-    /* "evoMPS\eps_maps_c.pyx":320
+    /* "evoMPS\eps_maps_c.pyx":308
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,
  *                     A1x.shape[0], A2.shape[1], A1x.shape[1],
  *                     <double *>&alpha, <double *>&A1x[0, 0], A1x.shape[1],             # <<<<<<<<<<<<<<
@@ -7700,7 +7700,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_10 = 0;
     __pyx_t_11 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":321
+    /* "evoMPS\eps_maps_c.pyx":309
  *                     A1x.shape[0], A2.shape[1], A1x.shape[1],
  *                     <double *>&alpha, <double *>&A1x[0, 0], A1x.shape[1],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7711,7 +7711,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_13 = 0;
     __pyx_t_14 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":322
+    /* "evoMPS\eps_maps_c.pyx":310
  *                     <double *>&alpha, <double *>&A1x[0, 0], A1x.shape[1],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], out.shape[1])             # <<<<<<<<<<<<<<
@@ -7721,7 +7721,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     __pyx_t_15 = 0;
     __pyx_t_16 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":318
+    /* "evoMPS\eps_maps_c.pyx":306
  *                     <double *>&A1x[0, 0], A1x.shape[1])
  * 
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,             # <<<<<<<<<<<<<<
@@ -7731,7 +7731,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, (__pyx_v_A1x.shape[0]), (__pyx_v_A2.shape[1]), (__pyx_v_A1x.shape[1]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_A1x.data + __pyx_t_10 * __pyx_v_A1x.strides[0]) )) + __pyx_t_11)) ))))), (__pyx_v_A1x.shape[1]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_12 * __pyx_v_A2.strides[0]) ) + __pyx_t_13 * __pyx_v_A2.strides[1]) )) + __pyx_t_14)) ))))), (__pyx_v_A2.shape[2]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_15 * __pyx_v_out.strides[0]) )) + __pyx_t_16)) ))))), (__pyx_v_out.shape[1]));
   }
 
-  /* "evoMPS\eps_maps_c.pyx":306
+  /* "evoMPS\eps_maps_c.pyx":294
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7742,7 +7742,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_dense(__pyx_t_6evoMPS_10eps_
   /* function exit code */
 }
 
-/* "evoMPS\eps_maps_c.pyx":326
+/* "evoMPS\eps_maps_c.pyx":314
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7765,7 +7765,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
   Py_ssize_t __pyx_t_9;
   Py_ssize_t __pyx_t_10;
 
-  /* "evoMPS\eps_maps_c.pyx":328
+  /* "evoMPS\eps_maps_c.pyx":316
  * cdef void eps_r_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:
  *     cdef int s
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7774,7 +7774,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":329
+  /* "evoMPS\eps_maps_c.pyx":317
  *     cdef int s
  *     cdef complex alpha = 1
  *     cdef complex beta = 1             # <<<<<<<<<<<<<<
@@ -7783,7 +7783,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":331
+  /* "evoMPS\eps_maps_c.pyx":319
  *     cdef complex beta = 1
  * 
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7794,7 +7794,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":334
+    /* "evoMPS\eps_maps_c.pyx":322
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,
  *                     A1.shape[1], A2.shape[1], A1.shape[2],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],             # <<<<<<<<<<<<<<
@@ -7805,7 +7805,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":335
+    /* "evoMPS\eps_maps_c.pyx":323
  *                     A1.shape[1], A2.shape[1], A1.shape[2],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7816,7 +7816,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_7 = 0;
     __pyx_t_8 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":336
+    /* "evoMPS\eps_maps_c.pyx":324
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], out.shape[1])             # <<<<<<<<<<<<<<
@@ -7826,7 +7826,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_9 = 0;
     __pyx_t_10 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":332
+    /* "evoMPS\eps_maps_c.pyx":320
  * 
  *     for s in xrange(A1.shape[0]):
  *         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,             # <<<<<<<<<<<<<<
@@ -7836,7 +7836,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, (__pyx_v_A1.shape[1]), (__pyx_v_A2.shape[1]), (__pyx_v_A1.shape[2]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A1.data + __pyx_t_3 * __pyx_v_A1.strides[0]) ) + __pyx_t_4 * __pyx_v_A1.strides[1]) )) + __pyx_t_5)) ))))), (__pyx_v_A1.shape[2]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_6 * __pyx_v_A2.strides[0]) ) + __pyx_t_7 * __pyx_v_A2.strides[1]) )) + __pyx_t_8)) ))))), (__pyx_v_A2.shape[2]), ((double *)(&__pyx_v_beta)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_9 * __pyx_v_out.strides[0]) )) + __pyx_t_10)) ))))), (__pyx_v_out.shape[1]));
   }
 
-  /* "evoMPS\eps_maps_c.pyx":326
+  /* "evoMPS\eps_maps_c.pyx":314
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_r_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7847,7 +7847,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_r_noop_id(__pyx_t_6evoMPS_10eps_map
   /* function exit code */
 }
 
-/* "evoMPS\eps_maps_c.pyx":340
+/* "evoMPS\eps_maps_c.pyx":328
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -7870,7 +7870,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
   Py_ssize_t __pyx_t_9;
   Py_ssize_t __pyx_t_10;
 
-  /* "evoMPS\eps_maps_c.pyx":342
+  /* "evoMPS\eps_maps_c.pyx":330
  * cdef void eps_l_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:
  *     cdef int s
  *     cdef complex alpha = 1             # <<<<<<<<<<<<<<
@@ -7879,7 +7879,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
  */
   __pyx_v_alpha = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":343
+  /* "evoMPS\eps_maps_c.pyx":331
  *     cdef int s
  *     cdef complex alpha = 1
  *     cdef complex beta = 1             # <<<<<<<<<<<<<<
@@ -7888,7 +7888,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
  */
   __pyx_v_beta = __pyx_t_double_complex_from_parts(1, 0);
 
-  /* "evoMPS\eps_maps_c.pyx":345
+  /* "evoMPS\eps_maps_c.pyx":333
  *     cdef complex beta = 1
  * 
  *     for s in xrange(A1.shape[0]):             # <<<<<<<<<<<<<<
@@ -7899,7 +7899,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
   for (__pyx_t_2 = 0; __pyx_t_2 < __pyx_t_1; __pyx_t_2+=1) {
     __pyx_v_s = __pyx_t_2;
 
-    /* "evoMPS\eps_maps_c.pyx":348
+    /* "evoMPS\eps_maps_c.pyx":336
  *         cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,
  *                     A1.shape[2], A2.shape[2], A1.shape[1],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],             # <<<<<<<<<<<<<<
@@ -7910,7 +7910,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_4 = 0;
     __pyx_t_5 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":349
+    /* "evoMPS\eps_maps_c.pyx":337
  *                     A1.shape[2], A2.shape[2], A1.shape[1],
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result!             # <<<<<<<<<<<<<<
@@ -7920,7 +7920,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_7 = 0;
     __pyx_t_8 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":350
+    /* "evoMPS\eps_maps_c.pyx":338
  *                     <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
  *                     <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result!
  *                     <double *>&out[0, 0], out.shape[1])             # <<<<<<<<<<<<<<
@@ -7928,7 +7928,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
     __pyx_t_9 = 0;
     __pyx_t_10 = 0;
 
-    /* "evoMPS\eps_maps_c.pyx":346
+    /* "evoMPS\eps_maps_c.pyx":334
  * 
  *     for s in xrange(A1.shape[0]):
  *         cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,             # <<<<<<<<<<<<<<
@@ -7938,7 +7938,7 @@ static void __pyx_f_6evoMPS_10eps_maps_c_eps_l_noop_id(__pyx_t_6evoMPS_10eps_map
     cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, (__pyx_v_A1.shape[2]), (__pyx_v_A2.shape[2]), (__pyx_v_A1.shape[1]), ((double *)(&__pyx_v_alpha)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A1.data + __pyx_t_3 * __pyx_v_A1.strides[0]) ) + __pyx_t_4 * __pyx_v_A1.strides[1]) )) + __pyx_t_5)) ))))), (__pyx_v_A1.shape[2]), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=2 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=1 */ (( /* dim=0 */ (__pyx_v_A2.data + __pyx_t_6 * __pyx_v_A2.strides[0]) ) + __pyx_t_7 * __pyx_v_A2.strides[1]) )) + __pyx_t_8)) ))))), (__pyx_v_A2.shape[2]), ((double *)(&__pyx_v_beta)), ((double *)(&(*((__pyx_t_double_complex *) ( /* dim=1 */ ((char *) (((__pyx_t_double_complex *) ( /* dim=0 */ (__pyx_v_out.data + __pyx_t_9 * __pyx_v_out.strides[0]) )) + __pyx_t_10)) ))))), (__pyx_v_out.shape[1]));
   }
 
-  /* "evoMPS\eps_maps_c.pyx":340
+  /* "evoMPS\eps_maps_c.pyx":328
  * @cy.boundscheck(False)
  * @cy.wraparound(False)
  * cdef void eps_l_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:             # <<<<<<<<<<<<<<
@@ -22393,11 +22393,11 @@ static __Pyx_StringTabEntry __pyx_string_tab[] = {
 };
 static int __Pyx_InitCachedBuiltins(void) {
   #if PY_MAJOR_VERSION >= 3
-  __pyx_builtin_xrange = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_xrange) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 138; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_builtin_xrange = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_xrange) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 126; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   #else
-  __pyx_builtin_xrange = __Pyx_GetBuiltinName(__pyx_n_s_xrange); if (!__pyx_builtin_xrange) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 138; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_builtin_xrange = __Pyx_GetBuiltinName(__pyx_n_s_xrange); if (!__pyx_builtin_xrange) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 126; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   #endif
-  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 229; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_builtin_ValueError = __Pyx_GetBuiltinName(__pyx_n_s_ValueError); if (!__pyx_builtin_ValueError) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 217; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_n_s_range); if (!__pyx_builtin_range) {__pyx_filename = __pyx_f[1]; __pyx_lineno = 231; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_builtin_RuntimeError = __Pyx_GetBuiltinName(__pyx_n_s_RuntimeError); if (!__pyx_builtin_RuntimeError) {__pyx_filename = __pyx_f[1]; __pyx_lineno = 799; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __pyx_builtin_MemoryError = __Pyx_GetBuiltinName(__pyx_n_s_MemoryError); if (!__pyx_builtin_MemoryError) {__pyx_filename = __pyx_f[2]; __pyx_lineno = 144; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
@@ -22415,47 +22415,47 @@ static int __Pyx_InitCachedConstants(void) {
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("__Pyx_InitCachedConstants", 0);
 
-  /* "evoMPS\eps_maps_c.pyx":70
+  /* "evoMPS\eps_maps_c.pyx":58
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)             # <<<<<<<<<<<<<<
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  */
-  __pyx_tuple_ = PyTuple_Pack(1, __pyx_int_0); if (unlikely(!__pyx_tuple_)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 70; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_tuple_ = PyTuple_Pack(1, __pyx_int_0); if (unlikely(!__pyx_tuple_)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 58; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_tuple_);
   __Pyx_GIVEREF(__pyx_tuple_);
 
-  /* "evoMPS\eps_maps_c.pyx":150
+  /* "evoMPS\eps_maps_c.pyx":138
  * @cy.wraparound(False)
  * cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
  *     ndout.fill(0)             # <<<<<<<<<<<<<<
  *     cdef cmp2d out = ndout
  *     cdef cmp3d outs
  */
-  __pyx_tuple__2 = PyTuple_Pack(1, __pyx_int_0); if (unlikely(!__pyx_tuple__2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 150; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_tuple__2 = PyTuple_Pack(1, __pyx_int_0); if (unlikely(!__pyx_tuple__2)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 138; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_tuple__2);
   __Pyx_GIVEREF(__pyx_tuple__2);
 
-  /* "evoMPS\eps_maps_c.pyx":229
+  /* "evoMPS\eps_maps_c.pyx":217
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")             # <<<<<<<<<<<<<<
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  */
-  __pyx_tuple__3 = PyTuple_Pack(1, __pyx_kp_s_gdmm_Invalid_array_dimensions); if (unlikely(!__pyx_tuple__3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 229; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_tuple__3 = PyTuple_Pack(1, __pyx_kp_s_gdmm_Invalid_array_dimensions); if (unlikely(!__pyx_tuple__3)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 217; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_tuple__3);
   __Pyx_GIVEREF(__pyx_tuple__3);
 
-  /* "evoMPS\eps_maps_c.pyx":239
+  /* "evoMPS\eps_maps_c.pyx":227
  *             or not Y.shape[0] == out.shape[1]):
  *                 with gil:
  *                     raise ValueError("gdmm: Invalid array dimensions!")             # <<<<<<<<<<<<<<
  *         for i in xrange(X.shape[0]):
  *             for j in xrange(X.shape[1]):
  */
-  __pyx_tuple__4 = PyTuple_Pack(1, __pyx_kp_s_gdmm_Invalid_array_dimensions); if (unlikely(!__pyx_tuple__4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 239; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
+  __pyx_tuple__4 = PyTuple_Pack(1, __pyx_kp_s_gdmm_Invalid_array_dimensions); if (unlikely(!__pyx_tuple__4)) {__pyx_filename = __pyx_f[0]; __pyx_lineno = 227; __pyx_clineno = __LINE__; goto __pyx_L1_error;}
   __Pyx_GOTREF(__pyx_tuple__4);
   __Pyx_GIVEREF(__pyx_tuple__4);
 
