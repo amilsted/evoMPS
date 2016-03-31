@@ -1050,31 +1050,34 @@ class EvoMPS_MPS_Uniform(object):
             The right (or left if left == True) eigenvector corresponding to w (if full_output == True).
         """
         assert self.q == other.q, "Hilbert spaces must have same dimensions!"
-        assert self.L == other.L, "Unit cell sizes must be equal!"
         
-        As = [self.A, other.A]
-        
+        from fractions import gcd
+        L_ = self.L * other.L / gcd(self.L, other.L)
+
+        As1 = list(self.A) * (L_ / self.L)
+        As2 = list(other.A) * (L_ / other.L)
+
         ED = self.D * other.D
         
         if ED == 1:
             ev = 1
-            for k in xrange(self.L):
+            for k in xrange(L_):
                 evk = 0
                 for s in xrange(self.q):    
-                    evk += As[0][k][s] * As[1][k][s].conj()
+                    evk += As1[k][s] * As2[k][s].conj()
                 ev *= evk
             if left:
                 ev = ev.conj()
             if full_output:
-                return abs(ev)**(1./self.L), ev, sp.ones((1), dtype=self.typ)
+                return abs(ev)**(1./L_), ev, sp.ones((1), dtype=self.typ)
             else:
-                return abs(ev)**(1./self.L), ev
+                return abs(ev)**(1./L_), ev
         elif (ED <= dense_cutoff or force_dense) and not force_sparse:
-            E = m.eyemat(ED, dtype=As[0][0].dtype)
-            for k in xrange(self.L):
-                Ek = sp.zeros((ED, ED), dtype=As[0][0].dtype)
-                for s in xrange(As[0][k].shape[0]):
-                    Ek += sp.kron(As[0][k][s], As[1][k][s].conj())
+            E = m.eyemat(ED, dtype=As1[0].dtype)
+            for k in xrange(L_):
+                Ek = sp.zeros((ED, ED), dtype=As1[0].dtype)
+                for s in xrange(As1[k].shape[0]):
+                    Ek += sp.kron(As1[k][s], As2[k][s].conj())
                 E = E.dot(Ek)
                 
             if full_output:
@@ -1084,18 +1087,18 @@ class EvoMPS_MPS_Uniform(object):
             
             ind = abs(ev).argmax()
             if full_output:
-                return abs(ev[ind])**(1./self.L), ev[ind], eV[:, ind]
+                return abs(ev[ind])**(1./L_), ev[ind], eV[:, ind]
             else:
-                return abs(ev[ind])**(1./self.L), ev[ind]
+                return abs(ev[ind])**(1./L_), ev[ind]
         else:
-            opE = self._get_EOP(As[0], As[1], left)
+            opE = self._get_EOP(As1, As2, left)
             res = las.eigs(opE, which='LM', k=1, ncv=20, return_eigenvectors=full_output)
             if full_output:
                 ev, eV = res
-                return abs(ev[0])**(1./self.L), ev[0], eV[:, 0]
+                return abs(ev[0])**(1./L_), ev[0], eV[:, 0]
             else:
                 ev = res
-                return abs(ev[0])**(1./self.L), ev[0]
+                return abs(ev[0])**(1./L_), ev[0]
             
     def phase_align(self, other):
         """Adjusts the parameter tensor A by a phase-factor to align it with another state.
