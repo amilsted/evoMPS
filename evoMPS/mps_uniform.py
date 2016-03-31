@@ -668,11 +668,12 @@ class EvoMPS_MPS_Uniform(object):
                 raise ValueError('restore_SCF: Decomposition of l and r failed!')
             
             U, sv, Vh = la.svd(Y.dot(X))
-            
+
             #s contains the Schmidt coefficients,
             S = m.simple_diag_matrix(sv, dtype=self.typ)
             Srt = S.sqrt()
             
+            #Invert the square roots of the Schmidt coefficients.
             nonzeros = np.count_nonzero(S.diag > zero_tol)
             Srti = sp.zeros_like(S.diag, dtype=S.dtype)
             Srti[-nonzeros:] = 1. / Srt.diag[-nonzeros:]
@@ -687,6 +688,8 @@ class EvoMPS_MPS_Uniform(object):
                 self.A[k][s] = self.A[k][s].dot(g_i)
                     
             if self.sanity_checks:
+                assert sp.all(sv[::-1] == sp.sort(sv)), "Singular values returned in unexpected order!"
+            
                 Sfull = np.asarray(S)
                 
                 if not np.allclose(g.dot(g_i), np.eye(self.D)):
