@@ -70,16 +70,10 @@ class EOp:
         return Ex.ravel()
         
 class EvoMPSNoConvergence(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
+    pass
         
 class EvoMPSNormError(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
+    pass
 
 class EvoMPS_MPS_Uniform(object):   
         
