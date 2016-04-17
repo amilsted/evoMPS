@@ -69,10 +69,10 @@ class EOp:
         
         return Ex.ravel()
         
-class EvoMPSNoConvergence(Exception):
+class EvoMPSNoConvergence(StandardError):
     pass
         
-class EvoMPSNormError(Exception):
+class EvoMPSNormError(StandardError):
     pass
 
 class EvoMPS_MPS_Uniform(object):   
@@ -320,11 +320,12 @@ class EvoMPS_MPS_Uniform(object):
                 if abs(ev) < 1E-12:
                     raise ValueError("Largest eigenvalue too small!")
                 if symmetric and np.imag(ev) != 0:
-                    raise ValueError("Largest eigenvalue is not real! (ncv too small?)")
+                    raise ValueError("Largest eigenvalue is not real (%g)! (ncv too small?)" % np.imag(ev))
                 break
             except (las.ArpackNoConvergence, ValueError) as e:
                 log.warning("_calc_lr_ARPACK(nev=%u,ncv=%u): %s Try %u! (%s)", nev, ncv, e, i, "l" if calc_l else "r")
                 v0 = None
+                nev += 1
                 ncv += 5
                 
         if i == max_retries - 1:
