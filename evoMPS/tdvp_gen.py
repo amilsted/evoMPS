@@ -1376,7 +1376,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
             return m.adot(self.l[n - 1], res)
         else:
-            return super(EvoMPS_MPS_Generic).expect_2s(op, n, AA=AA)
+            return super(EvoMPS_TDVP_Generic, self).expect_2s(op, n, AA=AA)
 
     def expect_3s(self, op, n, AAA=None):
         """Computes the expectation value of a nearest-neighbour three-site operator.
@@ -1410,5 +1410,5 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], self.C[n], AAA)
             return m.adot(self.l[n - 1], res)
         else:
-            return super(EvoMPS_MPS_Generic).expect_3s(op, n, AAA=AAA)
+            return super(EvoMPS_TDVP_Generic, self).expect_3s(op, n, AAA=AAA)
         
