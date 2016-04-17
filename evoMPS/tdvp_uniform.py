@@ -1663,11 +1663,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                    
         return c, g
 
-class ls_wolfe_sat(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
+class EvoMPS_line_search_wolfe_sat(Exception):
+    def __init__(self, message, tau, *args):
+        self.message = message
+        self.tau = tau
+        super(EvoMPS_line_search_wolfe_sat, self).__init__(message, tau, *args)
 
 class EvoMPS_line_search():
     def __init__(self, tdvp, B, Bg, B_overlap_tol=1E-6):
@@ -1765,7 +1765,7 @@ class EvoMPS_line_search():
                          self.tdvp.r[-1].copy(), K0, wol)
 
             if wol and self.in_search:
-                raise ls_wolfe_sat(tau)
+                raise EvoMPS_line_search_wolfe_sat("Wolfe conditions satisfied.", tau)
             
             return g.real
             
@@ -1832,9 +1832,9 @@ class EvoMPS_line_search():
                     log.warning("CG: Failed to find a valid bracket.")
                     return 0, self.hs[0], 0 #fail
                 
-            except ls_wolfe_sat as e:
+            except EvoMPS_line_search_wolfe_sat as e:
                 log.debug("CG: Aborting early due to Wolfe")
-                tau_opt = e.value
+                tau_opt = e.tau
                 
         i = self.taus.index(tau_opt)
         h_min = self.hs[i]
