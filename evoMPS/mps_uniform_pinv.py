@@ -33,8 +33,8 @@ class PinvOp:
         
         self.dtype = A1[0].dtype
         
-        self.out = np.empty((self.D, self.D), dtype=self.dtype, order='F')
-        self.tmp = np.empty((self.D, self.D), dtype=self.dtype, order='F')
+        self.out = np.empty((self.D, self.D), dtype=self.dtype, order='C')
+        self.tmp = np.empty((self.D, self.D), dtype=self.dtype, order='C')
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))

@@ -532,8 +532,8 @@ class Excite_H_Op_tp:
             A_A_o12c = get_A_ops(A_, A_, _ham_tp, conj=True)
             
             A_o1 = get_Aop(A_, _ham_tp, 2, conj=False)
-            tmp = sp.empty((A_.shape[1], V_.shape[1]), dtype=A.dtype, order='F')
-            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='F')
+            tmp = sp.empty((A_.shape[1], V_.shape[1]), dtype=A.dtype, order='C')
+            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='C')
             rhs10 = 0
             for al in xrange(len(A_o1)):
                 tmp2 = tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2)
@@ -622,8 +622,8 @@ class Excite_H_Op_tp:
             pass
         else:
             Bo1 = get_Aop(B, _ham_tp, 2, conj=False)
-            tmp = sp.empty((B.shape[1], V_.shape[1]), dtype=A.dtype, order='F')
-            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='F')
+            tmp = sp.empty((B.shape[1], V_.shape[1]), dtype=A.dtype, order='C')
+            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='C')
             tmp3 = sp.empty_like(tmp2, order='C')
             for al in xrange(len(Bo1)):
                 tmp3 = m.dot_inplace(tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2), r__sqrt_i, tmp3)

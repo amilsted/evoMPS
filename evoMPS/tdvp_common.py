@@ -386,7 +386,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     
     x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = np.empty_like(x, order='C')
-    x_subpart = np.empty_like(A[0], order='F')
+    x_subpart = np.empty_like(A[0], order='C')
     
     assert not (C is None and not Kp1 is None) #existence of Kp1 implies existence of C
     if not C is None:
@@ -435,7 +435,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
 
     if not lm2 is None and not Cm1 is None:
         x_subpart = np.empty((Am1.shape[2], D), dtype=A.dtype)
-        x_subsubpart = np.empty((Cm1[0, 0].shape[1], D), dtype=A.dtype, order='F')
+        x_subsubpart = np.empty((Cm1[0, 0].shape[1], D), dtype=A.dtype, order='C')
         qm1 = Am1.shape[0]
         x_part.fill(0)
         for t in xrange(q):     #~2nd line
@@ -462,7 +462,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     
     x = sp.zeros((q * Dm1 - D, D), dtype=A.dtype)
     x_part = sp.empty_like(x, order='C')
-    x_subpart = sp.empty_like(A[0], order='F')
+    x_subpart = sp.empty_like(A[0], order='C')
     
     if not C is None:
         x_part.fill(0)

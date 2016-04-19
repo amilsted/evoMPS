@@ -50,8 +50,8 @@ class EOp:
         else:
             self.eps = tm.eps_r_noop_inplace
             
-        self.out1 = sp.empty(((self.D1, self.D2)), dtype=self.dtype, order='F')
-        self.out2 = sp.empty(((self.D1, self.D2)), dtype=self.dtype, order='F')
+        self.out1 = sp.empty(((self.D1, self.D2)), dtype=self.dtype)
+        self.out2 = sp.empty(((self.D1, self.D2)), dtype=self.dtype)
     
     def matvec(self, v):
         """Matrix-vector multiplication. 

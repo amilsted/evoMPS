@@ -85,7 +85,7 @@ def eps_l_noop(x, A1, A2):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype, order='F')
+    out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
     return eps_l_noop_inplace(x, A1, A2, out)
     
 def eps_l_noop_inplace(x, A1, A2, out):
@@ -113,24 +113,17 @@ def eps_l_noop_inplace(x, A1, A2, out):
     """
     out.fill(0)
     
-    tmp_xA2s = np.empty((x.shape[0], A2[0].shape[1]), dtype=np.promote_types(x.dtype, A2.dtype))
-    
-    #Unfortunately, we can't choose to get the cblas version here.
-    #In fact, it prefers to return the Fortran version.
-    gemm = la.get_blas_funcs("gemm", arrays=(A1,tmp_xA2s))
-    res = out
+    #Two extra temporaries required because scipy doesn't bother to provide full gemm functionality.
+    tmp_A1sh = np.empty((A1[0].shape[1], A1[0].shape[0]), dtype=A1[0].dtype, order='F')
+    tmp_xA2s = np.empty((x.shape[0], A2[0].shape[1]), dtype=np.promote_types(x.dtype, A2[0].dtype))
+    out_s = np.empty_like(out, order='C')
     
     for s in xrange(A1.shape[0]):
+        tmp_A1sh[:] = A1[s].T
+        np.conjugate(tmp_A1sh, out=tmp_A1sh)
         tmp_xA2s = mm.dot_inplace(x, A2[s], tmp_xA2s)
-        #This will create a contiguous array with F or C ordering 
-        #(Fortran is preferred) from res if necessary.
-        #Note that we could use dot() here, but would require a third output array to collect the final result.
-        #This is because dot() has no beta parameter.
-        res = gemm(1.0, A1[s], tmp_xA2s, 1.0, res, 2, 0, 1)
-    
-    #Since gemm might have reallocated the output, copy over result if needed
-    if not out is res:
-        out[:] = res
+        out_s = np.dot(tmp_A1sh, tmp_xA2s, out=out_s) #dot expects a C-ordered output array
+        out += out_s
         
     return out
     
@@ -153,7 +146,7 @@ def eps_r_noop(x, A1, A2):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype, order='F')
+    out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype)
     return eps_r_noop_inplace(x, A1, A2, out)
     
 def eps_r_noop_inplace(x, A1, A2, out):
@@ -182,17 +175,15 @@ def eps_r_noop_inplace(x, A1, A2, out):
     out.fill(0)
     
     tmp_A1xs = np.empty((A1[0].shape[0], x.shape[1]), dtype=np.promote_types(A1.dtype, x.dtype))
-        
-    gemm = la.get_blas_funcs("gemm", arrays=(tmp_A1xs,A2))
-    res = out
+    tmp_A2sh = np.empty((A2[0].shape[1], A2[0].shape[0]), dtype=A2[0].dtype, order='F')
+    out_s = np.empty_like(out, order='C')
     
     for s in xrange(A1.shape[0]):
         tmp_A1xs = mm.dot_inplace(A1[s], x, tmp_A1xs)
-        res = gemm(1.0, tmp_A1xs, A2[s], 1.0, res, 0, 2, 1) 
-        
-    #Since gemm might have reallocated the output, copy over result if needed
-    if not out is res:
-        out[:] = res
+        tmp_A2sh[:] = A2[s].T
+        np.conjugate(tmp_A2sh, out=tmp_A2sh)
+        out_s = np.dot(tmp_A1xs, tmp_A2sh, out=out_s)
+        out += out_s
         
     return out
     
