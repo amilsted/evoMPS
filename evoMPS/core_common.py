@@ -6,6 +6,8 @@ Created on Tue Jan 20 17:43:17 2015
 """
 
 import numpy as np
+import scipy.linalg as la
+import matmul as mm
 
 def calc_AA(A, Ap1):
     Dp1 = Ap1.shape[2]
@@ -57,7 +59,7 @@ def calc_AAA_AA(AAp1, Ap2):
                 np.dot(AAp1[u, v], Ap2[w], out=AAA[u, v, w])
     
     return AAA
-
+    
 def eps_l_noop(x, A1, A2):
     """Implements the left epsilon map.
     
@@ -83,10 +85,8 @@ def eps_l_noop(x, A1, A2):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
-    for s in xrange(A1.shape[0]):
-        out += A1[s].conj().T.dot(x.dot(A2[s]))
-    return out
+    out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype, order='F')
+    return eps_l_noop_inplace(x, A1, A2, out)
     
 def eps_l_noop_inplace(x, A1, A2, out):
     """Implements the left epsilon map for a pre-exisiting output matrix.
@@ -112,8 +112,26 @@ def eps_l_noop_inplace(x, A1, A2, out):
         The resulting matrix.
     """
     out.fill(0)
+    
+    tmp_xA2s = np.empty((x.shape[0], A2[0].shape[1]), dtype=np.promote_types(x.dtype, A2.dtype))
+    
+    #Unfortunately, we can't choose to get the cblas version here.
+    #In fact, it prefers to return the Fortran version.
+    gemm = la.get_blas_funcs("gemm", arrays=(A1,tmp_xA2s))
+    res = out
+    
     for s in xrange(A1.shape[0]):
-        out += A1[s].conj().T.dot(x.dot(A2[s]))
+        tmp_xA2s = mm.dot_inplace(x, A2[s], tmp_xA2s)
+        #This will create a contiguous array with F or C ordering 
+        #(Fortran is preferred) from res if necessary.
+        #Note that we could use dot() here, but would require a third output array to collect the final result.
+        #This is because dot() has no beta parameter.
+        res = gemm(1.0, A1[s], tmp_xA2s, 1.0, res, 2, 0, 1)
+    
+    #Since gemm might have reallocated the output, copy over result if needed
+    if not out is res:
+        out[:] = res
+        
     return out
     
 def eps_r_noop(x, A1, A2):
@@ -135,10 +153,8 @@ def eps_r_noop(x, A1, A2):
     res : ndarray
         The resulting matrix.
     """
-    out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype)
-    for s in xrange(A1.shape[0]):
-        out += A1[s].dot(x.dot(A2[s].conj().T))
-    return out
+    out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype, order='F')
+    return eps_r_noop_inplace(x, A1, A2, out)
     
 def eps_r_noop_inplace(x, A1, A2, out):
     """Implements the right epsilon map for a pre-exisiting output matrix.
@@ -164,8 +180,20 @@ def eps_r_noop_inplace(x, A1, A2, out):
         The resulting matrix.
     """
     out.fill(0)
+    
+    tmp_A1xs = np.empty((A1[0].shape[0], x.shape[1]), dtype=np.promote_types(A1.dtype, x.dtype))
+        
+    gemm = la.get_blas_funcs("gemm", arrays=(tmp_A1xs,A2))
+    res = out
+    
     for s in xrange(A1.shape[0]):
-        out += A1[s].dot(x.dot(A2[s].conj().T))
+        tmp_A1xs = mm.dot_inplace(A1[s], x, tmp_A1xs)
+        res = gemm(1.0, tmp_A1xs, A2[s], 1.0, res, 0, 2, 1) 
+        
+    #Since gemm might have reallocated the output, copy over result if needed
+    if not out is res:
+        out[:] = res
+        
     return out
     
 def eps_l_op_1s(x, A1, A2, op):
