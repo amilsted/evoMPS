@@ -485,7 +485,7 @@ class Excite_H_Op_tp:
         
         self.M_prev = None
         self.y_pi_prev = None
-        
+    
     def calc_BHB_prereq(self, tdvp, tdvp2):
         """Calculates prerequisites for the application of the effective Hamiltonian in terms of tangent vectors.
         
@@ -507,23 +507,10 @@ class Excite_H_Op_tp:
         A = tdvp.A[0]
         A_ = tdvp2.A[0]
             
+        #Note: V has ~ D**2 * q**2 elements. We avoid making any copies of it except this one.
+        #      This one is only needed because low-level routines force V_[s] to be contiguous.
+        #      TODO: Store V instead of Vsh in tdvp_uniform too...
         V_ = sp.transpose(tdvp2.Vsh[0], axes=(0, 2, 1)).conj().copy(order='C')
-        
-        Vri_ = sp.zeros_like(V_)
-        try:
-            for s in xrange(self.q):
-                Vri_[s] = r__sqrt_i.dot_left(V_[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vri_[s] = V_[s].dot(r__sqrt_i)
-
-        Vr_ = sp.zeros_like(V_)            
-        try:
-            for s in xrange(self.q):
-                Vr_[s] = r__sqrt.dot_left(V_[s])
-        except AttributeError:
-            for s in xrange(self.q):
-                Vr_[s] = V_[s].dot(r__sqrt)
                 
         if self.ham_sites == 2:
             #eyeham = m.eyemat(self.q, dtype=sp.complex128)
@@ -532,11 +519,9 @@ class Excite_H_Op_tp:
             diham = -tdvp.h_expect.real * sp.eye(self.q, dtype=sp.complex128)
             _ham_tp = self.ham_tp + [[diham, eyeham]]  #subtract norm dof
             
+            Ao1 = get_Aop(A, _ham_tp, 2, conj=False)
+            
             AhlAo1 = [tm.eps_l_op_1s(l, A, A, o1.conj().T) for o1, o2 in _ham_tp]
-            
-            Vr_o2c = get_Aop(Vr_, _ham_tp, 1, conj=True)
-            
-            Vri_o1c = get_Aop(Vri_, _ham_tp, 0, conj=True)
             
             A_o2c = get_Aop(A_, _ham_tp, 1, conj=True)
             
@@ -546,16 +531,20 @@ class Excite_H_Op_tp:
             
             A_A_o12c = get_A_ops(A_, A_, _ham_tp, conj=True)
             
+            A_o1 = get_Aop(A_, _ham_tp, 2, conj=False)
+            tmp = sp.empty((A_.shape[1], V_.shape[1]), dtype=A.dtype, order='F')
+            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='F')
             rhs10 = 0
-            for al in xrange(len(Vri_o1c)):
-                rhs10 += tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_o2c[al]), A_, Vri_o1c[al])
+            for al in xrange(len(A_o1)):
+                tmp2 = tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2)
+                tmp3 = m.mmul(tmp2, r__sqrt_i)
+                rhs10 += tm.eps_r_noop_inplace(tmp3, A_o1[al], V_, tmp)
                 
-            return V_, Vri_, Vr_, AhlAo1, Vr_o2c, Vri_o1c, A_o2c, Ao1c, A_Vr_ho2, A_A_o12c, rhs10
+            return V_, AhlAo1, A_o2c, Ao1, Ao1c, A_Vr_ho2, A_A_o12c, rhs10, _ham_tp
             
         elif self.ham_sites == 3:
             return
 
-    
     def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
                     M_prev=None, y_pi_prev=None, pinv_solver=None):
         if pinv_solver is None:
@@ -564,7 +553,7 @@ class Excite_H_Op_tp:
         if self.ham_sites == 3:
             return
         else:
-            V_, Vri_, Vr_, AhlAo1, Vr_o2c, Vri_o1c, A_o2c, Ao1c, A_Vr_ho2, A_A_o12c, rhs10 = prereq
+            V_, AhlAo1, A_o2c, Ao1, Ao1c, A_Vr_ho2, A_A_o12c, rhs10, _ham_tp = prereq
         
         A = tdvp.A[0]
         A_ = tdvp2.A[0]
@@ -598,7 +587,7 @@ class Excite_H_Op_tp:
         if self.sanity_checks:
             B2 = np.zeros_like(B)
             for s in xrange(self.q):
-                B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
+                B2[s] = l_sqrt_i.dot(x.dot(m.mmul(V_[s], r__sqrt_i)))
             if la.norm(B - B2) / la.norm(B) > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad Vri!")
 
@@ -624,33 +613,47 @@ class Excite_H_Op_tp:
 #            M = M - l * m.adot(r_, M)
         Mh = M.conj().T.copy(order='C')
         
-        res = 0
-        
-        if self.ham_sites == 3:
-            pass
-        else:
-            for al in xrange(len(Vri_o1c)):
-                res += l_sqrt.dot(tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_o2c[al]), B, Vri_o1c[al])) #1
-                res += sp.exp(+1.j * p) * l_sqrt.dot(tm.eps_r_noop(tm.eps_r_noop(r_, B, A_o2c[al]), A, Vri_o1c[al])) #3
-                        
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
+        res_ls = 0
+        res_lsi = 0
         
         exp = sp.exp
-        eye = m.eyemat(r_.shape[0], dtype=tdvp.typ)
+        
         if self.ham_sites == 3:
             pass
         else:
+            Bo1 = get_Aop(B, _ham_tp, 2, conj=False)
+            tmp = sp.empty((B.shape[1], V_.shape[1]), dtype=A.dtype, order='F')
+            tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='F')
+            tmp3 = sp.empty_like(tmp2, order='C')
+            for al in xrange(len(Bo1)):
+                tmp3 = m.dot_inplace(tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2), r__sqrt_i, tmp3)
+                res_ls += tm.eps_r_noop_inplace(tmp3, Bo1[al], V_, tmp) #1
+                
+                tmp3 = m.dot_inplace(tm.eps_r_noop_inplace(r_, B, A_o2c[al], tmp2), r__sqrt_i, tmp3)
+                tmp = tm.eps_r_noop_inplace(tmp3, Ao1[al], V_, tmp) #3
+                tmp *= exp(+1.j * p)
+                res_ls += tmp
+            del(tmp)
+            del(tmp2)
+            del(tmp3)
+                        
+        res_lsi += sp.exp(-1.j * p) * Mh.dot(rhs10) #10
+        
+        if self.ham_sites == 3:
+            pass
+        else:
+            Bo2 = get_Aop(B, _ham_tp, 3, conj=False)
             for al in xrange(len(AhlAo1)):
-                res += l_sqrt_i.dot(AhlAo1[al].dot(tm.eps_r_noop(eye, B, Vr_o2c[al]))) #2
-                res += exp(-1.j * p) * l_sqrt_i.dot(tm.eps_l_noop(l, Ao1c[al], B).dot(A_Vr_ho2[al])) #4
-                res += exp(-2.j * p) * l_sqrt_i.dot(tm.eps_l_noop(Mh, Ao1c[al], A_).dot(A_Vr_ho2[al])) #12
+                res_lsi += AhlAo1[al].dot(tm.eps_r_noop(r__sqrt, Bo2[al], V_)) #2
+                res_lsi += exp(-1.j * p) * tm.eps_l_noop(l, Ao1c[al], B).dot(A_Vr_ho2[al]) #4
+                res_lsi += exp(-2.j * p) * tm.eps_l_noop(Mh, Ao1c[al], A_).dot(A_Vr_ho2[al]) #12
                     
+        K__rri = m.mmul(K__r, r__sqrt_i)
+        res_ls += tm.eps_r_noop(K__rri, B, V_) #5
         
-        res += l_sqrt.dot(tm.eps_r_noop(K__r, B, Vri_)) #5
+        res_lsi += K_l.dot(tm.eps_r_noop(r__sqrt, B, V_)) #6
         
-        res += l_sqrt_i.dot(K_l.dot(tm.eps_r_noop(r__sqrt, B, V_))) #6
-        
-        res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
+        res_lsi += sp.exp(-1.j * p) * Mh.dot(tm.eps_r_noop(K__rri, A_, V_)) #8
 
         y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
         
@@ -662,6 +665,7 @@ class Excite_H_Op_tp:
                 tmp += sp.exp(+1.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_A_o12c[al][1]), B, A_A_o12c[al][0]) #9
                 tmp += sp.exp(+2.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, B, A_A_o12c[al][1]), A, A_A_o12c[al][0]) #11
             y = y1 + tmp #7, 9, 11
+            del(tmp)
         
         if pseudo:
             y = y - m.adot(l, y) * r_
@@ -677,7 +681,10 @@ class Excite_H_Op_tp:
             if tst > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad x_pi. Off by: %g", tst)
         
-        res += l_sqrt.dot(tm.eps_r_noop(y_pi, A, Vri_))
+        res_ls += tm.eps_r_noop(m.mmul(y_pi, r__sqrt_i), A, V_)
+        
+        res = l_sqrt.dot(res_ls)
+        res += l_sqrt_i.dot(res_lsi)
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
@@ -687,7 +694,7 @@ class Excite_H_Op_tp:
             if abs(expval.imag) > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
         
-        return res, M, y_pi   
+        return res, M, y_pi  
     
     def matvec(self, v):
         x = v.reshape((self.D, (self.q - 1)*self.D))
@@ -704,6 +711,7 @@ class Excite_H_Op_tp:
         
         return res.ravel()
 
+        
 def excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
     pseudo = AL is AR
     
