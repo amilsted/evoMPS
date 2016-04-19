@@ -46,9 +46,12 @@ class EOp:
         self.left = left
         
         if left:
-            self.eps = tm.eps_l_noop
+            self.eps = tm.eps_l_noop_inplace
         else:
-            self.eps = tm.eps_r_noop
+            self.eps = tm.eps_r_noop_inplace
+            
+        self.out1 = sp.empty(((self.D1, self.D2)), dtype=self.dtype, order='F')
+        self.out2 = sp.empty(((self.D1, self.D2)), dtype=self.dtype, order='F')
     
     def matvec(self, v):
         """Matrix-vector multiplication. 
@@ -56,18 +59,27 @@ class EOp:
         """
         x = v.reshape((self.D1, self.D2))
         
+        res = self.out1
+        out = self.out2
+        res[:] = x #we should *not* modify x, since it belongs to ARPACK's workspace
+        
         if self.left:           
             for n in xrange(len(self.A1)):
-                x = self.eps(x, self.A1[n], self.A2[n])
+                out = self.eps(res, self.A1[n], self.A2[n], out)
+                tmp = res
+                res = out
+                out = tmp
         else:
             for n in xrange(len(self.A1) - 1, -1, -1):
-                x = self.eps(x, self.A1[n], self.A2[n])
-            
-        Ex = x
-        
+                out = self.eps(res, self.A1[n], self.A2[n], out)
+                tmp = res
+                res = out
+                out = tmp
+
         self.calls += 1
         
-        return Ex.ravel()
+        #if res is F-ordered, this will make a copy
+        return res.ravel() #the return value gets copied into ARPACK's workspace.
         
 class EvoMPSNoConvergence(StandardError):
     pass
