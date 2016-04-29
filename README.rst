@@ -14,12 +14,20 @@ Tutorial videos:
 Introduction
 ------------
 
-evoMPS simulates time-evolution (real or imaginary) of one-dimensional 
-many-particle quantum systems using matrix product states
-(MPS) and the time dependent variational principle (TDVP).
+evoMPS can find ground states and low-lying excited states of one-dimensional 
+quantum systems (local Hamiltonians) directly in the thermodynamic limit of infinitely long chains.
+States are represented as (infinite) matrix product states (MPS).
 
-It also implements the nonlinear conjugate gradient method to find infinite MPS
-ground states.
+evoMPS finds ground states efficiently, even for critical systems, using the 
+nonlinear conjugate gradient method. It computes dispersion relations using
+the MPS tangent space as ansatz states for low-lying excitations with well-defined momenta.
+
+evoMPS can also simulate nonuniform dynamics in a finite window of an infinite
+system.
+
+The above features set evoMPS apart from other MPS and DMRG software, which do
+not usually work directly in the thermodynamic limit and do not exploit the MPS 
+tangent space as an excitations ansatz.
 
 evoMPS is based on algorithms published by Haegeman et al. [1] and Milsted et al. [2],
 among others.
@@ -34,7 +42,7 @@ Key Features
 * Calculates dispersion relations for infinite systems using tangent plane methods
 * Handles locally nonuniform infinite systems (sandwich MPS aka infinite boundary conditions)
 * Time-Dependent Variational Principle for simulating time evolution
-* Runge-Kutta and split-step (finite only) integrators
+* Runge-Kutta (RK4) and split-step (finite only) integrators for greater accuracy
 * Supports local Hamiltonians: nearest-neighbour (or next-nearest neighbour)
 * Limited support for long range Hamiltonians (in development, currently finite only using MPOs)
 
