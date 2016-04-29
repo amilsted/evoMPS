@@ -319,7 +319,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
            or calc_K()."""
 
     
-    def calc_C(self, n_low=-1, n_high=-1):
+    def calc_C(self, n_low=-1, n_high=-1, calc_AA=True):
         """Generates the C tensors used to calculate the K's and ultimately the B's.
         
         This is called automatically by self.update().
@@ -347,14 +347,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_high < 1:
             n_high = self.N - self.ham_sites + 1
             
-        for n in xrange(1, self.N):
-            self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-        
-        if self.ham_sites == 3:
-            for n in xrange(1, self.N - 1):
-                self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
-        else:
-            self.AAA.fill(None)
+        if calc_AA:
+            for n in xrange(1, self.N):
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+            
+            if self.ham_sites == 3:
+                for n in xrange(1, self.N - 1):
+                    self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+            else:
+                self.AAA.fill(None)
         
         for n in xrange(n_low, n_high + 1):
             if callable(self.ham):
@@ -364,10 +365,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             else:
                 ham_n = self.ham[n]
             
-            if self.ham_sites == 2:
-                self.C[n] = tm.calc_C_mat_op_AA(ham_n, self.AA[n])
+            if ham_n is None:
+                self.C[n] = None
             else:
-                self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, self.AAA[n])                
+                if self.ham_sites == 2:
+                    self.C[n] = tm.calc_C_mat_op_AA(ham_n, self.AA[n])
+                else:
+                    self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, self.AAA[n])                
     
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's.
@@ -392,12 +396,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         for n in reversed(xrange(n_low, n_high + 1)):
             if n <= self.N - self.ham_sites + 1:
-                if self.ham_sites == 2:
-                    self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 1], self.A[n], self.AA[n])
+                if self.C[n] is None:
+                    self.K[n], ex = (tm.eps_r_noop(self.K[n + 1], self.A[n], self.A[n]), 0)
                 else:
-                    self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 2], self.A[n], self.AAA[n])
+                    if self.ham_sites == 2:
+                        self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                                  self.r[n + 1], self.A[n], self.AA[n])
+                    else:
+                        self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                                  self.r[n + 2], self.A[n], self.AAA[n])
 
                 self.h_expect[n] = ex
             else:
@@ -1372,7 +1379,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if AA is None:
             AA = self.AA[n]
         
-        if op is self.ham[n] and self.ham_sites == 2:
+        if not op is None and op is self.ham[n] and self.ham_sites == 2:
             res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
             return m.adot(self.l[n - 1], res)
         else:
@@ -1406,7 +1413,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             else:
                 AAA = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
                 
-        if op is self.ham[n] and self.ham_sites == 3:
+        if not op is None and op is self.ham[n] and self.ham_sites == 3:
             res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], self.C[n], AAA)
             return m.adot(self.l[n - 1], res)
         else:
