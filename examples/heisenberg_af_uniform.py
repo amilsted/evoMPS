@@ -22,14 +22,14 @@ bond_dim = 32                 #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
 Jy = 1.00
-Jz = 0.00
+Jz = 1.00
 
 tol = 1E-7                    #Ground state tolerance (norm of projected evolution vector)
 
 step = 0.04                   #Imaginary time step size
 max_steps = 10000             #Maximum number of iterations
 
-load_saved_ground = True      #Whether to load a saved ground state (if it exists)
+load_saved_ground = False     #Whether to load a saved ground state (if it exists)
 
 auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
@@ -148,6 +148,9 @@ if __name__ == '__main__':
     print "\t".join(col_heads)
     print
     
+    """
+    Define a function to print information after each step.
+    """
     prev_h = 0
     def cbf(s, i, **kwargs):
         global prev_h
@@ -177,7 +180,9 @@ if __name__ == '__main__':
 
         print "\t".join(row)
 
-
+    """
+    Find the ground state using the TDVP and the nonlinear conjugate gradient method
+    """
     if not loaded:
         s = dy.find_ground(s, tol=tol, h_init=step, cb_func=cbf, max_itr=max_steps)
         s.save_state(grnd_fname)
