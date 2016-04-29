@@ -34,7 +34,7 @@ def make_E_2s(A1, A2, B1, B2, op):
 
 class TestOps(unittest.TestCase):
 
-    def setUp(self):
+    def setUp(self): #TODO: Test rectangular x as well
         self.d = [2, 3]
         self.D = [2, 4, 3]
         
