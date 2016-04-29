@@ -712,7 +712,7 @@ class Excite_H_Op_tp:
         return res.ravel()
 
         
-def excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
+def _excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
     pseudo = AL is AR
     
     BBL = pinv_1mE(tm.eps_l_noop(lL, B, B), [AR], [AR], lL, rR, p=0, 
@@ -827,7 +827,7 @@ def excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
     
     return res
     
-def excite_expect_2s_tp_sep(AL, AR, B, lL, rR, op, d, n1, n2):
+def _excite_expect_2s_tp_sep(AL, AR, B, lL, rR, op, d, n1, n2):
     ls = [None] * (d + 1)
     ls[0] = lL
     rs = [None] * (d + 1)
