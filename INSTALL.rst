@@ -15,8 +15,9 @@ Prerequisites
 On Windows, an easy way to obtain everything required is to download and
 install a numerics-oriented Python distribution such as
 
-* pythonxy <http://www.pythonxy.com> (open source and a free download of 32-bit binaries)
-* enthought python distribution <http://www.enthought.com/products/epd.php> (free for academic use, with optimized linear algerba, 64-bit available)
+* Anaconda <https://www.continuum.io/why-anaconda> 
+* enthought python distribution <https://www.enthought.com/products/canopy/>
+* pythonxy <https://python-xy.github.io/>
 
 The full installation of either of these includes everything you need.
 Otherwise, the following are required:
@@ -25,12 +26,18 @@ Otherwise, the following are required:
 * Numpy <http://numpy.scipy.org> (tested on 1.6.1)
 * Scipy <http://www.scipy.org> (version 0.7.0 or newer - tested on 0.10)
 
-Numpy should be compiled with a LAPACK library, preferably
-an optimized one such as ATLAS <http://math-atlas.sourceforge.net/>. 
-Scipy requires a LAPACK library to be present.
+Numpy/Scipy should be compiled with a LAPACK library, preferably
+an optimized one such as the MKL from Intel <https://software.intel.com/en-us/intel-mkl>
+(now included for free with many python distributions due to licensing changes by Intel)
+or OpenBLAS <http://www.openblas.net/>.
 
-If present, Cython <http://www.cython.org/> will also be used to perform
-some (currently minor) optimizations.
+If present, a c compiler may be used to compile some parts of evoMPS,
+resulting in performance gains, especially at low bond dimensions.
+
+To setup a c compiler on Windows, see <https://github.com/cython/cython/wiki/CythonExtensionsOnWindows>.
+
+Some parts of evoMPS *require* compilation, such as the split-step
+integrator, which needs the (included) expokit FORTRAN program.
 
 To run the included examples, the following is also required:
 
@@ -50,6 +57,20 @@ Alternatively, to install for the current user only, run::
 
 Installation is not strictly necessary, as scripts using evoMPS can
 also be run from the base source directory.
+
+As of version 1.9, setup.py does *not* perform any compilation of extensions.
+This makes it easier to install the pure python version in case c or FORTRAN
+compilers are not present. To compile extensions, also run::
+
+    python setup_ext.py install
+    
+Again, add the --user option to install for the current user only.
+
+To also compile pure c versions of the transfer-operator maps (with additional
+support for OpenMP threading), run::
+
+    python setup_ext_pure_c.py install
+
 
 Getting Started
 ---------------

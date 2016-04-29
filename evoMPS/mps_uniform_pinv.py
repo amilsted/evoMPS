@@ -21,8 +21,8 @@ class PinvOp:
         
         self.A1 = A1
         self.A2 = A2
-        self.lL = lL
-        self.rL = rL
+        self.lL = sp.asarray(lL)
+        self.rL = sp.asarray(rL)
         self.p = p
         self.left = left
         self.pseudo = pseudo
@@ -33,31 +33,50 @@ class PinvOp:
         
         self.dtype = A1[0].dtype
         
-        self.out = np.empty((self.D, self.D), dtype=self.dtype)
+        self.out = np.empty((self.D, self.D), dtype=self.dtype, order='C')
+        self.tmp = np.empty((self.D, self.D), dtype=self.dtype, order='C')
     
     def matvec(self, v):
         x = v.reshape((self.D, self.D))
         
-        if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            Ehx = x
-            for k in xrange(len(self.A1)):
-                Ehx = tm.eps_l_noop(Ehx, self.A1[k], self.A2[k])
-            if self.pseudo:
-                QEQhx = Ehx - self.lL * m.adot(self.rL, x)
-                res = x - sp.exp(-1.j * self.p) * QEQhx
-            else:
-                res = x - sp.exp(-1.j * self.p) * Ehx
-        else:
-            Ex = x
-            for k in xrange(len(self.A1) - 1, -1, -1):
-                Ex = tm.eps_r_noop(Ex, self.A1[k], self.A2[k])
-            if self.pseudo:
-                QEQx = Ex - self.rL * m.adot(self.lL, x)
-                res = x - sp.exp(1.j * self.p) * QEQx
-            else:
-                res = x - sp.exp(1.j * self.p) * Ex
+        res = self.tmp
+        out = self.out
+        res[:] = x
         
-        return res.ravel()
+        if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
+            for k in xrange(len(self.A1)):
+                out = tm.eps_l_noop_inplace(res, self.A1[k], self.A2[k], out)
+                tmp = res
+                res = out
+                out = tmp
+                
+            if self.pseudo:
+                out[:] = self.lL
+                out *= m.adot(self.rL, x)
+                res -= out
+                res *= -sp.exp(-1.j * self.p)
+                res += x
+            else:
+                res *= -sp.exp(-1.j * self.p)
+                res += x
+        else:
+            for k in xrange(len(self.A1) - 1, -1, -1):
+                out = tm.eps_r_noop_inplace(res, self.A1[k], self.A2[k], out)
+                tmp = res
+                res = out
+                out = tmp
+                
+            if self.pseudo:
+                out[:] = self.rL 
+                out *= m.adot(self.lL, x)
+                res -= out
+                res *= -sp.exp(1.j * self.p)
+                res += x
+            else:
+                res *= -sp.exp(1.j * self.p)
+                res += x
+
+        return res.copy().ravel() #apparently we can't reuse the memory we return (seems to blow up lgmres), so we make a copy
         
 def pinv_1mE_brute(A1, A2, lL, rL, p=0, pseudo=True):
     D = A1[0].shape[1]
@@ -99,7 +118,7 @@ def pinv_1mE_brute_LOP(A1, A2, lL, rL, p=0, pseudo=True, left=False):
     
 def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=4000,
              out=None, sanity_checks=False, sc_data='', brute_check=False, solver=None,
-             use_CUDA=False):
+             use_CUDA=False, CUDA_use_batch=False):
     """Iteratively calculates the result of an inverse or pseudo-inverse of an 
     operator (eye - exp(1.j*p) * E) multiplied by a vector.
     
@@ -112,8 +131,9 @@ def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=
         out = np.ones_like(A1[0][0])
     
     if use_CUDA:
-        import tdvp_cuda_alternatives as tcu
-        op = tcu.PinvOp_CUDA(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
+        import cuda_alternatives as tcu
+        op = tcu.PinvOp_CUDA(p, A1, A2, lL, rL, left=left, pseudo=pseudo, 
+                             use_batch=CUDA_use_batch)
     else:
         op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     

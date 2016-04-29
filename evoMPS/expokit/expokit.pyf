@@ -243,9 +243,9 @@ python module expokit ! in
             double precision :: tol
             double precision :: anorm
             complex*16 dimension(lwsp) :: wsp
-            integer, optional,check(len(wsp)>=lwsp),depend(wsp) :: lwsp=len(wsp)
+            integer, optional,check(len(wsp)>=lwsp && len(wsp) >= 10),depend(wsp) :: lwsp=len(wsp)
             integer dimension(liwsp) :: iwsp
-            integer, optional,check(len(iwsp)>=liwsp),depend(iwsp) :: liwsp=len(iwsp)
+            integer, optional,check(len(iwsp)>=liwsp && len(iwsp) >= 7),depend(iwsp) :: liwsp=len(iwsp)
             external matvec
             integer :: itrace
             integer :: iflag
@@ -260,9 +260,9 @@ python module expokit ! in
             double precision :: tol
             double precision :: anorm
             complex*16 dimension(lwsp) :: wsp
-            integer, optional,check(len(wsp)>=lwsp),depend(wsp) :: lwsp=len(wsp)
+            integer, optional,check(len(wsp)>=lwsp && len(wsp) >= 10),depend(wsp) :: lwsp=len(wsp)
             integer dimension(liwsp) :: iwsp
-            integer, optional,check(len(iwsp)>=liwsp),depend(iwsp) :: liwsp=len(iwsp)
+            integer, optional,check(len(iwsp)>=liwsp && len(iwsp) >= 7),depend(iwsp) :: liwsp=len(iwsp)
             external matvec
             integer :: itrace
             integer :: iflag

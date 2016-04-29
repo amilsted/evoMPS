@@ -21,13 +21,13 @@ First, we set up some global variables to be used as parameters.
 bond_dim = 8                  #The maximum bond dimension
 
 J = 1.00                      #Interaction factor
-h = 0.50                      #Transverse field factor
+h = 0.90                      #Transverse field factor
 
 tol_im = 1E-10                #Ground state tolerance (norm of projected evolution vector)
 
 step = 0.08                   #Imaginary time step size
 
-load_saved_ground = True      #Whether to load a saved ground state (if it exists)
+load_saved_ground = False     #Whether to load a saved ground state (if it exists)
 
 auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
@@ -119,12 +119,19 @@ if __name__ == '__main__':
     print "\t".join(col_heads)
     print
 
+    """
+    The following loop performs Euler integration of imaginary time evolution.
+    """
     eta = 1
     i = 0
     while True:
         T.append(t)
 
-        s.update(auto_truncate=auto_truncate)
+        """
+        Update secondary data used to calculate expectation values etc.
+        This must also be done before calling take_step().
+        """
+        s.update(auto_truncate=auto_truncate) 
 
         H.append(s.h_expect.real)
 
@@ -164,29 +171,32 @@ if __name__ == '__main__':
 
         i += 1
 
-        """
-        Find excitations if we have the ground state.
-        """
         if eta < tol_im or loaded:
+            s.update()
             s.save_state(grnd_fname)
-            print 'Finding excitations!'
-            if top_non_triv:
-                s2 = copy.deepcopy(s)
-                flip_x = la.expm(1.j * sp.pi / 2. * Sz)
-                s2.apply_op_1s(flip_x)
-                s2.update()
-            ex_ev = []
-            ex_ev_nt = []
-            ex_p = []
-            for p in sp.linspace(0, sp.pi, num=num_momenta):
-                print "p = ", p
-                ex_ev.append(s.excite_top_triv(p, k=num_excitations, ncv=num_excitations * 4))
-                if top_non_triv:
-                    ex_ev_nt.append(s.excite_top_nontriv(s2, p, k=num_excitations, ncv=num_excitations * 4))
-                else:
-                    ex_ev_nt.append([0])
-                ex_p.append([p] * num_excitations)
             break
+
+    """
+    Find excitations once we have the ground state.
+    """
+    print 'Finding excitations!'
+    if top_non_triv:
+        s2 = copy.deepcopy(s)
+        s2.apply_op_1s(Sz)
+        s2.update()
+        print "Energy density difference with spin flip:", s.h_expect.real - s2.h_expect.real
+    ex_ev = []
+    ex_ev_nt = []
+    ex_p = []
+    for p in sp.linspace(0, sp.pi, num=num_momenta):
+        print "p = ", p
+        ex_ev.append(s.excite_top_triv(p, nev=num_excitations, ncv=num_excitations * 4))
+        if top_non_triv:
+            ex_ev_nt.append(s.excite_top_nontriv(s2, p, nev=num_excitations, ncv=num_excitations * 4))
+        else:
+            ex_ev_nt.append([0])
+        ex_p.append([p] * num_excitations)
+    
     """
     Simple plots of the results.
     """

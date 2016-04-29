@@ -21,7 +21,9 @@ import logging
 log = logging.getLogger(__name__)
 
 class Vari_Opt_Single_Site_Op:
-    def __init__(self, tdvp, n, KLnm1, tau=1, sanity_checks=False):
+    def __init__(self, tdvp, n, KLnm1, tau=1., HML=None, HMR=None, HMn=None,
+                 use_local_ham=True,
+                 sanity_checks=False):
         """
         """
         self.D = tdvp.D
@@ -29,6 +31,10 @@ class Vari_Opt_Single_Site_Op:
         self.tdvp = tdvp
         self.n = n
         self.KLnm1 = KLnm1
+        
+        self.HML = HML
+        self.HMR = HMR
+        self.HMn = HMn
         
         self.sanity_checks = sanity_checks
         self.sanity_tol = 1E-12
@@ -42,50 +48,84 @@ class Vari_Opt_Single_Site_Op:
         
         self.tau = tau
         
+        self.ham_local = use_local_ham
+        
+        self.ham_MPO = not HMn is None
+        
+    def apply_ham_local(self, An, res):
+        t = self.tdvp
+        n = self.n        
+        
+        #Assuming RCF        
+        if t.ham_sites == 2:
+            if n > 1:
+                AAnm1 = tm.calc_AA(t.A[n - 1], An)
+                Cnm1 = tm.calc_C_mat_op_AA(t.ham[n - 1], AAnm1)
+                Cnm1 = sp.transpose(Cnm1, axes=(1, 0, 2, 3)).copy()
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[s, :])
+            if n < t.N:
+                AAn = tm.calc_AA(An, t.A[n + 1])
+                Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
+                
+        if t.ham_sites == 3:
+            if n > 2:
+                AAAnm2 = tm.calc_AAA_AA(t.AA[n - 2], An)
+                Cnm2 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 2], AAAnm2)
+                Cnm2 = sp.transpose(Cnm2, axes=(2, 0, 1, 3, 4)).copy()
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_l_op_2s_AA12_C34(t.l[n - 3], t.AA[n - 2], Cnm2[s, :, :])
+                    
+            if n > 1 and n < t.N:
+                AAnm1 = tm.calc_AA(t.A[n - 1], An)  
+                AAAnm1 = tm.calc_AAA_AA(AAnm1, t.A[n + 1])
+                Cnm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAnm1)
+                for s in xrange(t.q[n]):
+                    for u in xrange(t.q[n - 1]):
+                        res[s] += t.A[n - 1][u].conj().T.dot(t.l[n - 2].dot(
+                                  tm.eps_r_noop(t.r[n + 1], Cnm1[u, s, :], t.A[n + 1])))
+                                  
+            if n < t.N - 1:
+                AAn = tm.calc_AA(An, t.A[n + 1])
+                AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
+                Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
+                for s in xrange(t.q[n]):
+                    res[s] += tm.eps_r_op_2s_AA12_C34(t.r[n + 2], Cn[s, :, :], t.AA[n + 1])
+            
         if n > 1:
-            try:
-                self.lm1_i = tdvp.l[n - 1].inv()
-            except AttributeError:
-                self.lm1_i = m.invmh(tdvp.l[n - 1])
-        else:
-            self.lm1_i = tdvp.l[n - 1]
+            for s in xrange(t.q[n]):
+                res[s] += self.KLnm1.dot(An[s])
+                
+        if n < t.N:
+            for s in xrange(t.q[n]):
+                res[s] += An[s].dot(t.K[n + 1])
+                
+    def apply_ham_MPO(self, An, res):
+        t = self.tdvp
+        n = self.n
+        
+        HMAn = tm.apply_MPO_local(self.HMn, An)
+        #print self.HML.shape, HMAn[0].shape, self.HMR.shape, An[0].shape
+        for s in xrange(t.q[n]):
+            res[s] += self.HML.conj().T.dot(HMAn[s]).dot(self.HMR)
         
     def matvec(self, x):
         self.calls += 1
         #print self.calls
         
-        t = self.tdvp
         n = self.n
         
         An = x.reshape((self.q[n], self.D[n - 1], self.D[n]))
         
-        if n > 1:
-            AAnm1 = tm.calc_AA(t.A[n - 1], An)
-            Cnm1 = tm.calc_C_mat_op_AA(t.ham[n - 1], AAnm1)
-        else:
-            AAnm1 = None
-            Cnm1 = None
-            
-        if n < t.N:
-            AAn = tm.calc_AA(An, t.A[n + 1])
-            Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
-        else:
-            AAn = None
-            Cn = None
-        
         res = sp.zeros_like(An)
         
-        #Assuming RCF        
-        if not Cnm1 is None:
-            for s in xrange(t.q[n]):
-                res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[:, s])
-                res[s] += self.KLnm1.dot(An[s])
-            res[s] = self.lm1_i.dot(res[s])
-                
-        if not Cn is None:
-            for s in xrange(t.q[n]):                
-                res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
-                res[s] += An[s].dot(t.K[n + 1])
+        if self.ham_local:
+            self.apply_ham_local(An, res)
+        
+        if self.ham_MPO:
+            self.apply_ham_MPO(An, res)
                 
         #print "en = ", (sp.inner(An.conj().ravel(), res.ravel())
         #                / sp.inner(An.conj().ravel(), An.ravel()))
@@ -93,7 +133,8 @@ class Vari_Opt_Single_Site_Op:
         return res.reshape(x.shape) * self.tau
         
 class Vari_Opt_SC_op:
-    def __init__(self, tdvp, n, KLn, tau=1, sanity_checks=False):
+    def __init__(self, tdvp, n, KLn, tau=1, HML=None, HMR=None,
+                 use_local_ham=True, sanity_checks=False):
         """
         """
         self.D = tdvp.D
@@ -101,6 +142,9 @@ class Vari_Opt_SC_op:
         self.tdvp = tdvp
         self.n = n
         self.KLn = KLn
+        
+        self.HML = HML
+        self.HMR = HMR
         
         self.sanity_checks = sanity_checks
         self.sanity_tol = 1E-12
@@ -114,24 +158,58 @@ class Vari_Opt_SC_op:
         
         self.tau = tau
         
-    def matvec(self, x):
-        self.calls += 1
-        #print self.calls
+        self.ham_local = use_local_ham
         
+        self.ham_MPO = not HML is None
+        
+    def apply_ham_MPO(self, Gn, res):
+        HMGn = sp.kron(Gn, sp.eye(self.HMR.shape[0] / self.D[self.n]))
+        res += self.HML.conj().T.dot(HMGn).dot(self.HMR)
+        
+    def apply_ham_local(self, Gn, res):
         t = self.tdvp
         n = self.n
-        
-        Gn = x.reshape((self.D[n], self.D[n]))
 
-        res = self.KLn.dot(Gn) + Gn.dot(t.K[n + 1])
+        res += self.KLn.dot(Gn) + Gn.dot(t.K[n + 1])
         
-        if n < t.N:
-            Ap1 = sp.array([Gn.dot(As) for As in t.A[n + 1]])
+        Ap1 = sp.array([Gn.dot(As) for As in t.A[n + 1]])
+        
+        if t.ham_sites == 2:
             AAn = tm.calc_AA(t.A[n], Ap1)
             Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
             for s in xrange(t.q[n]):
                 sres = tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
                 res += t.A[n][s].conj().T.dot(t.l[n - 1].dot(sres))
+        elif t.ham_sites == 3:
+            if n < t.N - 1:
+                AAn = tm.calc_AA(t.A[n], Ap1)
+                AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
+                Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
+                for s in xrange(t.q[n]):
+                    res += t.A[n][s].conj().T.dot(
+                             tm.eps_r_op_2s_AA12_C34(t.r[n + 2], Cn[s, :, :], t.AA[n + 1]))
+            if n > 1:
+                AAAm1 = tm.calc_AAA_AA(t.AA[n - 1], Ap1)
+                Cm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAm1)
+                Cm1 = sp.transpose(Cm1, axes=(2, 0, 1, 3, 4)).copy()
+                for s in xrange(t.q[n + 1]):
+                    res += tm.eps_l_op_2s_AA12_C34(t.l[n - 2], t.AA[n - 1], Cm1[s, :, :]).dot(t.A[n + 1][s].conj().T)
+            
+    def matvec(self, x):
+        self.calls += 1
+        #print self.calls
+
+        n = self.n
+        
+        Gn = x.reshape((self.D[n], self.D[n]))
+
+        res = sp.zeros_like(Gn)
+        
+        if self.ham_local:
+            self.apply_ham_local(Gn, res)
+            
+        if self.ham_MPO:
+            self.apply_ham_MPO(Gn, res)
         
         return res.reshape(x.shape) * self.tau
 
@@ -241,7 +319,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
            or calc_K()."""
 
     
-    def calc_C(self, n_low=-1, n_high=-1):
+    def calc_C(self, n_low=-1, n_high=-1, calc_AA=True):
         """Generates the C tensors used to calculate the K's and ultimately the B's.
         
         This is called automatically by self.update().
@@ -269,14 +347,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_high < 1:
             n_high = self.N - self.ham_sites + 1
             
-        for n in xrange(1, self.N):
-            self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-        
-        if self.ham_sites == 3:
-            for n in xrange(1, self.N - 1):
-                self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
-        else:
-            self.AAA.fill(None)
+        if calc_AA:
+            for n in xrange(1, self.N):
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+            
+            if self.ham_sites == 3:
+                for n in xrange(1, self.N - 1):
+                    self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+            else:
+                self.AAA.fill(None)
         
         for n in xrange(n_low, n_high + 1):
             if callable(self.ham):
@@ -286,10 +365,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             else:
                 ham_n = self.ham[n]
             
-            if self.ham_sites == 2:
-                self.C[n] = tm.calc_C_mat_op_AA(ham_n, self.AA[n])
+            if ham_n is None:
+                self.C[n] = None
             else:
-                self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, self.AAA[n])                
+                if self.ham_sites == 2:
+                    self.C[n] = tm.calc_C_mat_op_AA(ham_n, self.AA[n])
+                else:
+                    self.C[n] = tm.calc_C_3s_mat_op_AAA(ham_n, self.AAA[n])                
     
     def calc_K(self, n_low=-1, n_high=-1):
         """Generates the K matrices used to calculate the B's.
@@ -314,12 +396,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         for n in reversed(xrange(n_low, n_high + 1)):
             if n <= self.N - self.ham_sites + 1:
-                if self.ham_sites == 2:
-                    self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 1], self.A[n], self.AA[n])
+                if self.C[n] is None:
+                    self.K[n], ex = (tm.eps_r_noop(self.K[n + 1], self.A[n], self.A[n]), 0)
                 else:
-                    self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
-                                              self.r[n + 2], self.A[n], self.AAA[n])
+                    if self.ham_sites == 2:
+                        self.K[n], ex = tm.calc_K(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                                  self.r[n + 1], self.A[n], self.AA[n])
+                    else:
+                        self.K[n], ex = tm.calc_K_3s(self.K[n + 1], self.C[n], self.l[n - 1], 
+                                                  self.r[n + 2], self.A[n], self.AAA[n])
 
                 self.h_expect[n] = ex
             else:
@@ -573,6 +658,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                    
         B = [None] #There is no site zero
         eta_sq_tot = 0
+        if set_eta:
+            self.eta_sq.fill(0)
         for n in xrange(1, self.N + 1):
             Bn = self.calc_B_n(n, set_eta=set_eta, l_s_m1=l_s[n-1], 
                              l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
@@ -617,7 +704,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     
             B = sp.empty_like(self.A[n])
             for s in xrange(self.q[n]):
-                B[s] = m.mmul(l_si_m1, x, m.H(Vrh[s]), r_si)
+                B[s] = l_si_m1.dot(x).dot(r_si.dot(Vrh[s]).conj().T)
             return B
         else:
             return None
@@ -644,7 +731,61 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             return B
         else:
             return None
-
+            
+    def calc_MPO_l(self, MAn, n, MLm1):
+        if n == 1:
+            MLm1 = m.eyemat(1, dtype=self.typ)
+        return tm.eps_l_noop(MLm1, MAn, self.A[n])
+        
+    def calc_MPO_rm1(self, MAn, n, MRn):
+        if n == self.N:
+            MRn = m.eyemat(1, dtype=self.typ)
+        return tm.eps_r_noop(MRn, MAn, self.A[n])
+    
+    def calc_B_MPO(self, H):
+        #AH = [None] + [sp.tensordot(An, Hn, axes=[[0], [1]]).reshape()
+        #                                          for An, Hn in zip(self.A[1:], H)]:
+        A = self.A
+        q = self.q
+        AH = [None] * (self.N + 1)
+        for n in xrange(1, self.N + 1):
+            AH[n] = tm.apply_MPO_local(H[n], A[n])
+            
+        HR = [None] * self.N + [sp.array([[1. + 0.j]])]
+        for n in xrange(self.N, 0, -1):
+            HR[n - 1] = self.calc_MPO_rm1(AH[n], n, HR[n])
+            
+        HL = [sp.array([[1. + 0.j]])]  + [None] * self.N
+        for n in xrange(1, self.N + 1):
+            HL[n] = self.calc_MPO_l(AH[n], n, HL[n - 1])
+            
+        #print m.adot(HL[self.N], HR[self.N])
+        self.H_expect = m.adot(HL[self.N], HR[self.N])
+        
+        l = self.l
+        r = self.r
+        x = [None] * (self.N + 1)
+        B = [None] * (self.N + 1)
+        for n in xrange(1, self.N + 1):
+            ls, lsi, rs, rsi = tm.calc_l_r_roots(l[n - 1], r[n], 
+                                                           zero_tol=self.zero_tol,
+                                                           sanity_checks=self.sanity_checks,
+                                                           sc_data=('site', n))
+            Vh = tm.calc_Vsh(A[n], rs, sanity_checks=self.sanity_checks)
+            if not Vh is None:
+                Vrsi = sp.array([(rsi.dot(Vhs)).conj().T for Vhs in Vh])
+                x[n] =  lsi.dot(HL[n - 1].conj().T).dot(tm.eps_r_noop(HR[n], AH[n], Vrsi))
+                self.eta_sq[n] = m.adot(x[n], x[n]).real
+                Bn = sp.empty_like(A[n])
+                for s in xrange(q[n]):
+                    Bn[s] = lsi.dot(x[n]).dot(Vrsi[s])
+                B[n] = Bn
+        
+        #print "eta", sp.sqrt(sp.array(self.eta_sq).sum())
+        
+        self.eta = sp.sqrt(self.eta_sq.sum())
+        
+        return B
     
     def take_step(self, dtau, B=None, save_memory=False, calc_Y_2s=False, 
                   dynexp=False, dD_max=16, D_max=0, sv_tol=1E-14):   
@@ -682,7 +823,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         sv_tol : float
             Only use singular values larger than this for dynamical expansion.
         """
-        self.eta_sq.fill(0)    
         self.etaBB_sq.fill(0)
         
         if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
@@ -691,7 +831,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             for n in xrange(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
                 if n <= self.N:
-                    B[n] = self.calc_B(n)
+                    B[n] = self.calc_B_n(n)
                 
                 #Only change an A after the next B no longer depends on it!
                 if n >= self.ham_sites:
@@ -758,12 +898,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     log.info("Dyn. expanded! New D: %s", self.D)
                     self.eta_sq = oldeta
                     self.etaBB_sq = oldetaBB
+                    self.eta = sp.sqrt(self.eta_sq.sum())
             else:
                 for n in xrange(1, self.N + 1):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
                        
-        self.eta = sp.sqrt(self.eta_sq.sum())
         self.etaBB = sp.sqrt(self.etaBB_sq.sum())
         
     def take_step_RK4(self, dtau):
@@ -1000,82 +1140,19 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         return Bs_CG, Bs, eta, tau
         
-    def vari_opt_ss_sweep(self, ncv=None):
+    def vari_opt_ss_sweep(self, ncv=None, tol=0, HMPO=None, use_local_ham=True):
         """Perform a DMRG-style optimizing sweep to reduce the energy.
         
         This carries out the MPS version of the one-site DMRG algorithm.
         Combined with imaginary time evolution, this can dramatically improve
         convergence speed.
         """
-        assert self.canonical_form == 'right', 'vari_opt_ss_sweep only implemented for right canonical form'
-    
-        KL = [None] * (self.N + 1)
-        KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
-        for n in xrange(1, self.N + 1):
-            if n > 2:
-                k = n - 1
-                KL[k], ex = tm.calc_K_l(KL[k - 1], self.C[k - 1], self.l[k - 2], 
-                                        self.r[k], self.A[k], self.AA[k - 1])
-
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
-            evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
+        self.take_step_split(1., HMPO=HMPO, use_local_ham=use_local_ham, DMRG=True)
             
-            self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
-            
-            #shift centre matrix right (RCF is like having a centre "matrix" at "1")
-            G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
-                                     sanity_checks=self.sanity_checks)
-            
-            #This is not strictly necessary, since r[n] is not used again,
-            self.r[n] = G.dot(self.r[n].dot(G.conj().T))
-
-            if n < self.N:
-                for s in xrange(self.q[n + 1]):
-                    self.A[n + 1][s] = G.dot(self.A[n + 1][s])
-            
-            #All needed l and r should now be up to date
-            #All needed KR should be valid still
-            #AA and C must be updated
-            if n > 1:
-                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
-                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
-            if n < self.N:
-                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
-
-            
-        for n in xrange(self.N, 0, -1):
-            if n < self.N:
-                self.calc_K(n_low=n + 1, n_high=n + 1)
-
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], sanity_checks=self.sanity_checks)
-            evs, eVs = las.eigsh(lop, k=1, which='SA', v0=self.A[n].ravel(), ncv=ncv)
-            
-            self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
-            
-            #shift centre matrix left (LCF is like having a centre "matrix" at "N")
-            Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
-                                      sanity_checks=self.sanity_checks)
-            
-            #This is not strictly necessary, since l[n - 1] is not used again
-            self.l[n - 1] = Gi.conj().T.dot(self.l[n - 1].dot(Gi))
-
-            if n > 1:
-                for s in xrange(self.q[n - 1]):
-                    self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
-            
-            #All needed l and r should now be up to date
-            #All needed KL should be valid still
-            #AA and C must be updated
-            if n > 1:
-                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
-                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
-            if n < self.N:
-                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
                 
-                
-    def take_step_split(self, dtau, ham_is_Herm=True):
+    def take_step_split(self, dtau, ham_is_Herm=True, HMPO=None, 
+                        use_local_ham=True, ncv=10, tol=1E-14, DMRG=False,
+                        print_progress=True):
         """Take a time-step dtau using the split-step integrator.
         
         This is the one-site version of a DMRG-like time integrator described
@@ -1089,7 +1166,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         NOTE:
         This requires the expokit extension, which is included in evoMPS but 
-        must be compiled during, e.g. using setup.py to build all extensions.
+        must be compiled, for example using setup.py to build all extensions.
         
         Parameters
         ----------
@@ -1099,94 +1176,183 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Whether the Hamiltonian is really Hermitian. If so, the lanczos
             method will be used for imaginary time evolution.
         """
-        #TODO: Compute eta.
-        self.eta_sq.fill(0)
-        self.eta = 0
+        #self.eta_sq.fill(0)
+        #self.eta = 0
+        
+        if not DMRG:
+            dtau *= -1
+            from expokit_expmv import zexpmv
+    
+            if sp.iscomplex(dtau):
+                op_is_herm = False
+                fac = 1.j
+                dtau = sp.imag(dtau)
+            else:
+                if ham_is_Herm:
+                    op_is_herm = True
+                else:
+                    op_is_herm = False
+                fac = 1
         
         assert self.canonical_form == 'right', 'take_step_split only implemented for right canonical form'
-        assert self.ham_sites == 2, 'take_step_split only implemented for nearest neighbour Hamiltonians'
-        dtau *= -1
-        from expokit_expmv import zexpmv, zexpmvh
-
-        if sp.iscomplex(dtau) or not ham_is_Herm:
-            expmv = zexpmv
-            fac = 1.j
-            dtau = sp.imag(dtau)
-        else:
-            expmv = zexpmvh
-            fac = 1
-            
-        norm_est = abs(self.H_expect.real)
-    
+        assert self.ham_sites == 2 or self.ham_sites == 3
+        import sys
+        
         KL = [None] * (self.N + 1)
         KL[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
-        for n in xrange(1, self.N + 1):
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac)
-            #print "Befor A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmv(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)            
+        KL[2] = sp.zeros((self.D[2], self.D[2]), dtype=self.typ)
+        
+        HMA = [None] * (self.N + 1)
+        HML = [sp.eye(1, dtype=self.typ)] + [None] * self.N
+        HMR = [None] * self.N + [sp.eye(1, dtype=self.typ)]
+        if HMPO is None:
+            HM = [None] * (self.N + 1)
+        else:
+            HM = HMPO
+            for n in xrange(self.N, 0, -1):
+                HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
+                HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
+                
+        def evolve_A(n):
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, 
+                                          HML=HML[n - 1], HMR=HMR[n], HMn=HM[n],
+                                          use_local_ham=use_local_ham,
+                                          sanity_checks=self.sanity_checks)
+            An_old = self.A[n].ravel()
+            An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+                        A_is_Herm=op_is_herm)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
-            self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
-            norm = m.adot(self.l[n], self.r[n])
+            self.A[n] /= sp.sqrt(m.adot(self.A[n], self.A[n]))
+            
+        def evolve_G(n, G):
+            lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac,
+                                  HML=HML[n], HMR=HMR[n],
+                                  use_local_ham=use_local_ham,
+                                  sanity_checks=self.sanity_checks)
+            Gold = G.ravel()
+            G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+                       A_is_Herm=op_is_herm)
+            G = G.reshape((self.D[n], self.D[n]))
+            G /= sp.sqrt(m.adot(G, G))
+            return G
+            
+        def opt_A(n):
+            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], 
+                                          HML=HML[n - 1], HMR=HMR[n], HMn=HM[n],
+                                          use_local_ham=use_local_ham,
+                                          sanity_checks=self.sanity_checks)
+            evs, eVs = las.eigsh(lop, k=1, which='SA', sigma=None, 
+                                 v0=self.A[n].ravel(), ncv=ncv, tol=tol)
+            
+            self.A[n] = eVs[:, 0].reshape((self.q[n], self.D[n - 1], self.D[n]))
+            norm = m.adot(self.A[n], self.A[n])
             self.A[n] /= sp.sqrt(norm)
-            #print "After A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real, norm.real
+        
+        def update_Heff_left(n):
+            if self.ham_sites == 2 and n > 1:
+                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+                KL[n], ex = tm.calc_K_l(KL[n - 1], self.C[n - 1], self.l[n - 2], 
+                                        self.r[n], self.A[n], self.AA[n - 1])
+            elif self.ham_sites == 3:
+                if n > 1:
+                    #for next step and bond
+                    self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
+                if n > 2:
+                    self.AAA[n - 2] = tm.calc_AAA_AA(self.AA[n - 2], self.A[n])
+                    self.C[n - 2] = tm.calc_C_3s_mat_op_AAA(self.ham[n - 2], self.AAA[n - 2])
+                    KL[n], ex = tm.calc_K_3s_l(KL[n - 1], self.C[n - 2], self.l[n - 3], 
+                                               self.r[n], self.A[n], self.AAA[n - 2])
+                                        
+            if not HMPO is None:
+                HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
+                HML[n] = self.calc_MPO_l(HMA[n], n, HML[n - 1])
+                
+        def update_Heff_right(n):
+            if self.ham_sites == 2 and n < self.N:
+                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])                    
+                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])
+            
+            if self.ham_sites == 3:
+                if n < self.N:
+                    self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
+                if n < self.N - 1:
+                    self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
+                    self.C[n] = tm.calc_C_3s_mat_op_AAA(self.ham[n], self.AAA[n])
+            
+            if n < self.N:
+                self.calc_K(n_low=n, n_high=n)
+                
+            if not HMPO is None:
+                HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
+                HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
+            
+        norm_est = abs(self.H_expect.real)
+        
+#        A_old = [An.copy() for An in self.A[1:self.N + 1]]
+    
+        for n in xrange(1, self.N + 1):
+            if print_progress:
+                print '{0}\r'.format("Sweep LR:" + str(n) + '        '),
+            sys.stdout.flush()
+            if DMRG:
+                opt_A(n)
+            else:
+                evolve_A(n)
             
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
                                      sanity_checks=self.sanity_checks) 
                                      
-            if n > 1:
-                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
-                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
-                KL[n], ex = tm.calc_K_l(KL[n - 1], self.C[n - 1], self.l[n - 2], 
-                                        self.r[n], self.A[n], self.AA[n - 1])
+            update_Heff_left(n)
                 
-            if n < self.N:                    
-                lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac)
-                #print "Befor G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real
-                G = expmv(lop2, G.ravel(), -dtau/2., norm_est=norm_est)
-                G = G.reshape((self.D[n], self.D[n]))
-                norm = sp.trace(self.l[n].dot(G).dot(self.r[n].dot(G.conj().T)))
-                G /= sp.sqrt(norm)
-                #print "After G", n, sp.inner(G.ravel().conj(), lop2.matvec(G.ravel())).real, norm.real
+            if n < self.N:
+                if not DMRG:
+                    G = evolve_G(n, G)
                 
                 for s in xrange(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])                
-                
-                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])           
-   
+        if print_progress:
+            print
+        
         for n in xrange(self.N, 0, -1):
-            lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
-            #print "Before A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real
-            An = expmv(lop, self.A[n].ravel(), dtau/2., norm_est=norm_est)
-            self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
-            self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
-            norm = m.adot(self.l[n], self.r[n])
-            self.A[n] /= sp.sqrt(norm)
-            #print "After A", n, sp.inner(self.A[n].ravel().conj(), lop.matvec(self.A[n].ravel())).real, norm.real
+            if print_progress:
+                print '{0}\r'.format("Sweep RL:" + str(n) + '        '),
+            sys.stdout.flush()
+            if DMRG:
+                opt_A(n)
+            else:
+                evolve_A(n)
             
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
                                       sanity_checks=self.sanity_checks)
                                       
-            if n < self.N:
-                self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
-                self.C[n] = tm.calc_C_mat_op_AA(self.ham[n], self.AA[n])                                          
-                self.calc_K(n_low=n, n_high=n)
+            update_Heff_right(n)
             
             if n > 1:
-                lop2 = Vari_Opt_SC_op(self, n - 1, KL[n - 1], tau=fac, sanity_checks=self.sanity_checks)
-                Gi = expmv(lop2, Gi.ravel(), -dtau/2., norm_est=norm_est)
-                Gi = Gi.reshape((self.D[n - 1], self.D[n - 1]))
-                norm = sp.trace(self.l[n - 1].dot(Gi).dot(self.r[n - 1].dot(Gi.conj().T)))
-                G /= sp.sqrt(norm)
-                #print "After G", n, sp.inner(Gi.ravel().conj(), lop2.matvec(Gi.ravel())).real, norm.real
+                if not DMRG:
+                    Gi = evolve_G(n - 1, Gi)
 
                 for s in xrange(self.q[n - 1]):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
-            
-                self.AA[n - 1] = tm.calc_AA(self.A[n - 1], self.A[n])
-                self.C[n - 1] = tm.calc_C_mat_op_AA(self.ham[n - 1], self.AA[n - 1])
+        if print_progress:
+            print
+
+#        #NON-WORKING estimate of eta
+#        tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+#                                             sc_data="restore_RCF_l")
+#        print "norm", m.adot(self.l[self.N], self.r[self.N])
+#        Bs_eff = [None] + [1 / abs(dtau) * (An - An_old) for An, An_old in zip(self.A[1:self.N + 1], A_old)]
+#        etasq = [m.adot(self.l[n - 1], 
+#                        tm.eps_r_noop(self.r[n], Bs_eff[n], Bs_eff[n])) for n in xrange(1, self.N + 1)]
+#        print sp.sqrt(sp.sum(etasq))
+        
+        self.H_expect = 0
+        if use_local_ham:
+            self.H_expect += self.K[1][0, 0]
+        if not HMPO is None:
+            self.H_expect += HMR[0][0, 0]
 
         
     def expect_2s(self, op, n, AA=None):
@@ -1213,11 +1379,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if AA is None:
             AA = self.AA[n]
         
-        if op is self.ham[n] and self.ham_sites == 2:
+        if not op is None and op is self.ham[n] and self.ham_sites == 2:
             res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
             return m.adot(self.l[n - 1], res)
         else:
-            return super(EvoMPS_MPS_Generic).expect_2s(op, n, AA=AA)
+            return super(EvoMPS_TDVP_Generic, self).expect_2s(op, n, AA=AA)
 
     def expect_3s(self, op, n, AAA=None):
         """Computes the expectation value of a nearest-neighbour three-site operator.
@@ -1247,9 +1413,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             else:
                 AAA = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
                 
-        if op is self.ham[n] and self.ham_sites == 3:
+        if not op is None and op is self.ham[n] and self.ham_sites == 3:
             res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], self.C[n], AAA)
             return m.adot(self.l[n - 1], res)
         else:
-            return super(EvoMPS_MPS_Generic).expect_3s(op, n, AAA=AAA)
+            return super(EvoMPS_TDVP_Generic, self).expect_3s(op, n, AAA=AAA)
         

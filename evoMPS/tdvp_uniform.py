@@ -19,14 +19,14 @@ import tdvp_common as tm
 import matmul as m
 from mps_uniform import EvoMPS_MPS_Uniform, EvoMPSNoConvergence, EvoMPSNormError
 from mps_uniform_pinv import pinv_1mE
-from mps_uniform_excite import Excite_H_Op
+from mps_uniform_excite import Excite_H_Op, Excite_H_Op_tp
 import logging
 
 log = logging.getLogger(__name__)
         
 class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
-    def __init__(self, D, q, ham, ham_sites=None, L=1, dtype=None):
+    def __init__(self, D, q, ham, ham_sites=None, L=1, dtype=None, do_update=True):
         """Implements the TDVP algorithm for uniform MPS.
         
         Parameters
@@ -51,6 +51,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
            specified in ham_sites."""
           
         self.ham_sites = ham_sites
+        
+        self.ham_tp = None
 
         self.K_solver = las.bicgstab
         """The sparse matrix solver to use for finding K (pseudo-inverse)."""
@@ -62,7 +64,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """The energy density expectation value, available only after calling
            update() or calc_K()."""
         
-        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L=L, dtype=dtype)
+        super(EvoMPS_TDVP_Uniform, self).__init__(D, q, L=L, dtype=dtype, do_update=do_update)
     
     def _init_arrays(self, D, q, L):
         super(EvoMPS_TDVP_Uniform, self)._init_arrays(D, q, L)
@@ -123,6 +125,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K0_init = None
         
     def convert_to_TI_blocked(self, do_update=True):
+        if self.L == 1:
+            return
+            
         L = self.L
         q = self.q
         newq = q**L
@@ -180,9 +185,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             ham = self.ham
         
+        if self.ham_tp is None:
+            self.calc_AA()
+        
         for k in xrange(self.L):
             if self.ham_sites == 2:
-                self.C[k][:] = tm.calc_C_mat_op_AA(ham, self.AA[k])
+                if not self.ham_tp is None:
+                    #self.C[k][:] = tm.calc_C_mat_op_tp(self.ham_tp, self.A[k], self.A[(k + 1) % self.L])
+                    self.C[k] = tm.calc_C_tp(self.ham_tp, self.A[k], self.A[(k + 1) % self.L])
+                else:
+                    self.C[k] = tm.calc_C_mat_op_AA(ham, self.AA[k])
             else:
                 self.AAA[k] = tm.calc_AAA_AA(self.AA[k], self.A[(k + 2) % self.L])
                 self.C[k][:] = tm.calc_C_3s_mat_op_AAA(ham, self.AAA[k])
@@ -234,7 +246,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         out = pinv_1mE(x, A1, A2, self.l[-1], rL, p=p, left=left, pseudo=pseudo, 
                        out=out, tol=tol, solver=solver, brute_check=brute_check,
                        sanity_checks=self.sanity_checks, sc_data=sc_data,
-                       use_CUDA=self.PPinv_use_CUDA)
+                       use_CUDA=self.PPinv_use_CUDA,
+                       CUDA_use_batch=(self.D <= self.CUDA_batch_maxD))
 
         return out
         
@@ -253,12 +266,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         L = self.L
         
         if self.ham_sites == 2:
-            Hr = tm.eps_r_op_2s_C12_AA34(self.r[1 % L], self.C[0], self.AA[0])
-            for k in xrange(1, L):
-                Hrk = tm.eps_r_op_2s_C12_AA34(self.r[(k + 1) % L], self.C[k], self.AA[k])
-                for j in xrange(k - 1, -1, -1):
-                    Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
-                Hr += Hrk
+            if not self.ham_tp is None:
+                Hr = tm.eps_r_op_2s_C12_tp(self.r[1 % L], self.C[0], self.A[0], self.A[1 % L])
+                for k in xrange(1, L):
+                    Hrk = tm.eps_r_op_2s_C12_tp(self.r[(k + 1) % L], self.C[k], self.A[k], self.A[(k + 1) % L])
+                    for j in xrange(k - 1, -1, -1):
+                        Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
+                    Hr += Hrk
+            else:
+                Hr = tm.eps_r_op_2s_C12_AA34(self.r[1 % L], self.C[0], self.AA[0])
+                for k in xrange(1, L):
+                    Hrk = tm.eps_r_op_2s_C12_AA34(self.r[(k + 1) % L], self.C[k], self.AA[k])
+                    for j in xrange(k - 1, -1, -1):
+                        Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
+                    Hr += Hrk
         else:
             Hr = tm.eps_r_op_3s_C123_AAA456(self.r[2 % L], self.C[0], self.AAA[0])
             for k in xrange(1, L):
@@ -281,10 +302,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K0_init = None
         
         if self.ham_sites == 2:
-            for k in sp.arange(L - 1, 0, -1) % L:
-                self.K[k], hk = tm.calc_K(self.K[(k + 1) % L], self.C[k], self.l[k - 1], self.r[(k + 1) % L],
-                                          self.A[k], self.AA[k])
-                self.K[k] -= self.r[(k - 1) % L] * hk
+            if not self.ham_tp is None:
+                for k in sp.arange(L - 1, 0, -1) % L:
+                    self.K[k], hk = tm.calc_K_tp(self.K[(k + 1) % L], self.l[k - 1], self.r[(k + 1) % L],
+                                                 self.A[k], self.A[(k + 1) % L], self.C[k])
+                    self.K[k] -= self.r[(k - 1) % L] * hk
+            else:
+                for k in sp.arange(L - 1, 0, -1) % L:
+                    self.K[k], hk = tm.calc_K(self.K[(k + 1) % L], self.C[k], self.l[k - 1], self.r[(k + 1) % L],
+                                              self.A[k], self.AA[k])
+                    self.K[k] -= self.r[(k - 1) % L] * hk
         else:
             for k in sp.arange(L - 1, 0, -1) % L:
                 self.K[k], hk = tm.calc_K_3s(self.K[(k + 1) % L], self.C[k], self.l[k - 1], self.r[(k + 2) % L],
@@ -321,12 +348,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         L = self.L
         if self.ham_sites == 2:
-            lH = tm.eps_l_op_2s_AA12_C34(self.l[(L - 3) % L], self.AA[(L - 2) % L], self.C[(L - 2) % L])
-            for k in sp.arange(-1, L - 2) % L:
-                lHk = tm.eps_l_op_2s_AA12_C34(self.l[(k - 1) % L], self.AA[k], self.C[k])
-                for j in xrange((k + 2) % L, L):
-                    lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
-                lH += lHk
+            if not self.ham_tp is None:
+                lH = tm.eps_l_op_2s_C34_tp(self.l[(L - 3) % L], self.A[(L - 2) % L], self.A[(L - 1) % L], self.C[(L - 2) % L])
+                for k in sp.arange(-1, L - 2) % L:
+                    lHk = tm.eps_l_op_2s_C34_tp(self.l[(k - 1) % L], self.A[k], self.A[(k + 1) % L], self.C[k])
+                    for j in xrange((k + 2) % L, L):
+                        lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
+                    lH += lHk
+            else:
+                lH = tm.eps_l_op_2s_AA12_C34(self.l[(L - 3) % L], self.AA[(L - 2) % L], self.C[(L - 2) % L])
+                for k in sp.arange(-1, L - 2) % L:
+                    lHk = tm.eps_l_op_2s_AA12_C34(self.l[(k - 1) % L], self.AA[k], self.C[k])
+                    for j in xrange((k + 2) % L, L):
+                        lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
+                    lH += lHk
         else:
             lH = tm.eps_l_op_3s_AAA123_C456(self.l[(L - 4) % L], self.AAA[(L - 3) % L], self.C[(L - 3) % L])
             for k in sp.arange(-2, L - 3) % L:
@@ -347,14 +382,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.K_left[-1] = self.calc_PPinv(lHQ, left=True, out=self.K_left[-1], solver=self.K_solver)
                 
         if self.ham_sites == 2:
-            for k in sp.arange(0, L - 1):
-                self.K_left[k], hk = tm.calc_K_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
-                                             self.l[(k - 2) % L], self.r[k],
-                                             self.A[k], self.AA[(k - 1) % L])
-                self.K_left[k] -= self.l[k] * hk
+            if not self.ham_tp is None:
+                for k in sp.arange(0, L - 1):
+                    self.K_left[k], hk = tm.calc_K_l_tp(self.K[(k - 1) % L],  
+                                                 self.l[(k - 2) % L], self.r[k],
+                                                 self.A[(k - 1) % L], self.A[k],
+                                                 self.C[(k - 1) % L])
+                    self.K_left[k] -= self.l[k] * hk
+            else:
+                for k in sp.arange(0, L - 1):
+                    self.K_left[k], hk = tm.calc_K_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
+                                                 self.l[(k - 2) % L], self.r[k],
+                                                 self.A[k], self.AA[(k - 1) % L])
+                    self.K_left[k] -= self.l[k] * hk
         else:
             for k in sp.arange(0, L - 1):
-                self.K_left[k], hk = tm.calc_K_3s_l(self.K[(k - 1) % L], self.C[(k - 1) % L], 
+                self.K_left[k], hk = tm.calc_K_3s_l(self.K[(k - 1) % L], self.C[(k - 2) % L], 
                                                 self.l[(k - 3) % L], self.r[k],
                                                 self.A[k],
                                                 self.AAA[(k - 2) % L])
@@ -427,11 +470,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Vsh.append(Vshk)
             
             if self.ham_sites == 2:
-                xk = tm.calc_x(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
-                              self.r[(k+1)%L], self.l[(k-2)%L], self.A[(k-1)%L], 
-                              self.A[k], self.A[(k+1)%L], 
-                              self.l_sqrt[(k-1)%L], self.l_sqrt_i[(k-1)%L],
-                              self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
+                if not self.ham_tp is None:
+                    xk = tm.calc_x_tp(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
+                                  self.r[(k+1)%L], self.l[(k-2)%L], self.A[(k-1)%L], 
+                                  self.A[k], self.A[(k+1)%L], 
+                                  self.l_sqrt[(k-1)%L], self.l_sqrt_i[(k-1)%L],
+                                  self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
+                else:
+                    xk = tm.calc_x(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
+                                  self.r[(k+1)%L], self.l[(k-2)%L], self.A[(k-1)%L], 
+                                  self.A[k], self.A[(k+1)%L], 
+                                  self.l_sqrt[(k-1)%L], self.l_sqrt_i[(k-1)%L],
+                                  self.r_sqrt[k], self.r_sqrt_i[k], Vshk)
             else:
                 xk = tm.calc_x_3s(self.K[(k + 1) % L], self.C[k], self.C[(k-1)%L], 
                                  self.C[(k-2)%L], self.r[(k+1)%L], self.r[(k+2)%L], 
@@ -465,9 +515,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         L = self.L
         Y = sp.empty((L), dtype=sp.ndarray)
         if self.ham_sites == 2:
-            for k in xrange(L):
-                Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
-                                                   self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
+            if not self.ham_tp is None:
+                for k in xrange(L):
+                    Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s_tp(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
+                                                       self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
+            else:
+                for k in xrange(L):
+                    Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
+                                                       self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
         else:
             for k in xrange(L):
                 Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s_ham_3s(self.A[k - 1], self.A[(k + 2) % L], 
@@ -627,7 +682,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def evolve_state():
         pass
             
-    def _prepare_excite_op_top_triv(self, p):
+    def _prepare_excite_op_top_triv(self, p, pinv_tol=1E-12, pinv_solver=None):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
 
@@ -635,13 +690,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_l_r_roots()
         self.Vsh[0] = tm.calc_Vsh(self.A[0], self.r_sqrt[0], sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, self, p, sanity_checks=self.sanity_checks)
+        if not self.ham_tp is None:
+            op = Excite_H_Op_tp(self, self, p, pinv_tol=pinv_tol,
+                             sanity_checks=self.sanity_checks)
+        else:
+            op = Excite_H_Op(self, self, p, pinv_tol=pinv_tol,
+                             sanity_checks=self.sanity_checks)
+        op.pinv_CUDA = self.PPinv_use_CUDA
+        op.pinv_solver = pinv_solver
 
         return op        
     
-    def excite_top_triv(self, p, k=6, tol=0, max_itr=None, v0=None, ncv=None,
+    def excite_top_triv(self, p, nev=6, tol=0, max_itr=None, v0=None, ncv=None,
                         sigma=None, which='SM', return_eigenvectors=False,
-                        max_retries=3):
+                        max_retries=3, pinv_tol=1E-12, pinv_solver=None):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -658,7 +720,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         ----------
         p : float
             Momentum in units of inverse lattice spacing.
-        k : int
+        nev : int
             Number of eigenvalues to calculate.
         tol : float
             Tolerance (defaults to machine precision).
@@ -671,11 +733,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         sigma : float
             Eigenvalue shift to use.
         which : string
-            Which eigenvalues to find ('SM' means the k smallest).
+            Which eigenvalues to find ('SM' means the nev smallest).
         return_eigenvectors : bool
             Whether to return eigenvectors as well as eigenvalues.
         max_retries : int
             Maximum number of retries (with growing ncv), in case of no convergence.
+        pinv_tol : float
+            Tolerance for pseudo-inverse operations.
             
         Returns
         -------
@@ -684,25 +748,29 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         eV : ndarray
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
-        op = self._prepare_excite_op_top_triv(p)
+        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol,
+                                              pinv_solver=pinv_solver)
+                                              
+        if ncv is None:
+            ncv = max(20, 2 * nev + 1)
         
         for i in xrange(max_retries):
             try:
-                res = las.eigsh(op, which=which, k=k, v0=v0, ncv=ncv,
+                res = las.eigsh(op, which=which, k=nev, v0=v0, ncv=ncv,
                                  return_eigenvectors=return_eigenvectors, 
                                  maxiter=max_itr, tol=tol, sigma=sigma)
             except las.ArpackNoConvergence:
                 log.warning("excite_top_triv: Retry %u!", i)
                 v0 = None
-                ncv = k * (3 + i)
+                ncv = max(20, nev * (3 + i))
                 if i == max_retries - 1:
                     log.error("excite_top_triv: Failed to converge!")
                     raise EvoMPSNoConvergence('excite_top_triv')
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_triv(p)
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12):
+        op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -718,7 +786,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _prepare_excite_op_top_nontriv(self, donor, p):
+    def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
+                                       pinv_solver=None):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -731,31 +800,106 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         self.phase_align(donor)
         
+        #htp = self.ham_tp
+        #self.ham_tp = None
         self.update()
         #donor.update()
-
+        
         self.calc_K_l()
+        #self.ham_tp = htp
         self.calc_l_r_roots()
         donor.calc_l_r_roots()
         donor.Vsh[0] = tm.calc_Vsh(donor.A[0], donor.r_sqrt[0], sanity_checks=self.sanity_checks)
         
-        op = Excite_H_Op(self, donor, p, sanity_checks=self.sanity_checks)
+        if not self.ham_tp is None:
+            op = Excite_H_Op_tp(self, donor, p, pinv_tol=pinv_tol,
+                             sanity_checks=self.sanity_checks)
+        else:
+            op = Excite_H_Op(self, donor, p, pinv_tol=pinv_tol,
+                             sanity_checks=self.sanity_checks)
+        op.pinv_CUDA = self.PPinv_use_CUDA
+        op.pinv_solver = pinv_solver
 
         return op 
 
-    def excite_top_nontriv(self, donor, p, k=6, tol=0, max_itr=None, v0=None,
+    def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
-                           ncv=None):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
-                            
-        res = las.eigsh(op, sigma=sigma, which=which, k=k, v0=v0,
-                            return_eigenvectors=return_eigenvectors, 
-                            maxiter=max_itr, tol=tol, ncv=ncv)
+                           ncv=None, max_retries=3, pinv_tol=1E-12,
+                           pinv_solver=None):
+        """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
+        using tangent vectors of the current state as ansatz states.
         
+        This is best used with an approximate ground state to find approximate
+        excitation energies.
+        
+        This uses topologically nontrivial ansatz states and requires two
+        ground of the possible states. One will be used on one infinite half
+        of the chain, the other on the other half. The local disturbance
+        represents the interface (a kink, for example) between the two.
+        
+        The second ground state can be generated by applying a symmetry
+        operation to a copy of an existing ground state.
+        
+        Many of the parameters are passed on to scipy.sparse.linalg.eigsh().
+        
+        Parameters
+        ----------
+        donor : EvoMPS_TDVP_Uniform
+            The second ground state.
+        p : float
+            Momentum in units of inverse lattice spacing.
+        nev : int
+            Number of eigenvalues to calculate.
+        tol : float
+            Tolerance (defaults to machine precision).
+        max_itr : int
+            Maximum number of iterations.
+        v0 : ndarray
+            Starting vector.
+        ncv : int
+            Number of Arnoldi vectors to store.
+        sigma : float
+            Eigenvalue shift to use.
+        which : string
+            Which eigenvalues to find ('SM' means the nev smallest).
+        return_eigenvectors : bool
+            Whether to return eigenvectors as well as eigenvalues.
+        max_retries : int
+            Maximum number of retries (with growing ncv), in case of no convergence.
+        pinv_tol : float
+            Tolerance for pseudo-inverse operations.
+            
+        Returns
+        -------
+        ev : ndarray
+            List of eigenvalues.
+        eV : ndarray
+            Matrix of eigenvectors (if return_eigenvectors == True).
+        """
+        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
+                                                 pinv_solver=pinv_solver)
+        
+        if ncv is None:
+            ncv = max(20, 2 * nev + 1)
+        
+        for i in xrange(max_retries):
+            try:
+                res = las.eigsh(op, sigma=sigma, which=which, k=nev, v0=v0,
+                                    return_eigenvectors=return_eigenvectors, 
+                                    maxiter=max_itr, tol=tol, ncv=ncv)
+            except las.ArpackNoConvergence:
+                log.warning("excite_top_nontriv: Retry %u!", i)
+                v0 = None
+                ncv = max(20, nev * (3 + i))
+                if i == max_retries - 1:
+                    log.error("excite_top_nontriv: Failed to converge!")
+                    raise EvoMPSNoConvergence('excite_top_nontriv')
+                          
         return res
         
-    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False):
-        op = self._prepare_excite_op_top_nontriv(donor, p)
+    def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
+                                 pinv_tol=1E-12):
+        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -771,20 +915,31 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
          
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
-    def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15):
+    def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15,
+                           A2=None, l=None, r=None,):
         L = self.L
         BRr = [None] * L
         BR = [None] * L
         
+        if A2 is None:
+            A2 = self.A
+        if l is None:
+            l = self.l
+        if r is None:
+            r = self.r
+        
         M = len(B[0].shape) - 2
-        A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+        Ae = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+        A2e = list(A2) * int(sp.ceil((L - 1. + M) / L))
         
         #print "M=", M
         #print len(A)
         
         As = [None] * L
+        A2s = [None] * L
         for k in xrange(L):
-            As[k] = A[k:k + M]
+            As[k] = Ae[k:k + M]
+            A2s[k] = A2e[k:k + M]
         Bs = [None] * L
         for k in xrange(L):
             Bs[k] = [B[k]]
@@ -794,14 +949,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             X2 = Bs
         else:
             X1 = Bs
-            X2 = As
+            X2 = A2s
 
         BRblock = 0
         for k in xrange(L - 1, -1, -1):
-            BRr[k] = tm.eps_r_noop_multi(self.r[(k + M - 1) % L], X1[k], X2[k])
+            BRr[k] = tm.eps_r_noop_multi(r[(k + M - 1) % L], X1[k], X2[k])
             #BRr[k] = tm.eps_r_noop(self.r[k], X1[k][0], X2[k][0])
             if k < L - 1:
-                BRblock = sp.exp(1.j * p_) * tm.eps_r_noop(BRblock, self.A[k], self.A[k])
+                BRblock = sp.exp(1.j * p_) * tm.eps_r_noop(BRblock, Ae[k], A2e[k])
             BRblock += BRr[k]
                 
         #print "BRblock", la.norm(BRblock.ravel())
@@ -809,14 +964,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if sp.allclose(BRblock.ravel(), 0, rtol=GF_tol): #Skip the far connected contributions if we are approximately gauge-fixing
             BRblock_fid = 0
         else:
-            BRblock_fid = m.adot(self.l[-1], BRblock)
-            QBRblock = BRblock - self.r[-1] * BRblock_fid
+            BRblock_fid = m.adot(l[-1], BRblock)
+            QBRblock = BRblock - r[-1] * BRblock_fid
             BR[0] = QBRblock.copy()
             BR[0] = self.calc_PPinv(QBRblock, p=(L * p_), solver=las.lgmres, 
                                     tol=con_tol, out=BR[0])
                                                          
             for k in xrange(L - 1, 0, -1):
-                BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], self.A[k], self.A[k])
+                BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], Ae[k], A2e[k])
                 #BR[k] -= self.r[k - 1] *  m.adot(self.l[k - 1], BR[k]) NO
                 
             #BR0_ = BRr[0] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[1 % L], self.A[0], self.A[0])
@@ -842,7 +997,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         for k in xrange(L):
             #VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
             r_si = self.r_sqrt_i[(k + M - 1) % L]
-            VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
+            VRh = self.Vsh[(k + M - 1) % L]
+            VRr_si = sp.empty((VRh.shape[0], VRh.shape[2], VRh.shape[1]), dtype=VRh.dtype)
+            for s in xrange(len(VRr_si)):
+                VRr_si[s] = r_si.dot(VRh[s]).conj().T
+            #VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
             
             x[k] = [0] * q**(M - 1)
     
@@ -921,12 +1080,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
             print 
             
-    def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False):
+    def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
+                          A2=None, l=None, r=None):
         L = self.L
         M = len(B1[0].shape) - 2
         #print "M=", M
-        A = list(self.A) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
+        Ae = list(self.A) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
+        if A2 is None:
+            A2e = A
+        else:
+            A2e = list(A2) * int(sp.ceil((L - 1. + 2. * M - 1.) / L))
         #print len(A)
+        
+        if l is None:
+            l = self.l
+        if r is None:
+            r = self.r
         
         #ter = range(len(A))
         
@@ -934,30 +1103,30 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         res12 = 0
         res21 = 0
         for k in xrange(L):
-            res += m.adot(self.l[k - 1], tm.eps_r_noop_multi(self.r[(k + M - 1) % L], [B1[k]], [B2[k]]))
+            res += m.adot(l[k - 1], tm.eps_r_noop_multi(r[(k + M - 1) % L], [B1[k]], [B2[k]]))
             
             #B1 right of B2
             if not B1_is_GF:
                 for j in xrange(1, M):
                     #print k, j, ter[k:k + j], ter[k + M:k + M + j]
-                    ket = A[k:k + j] + [B1[(k + j) % L]]
-                    bra = [B2[k]] + A[k + M:k + M + j]
-                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    ket = Ae[k:k + j] + [B1[(k + j) % L]]
+                    bra = [B2[k]] + A2e[k + M:k + M + j]
+                    R = tm.eps_r_noop_multi(r[(k + M + j - 1) % L], ket, bra)
                     #print la.norm(R), m.adot(self.l[k - 1], R)
-                    res21 += sp.exp((j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
+                    res21 += sp.exp((j + 1) * 1.j * p) * m.adot(l[k - 1], R)
             
             #B2 right of B1
             if not B2_is_GF:
                 for j in xrange(1, M):
-                    ket = [B1[k]] + A[k + M:k + M + j]
-                    bra = A[k:k + j] + [B2[(k + j) % L]]
-                    R = tm.eps_r_noop_multi(self.r[(k + M + j - 1) % L], ket, bra)
+                    ket = [B1[k]] + Ae[k + M:k + M + j]
+                    bra = A2e[k:k + j] + [B2[(k + j) % L]]
+                    R = tm.eps_r_noop_multi(r[(k + M + j - 1) % L], ket, bra)
                     #print la.norm(R), m.adot(self.l[k - 1], R)
-                    res12 += sp.exp(-(j + 1) * 1.j * p) * m.adot(self.l[k - 1], R)
+                    res12 += sp.exp(-(j + 1) * 1.j * p) * m.adot(l[k - 1], R)
                     
             if M == 1:
-                res21 += sp.exp(1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], B1[(k + 1) % L], self.A[(k + 1) % L]), self.A[k], B2[k]))
-                res12 += sp.exp(-1.j * p) * m.adot(self.l[k - 1], tm.eps_r_noop(tm.eps_r_noop(self.r[(k + 1) % L], self.A[(k + 1) % L], B2[(k + 1) % L]), B1[k], self.A[k]))
+                res21 += sp.exp(1.j * p) * m.adot(l[k - 1], tm.eps_r_noop(tm.eps_r_noop(r[(k + 1) % L], B1[(k + 1) % L], A2e[(k + 1) % L]), Ae[k], B2[k]))
+                res12 += sp.exp(-1.j * p) * m.adot(l[k - 1], tm.eps_r_noop(tm.eps_r_noop(r[(k + 1) % L], Ae[(k + 1) % L], B2[(k + 1) % L]), B1[k], A2e[k]))
             
         if M == 1:
             #print "res12, res21", res12, res21
@@ -967,10 +1136,36 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         
     def _B_overlap(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
-                   con_tol=None, GF_tol=1E-15):
+                   con_tol=None, GF_tol=1E-15, other=None):
         L = self.L
         
-        res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF)
+        if other is None:
+            l = self.l
+            r = self.r
+            A2 = self.A
+        else:
+            A2 = other.A
+            
+            d, ev, lL = self.fidelity_per_site(other, full_output=True, left=True)
+            d, ev, rL = self.fidelity_per_site(other, full_output=True, left=False)
+            if not abs(1 - d) < 1E-12:
+                log.warning("Warning! Attempt to calculate tangent vector overlap for non-equivalent states.", d)
+            l = [None] * L
+            r = [None] * L
+            nrm = abs(m.adot(lL, rL))
+            if not abs(nrm - 1) < 1E-12:
+                log.warning("Warning! Normalization error in _B_overlap.", nrm)
+            l[-1] = lL.reshape(self.l[-1].shape)
+            r[-1] = rL.reshape(self.r[-1].shape)
+
+            for k in xrange(len(self.A) - 1, 0, -1):
+                r[k - 1] = tm.eps_r_noop(r[k], self.A[k], A2[k])
+                
+            for k in xrange(0, len(self.A) - 1):
+                l[k] = tm.eps_l_noop(l[k - 1], self.A[k], A2[k])
+        
+        res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF, 
+                                                   A2=A2, l=l, r=r)
         #print "onsite = ", res, res12, res21
         
         res += res12 + res21
@@ -978,22 +1173,27 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         def calc_con(BnoGF, BGF, p_, noGF_conj):
             if noGF_conj:
                 p_ = -p_
-            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=noGF_conj, con_tol=con_tol, GF_tol=GF_tol)
+            BR, BRbl_fid = self._B_overlap_calc_BR(BnoGF, p_, conj=noGF_conj, 
+                                                   con_tol=con_tol, GF_tol=GF_tol,
+                                                   A2=A2, l=l, r=r)
 
             rescon = 0
             if not BR[0] is None:
                 M = len(BGF[0].shape) - 2
-                A = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+                Ae = list(self.A) * int(sp.ceil((L - 1. + M) / L))
+                A2e = list(A2) * int(sp.ceil((L - 1. + M) / L))
 
                 As = [None] * L
+                A2s = [None] * L
                 BGFs = [None] * L
                 for k in xrange(L):
-                    As[k] = A[k:k + M]
+                    As[k] = Ae[k:k + M]
+                    A2s[k] = A2e[k:k + M]
                     BGFs[k] = [BGF[k]]
                 
                 if noGF_conj:
                     Y1 = BGFs
-                    Y2 = As
+                    Y2 = A2s
                 else:
                     Y1 = As
                     Y2 = BGFs
@@ -1006,10 +1206,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                         #rescon_1 += m.adot(self.l[k - 1], R2)
                     else:
                         if noGF_conj:
-                            R = tm.eps_r_op_2s_C12(BR[(k + M) % L], BGF[k], self.A[k], self.A[(k + 1) % L])
+                            R = tm.eps_r_op_2s_C12(BR[(k + M) % L], BGF[k], A2e[k], A2e[(k + 1) % L])
                         else:
-                            R = tm.eps_r_op_2s_C34(BR[(k + M) % L], self.A[k], self.A[(k + 1) % L], BGF[k])
-                    rescon += m.adot(self.l[k - 1], R)
+                            R = tm.eps_r_op_2s_C34(BR[(k + M) % L], Ae[k], Ae[(k + 1) % L], BGF[k])
+                    rescon += m.adot(l[k - 1], R)
                 rescon *= sp.exp(M * 1.j * p_)
                 #rescon_1 *= sp.exp(M * 1.j * p_)
                 #print "rescon_1", rescon_1
@@ -1152,7 +1352,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             BCG = BG
         else:
             if use_PR:                
-                BGdotBG0 = self._B_overlap(BG, BG0, B1_is_GF=True, con_tol=B_overlap_tol)
+                BGdotBG0 = self._B_overlap(BG, BG0, B1_is_GF=True)
                 beta = (BGdotBG - BGdotBG0) / BG0dotBG0 #Note: Overall factors/signs on the gradients do not affect beta
             else:
                 beta = BGdotBG / BG0dotBG0 #FR
@@ -1332,10 +1532,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  expand_q=expand_q, shrink_q=shrink_q,
                                  refac=refac, imfac=imfac)
             
-    def set_q(self, newq):
+    def set_q(self, newq, offset=0):
         oldK = self.K        
-        super(EvoMPS_TDVP_Uniform, self).set_q(newq)        
+        super(EvoMPS_TDVP_Uniform, self).set_q(newq, offset=offset)        
         self.K = oldK
+        print "New Hamiltonian required! Use set_ham(...)."
                     
     def expand_D(self, newD, refac=100, imfac=0):
         oldK0 = self.K[0]
@@ -1364,13 +1565,109 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             return m.adot(self.l[(k - 1) % self.L], res)
         else:
             return super(EvoMPS_TDVP_Uniform, self).expect_3s(op, k=k)
+            
+    def _get_tangent_lr(self, B, d, nb=None, op1=None, s2=None):
+        if nb is None:
+            nb = d + 1
+        if s2 is None:
+            A2 = self.A[0]
+            r = self.r
+        else:
+            A2 = s2.A[0]
+            r = s2.r
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+        
+        ls = [self.l[0]] * (2*d + 2)
+        ls[0] = self.l[0]
+        if op1 is None:
+            ls[0] = self.l[0]
+            ls[1] = tm.eps_l_noop(ls[0], As[1], As[1])
+        else:
+            ls[1] = tm.eps_l_op_1s(ls[0], As[1], As[1], op1)
+            
+        for n in xrange(2, 2 * d + 1):
+            ls[n] = tm.eps_l_noop(ls[n - 1], As[n], As[n])
+            
+        rs = [None] * (2*d + 2)
+        rs[-1] = r[0]
+        for n in xrange(2*d + 1, 0, -1):
+            rs[n - 1] = tm.eps_r_noop(rs[n], As[n], As[n])
+            
+        return ls, rs
+            
+    def expect_tangent_1s(self, B, op, d, nb=None, lrs=None, s2=None):
+        if nb is None:
+            nb = d + 1
+        if lrs is None:
+            ls, rs = self._get_tangent_lr(B, d, nb=nb, s2=s2)
+        else:
+            ls, rs = lrs
+            
+        if s2 is None:
+            A2 = self.A[0]
+        else:
+            A2 = s2.A[0]
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+            
+        exs = [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op)) 
+               for n in xrange(1, 2*d + 2)]
+                   
+        return sp.array(exs)
+        
+    def expect_tangent_2s(self, B, op, d):
+        AA = tm.calc_AA(self.A[0], self.A[0])
+        AB = tm.calc_AA(self.A[0], B)
+        BA = tm.calc_AA(B, self.A[0])
+        Cop = tm.calc_C_mat_op_AA(op, AA)
+        CopAB = tm.calc_C_mat_op_AA(op, AB)
+        CopBA = tm.calc_C_mat_op_AA(op, BA)
+        
+        nb = d + 1
+        ls, rs = self._get_tangent_lr(B, d)
+            
+        AAs = [AA] * (2*d + 2)
+        AAs[nb - 1] = AB 
+        AAs[nb] = BA
+        
+        Cs = [Cop] * (2*d + 2)
+        Cs[nb - 1] = CopAB
+        Cs[nb] = CopBA
+            
+        exs = [m.adot(ls[n - 1], tm.eps_r_op_2s_AA12_C34(rs[n + 1], Cs[n], AAs[n])) 
+               for n in xrange(1, 2*d + 1)]
+                   
+        return sp.array(exs)
+        
+    def correlation_tangent_1s_1s(self, B, op1, op2, d, nb=None, s2=None):
+        ls, rs = self._get_tangent_lr(B, d, nb=nb, s2=s2)
+        exs1 = self.expect_tangent_1s(B, op1, d, nb=nb, lrs=(ls, rs), s2=s2)
+        exs2 = self.expect_tangent_1s(B, op2, d, nb=nb, lrs=(ls, rs), s2=s2)
+        
+        if nb is None:
+            nb = d + 1
 
+        if s2 is None:
+            A2 = self.A[0]
+        else:
+            A2 = s2.A[0]
+        As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
+        
+        ls, rs = self._get_tangent_lr(B, d, op1=op1, nb=nb, s2=s2)
+        g = [m.adot(ls[0], tm.eps_r_op_1s(rs[1], As[1], As[1], op1.dot(op2)))]
+        g += [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op2)) 
+              for n in xrange(2, 2*d + 2)]
+        
+        g = sp.array(g)
+        
+        c = g - exs1 * exs2
+                   
+        return c, g
 
-class ls_wolfe_sat(Exception):
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
+class EvoMPS_line_search_wolfe_sat(Exception):
+    def __init__(self, message, tau, *args):
+        self.message = message
+        self.tau = tau
+        super(EvoMPS_line_search_wolfe_sat, self).__init__(message, tau, *args)
 
 class EvoMPS_line_search():
     def __init__(self, tdvp, B, Bg, B_overlap_tol=1E-6):
@@ -1468,7 +1765,7 @@ class EvoMPS_line_search():
                          self.tdvp.r[-1].copy(), K0, wol)
 
             if wol and self.in_search:
-                raise ls_wolfe_sat(tau)
+                raise EvoMPS_line_search_wolfe_sat("Wolfe conditions satisfied.", tau)
             
             return g.real
             
@@ -1535,9 +1832,9 @@ class EvoMPS_line_search():
                     log.warning("CG: Failed to find a valid bracket.")
                     return 0, self.hs[0], 0 #fail
                 
-            except ls_wolfe_sat as e:
+            except EvoMPS_line_search_wolfe_sat as e:
                 log.debug("CG: Aborting early due to Wolfe")
-                tau_opt = e.value
+                tau_opt = e.tau
                 
         i = self.taus.index(tau_opt)
         h_min = self.hs[i]

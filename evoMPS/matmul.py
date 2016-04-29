@@ -133,8 +133,8 @@ class simple_diag_matrix:
     dtype = None
     
     def __init__(self, diag, dtype=None):
-        self.dtype = dtype
         diag = sp.asanyarray(diag, dtype=dtype)
+        self.dtype = diag.dtype
         assert diag.ndim == 1
         self.diag = diag
         self.shape = (diag.shape[0], diag.shape[0])
@@ -294,6 +294,21 @@ def mmul(*args):
 #        else:
 #            return sp.dot(res, args[-1], out=out)
 
+#Inplace dot assuming dense output
+def dot_inplace(A, B, out):
+    if isinstance(A, eyemat):
+        out[:] = B
+        return out
+    elif isinstance(B, eyemat):
+        out[:] = A
+        return out
+    elif isinstance(A, simple_diag_matrix):
+        return mmul_diag(A.diag, B, out=out)
+    elif isinstance(B, simple_diag_matrix):
+        return mmul_diag(B.diag, A, out=out, act_right=False)
+    else:
+        return sp.dot(A, B, out=out)
+
 def adot(a, b):
     """
     Calculates the scalar product for the ancilla, expecting
@@ -382,7 +397,7 @@ def sqrtmh(A, ret_evd=False, evd=None):
     else:
         return mmul(EV, B)
         
-def mmul_diag(Adiag, B, act_right=True):
+def mmul_diag(Adiag, B, act_right=True, out=None):
     if act_right:
         assert B.shape[0] == Adiag.shape[0]
     else:
@@ -390,13 +405,17 @@ def mmul_diag(Adiag, B, act_right=True):
         
     assert Adiag.ndim == 1
     assert B.ndim == 2
-
+    
     if act_right:
-        #B = sp.asarray(B, order='F')
-        tmp = Adiag * B.T
-        out = tmp.T
+        if out is None:
+            out = sp.empty((Adiag.shape[0], B.shape[1]), dtype=sp.promote_types(Adiag.dtype, B.dtype))
+        out = out.T
+        sp.multiply(Adiag, B.T, out)
+        out = out.T
     else:
-        out = Adiag * B
+        if out is None:
+            out = sp.empty((B.shape[0], Adiag.shape[0]), dtype=sp.promote_types(Adiag.dtype, B.dtype))
+        sp.multiply(Adiag, B, out)
         
     return out
         
