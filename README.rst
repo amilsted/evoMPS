@@ -15,8 +15,10 @@ Introduction
 ------------
 
 evoMPS can find ground states and low-lying excited states of one-dimensional 
-quantum systems (local Hamiltonians) directly in the thermodynamic limit of infinitely long chains.
-States are represented as (infinite) matrix product states (MPS).
+quantum systems (local, translation-invariant Hamiltonians) directly in the 
+thermodynamic limit of infinitely long chains. States are represented as 
+infinite matrix product states (MPS) invariant under translation by L sites
+(block-translation invariant).
 
 evoMPS finds ground states efficiently, even for critical systems, using the 
 nonlinear conjugate gradient method. It computes dispersion relations using
@@ -27,7 +29,8 @@ system.
 
 The above features set evoMPS apart from other MPS and DMRG software, which do
 not usually work directly in the thermodynamic limit and do not exploit the MPS 
-tangent space as an excitations ansatz.
+tangent space as an excitations ansatz. In addition, evoMPS can find ground states
+and simulate real-time dynamics of finite systems with open boundary conditions.
 
 evoMPS is based on algorithms published by Haegeman et al. [1] and Milsted et al. [2],
 among others.
