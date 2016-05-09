@@ -385,23 +385,26 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     q = A.shape[0]
     
     x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
-    x_part = np.empty_like(x, order='C')
+    x_part = np.zeros_like(x, order='C')
     x_subpart = np.empty_like(A[0], order='C')
     
-    assert not (C is None and not Kp1 is None) #existence of Kp1 implies existence of C
-    if not C is None:
-        x_part.fill(0)
-        for s in xrange(q):            
-            x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
+    #assert not (C is None and not Kp1 is None) #existence of Kp1 implies existence of C
+
+    if C is not None or Kp1 is not None:
+        for s in xrange(q):
+            if C is None:
+                x_subpart.fill(0)
+            else:
+                x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
             
             if not Kp1 is None:
                 x_subpart += A[s].dot(Kp1) #~3rd line
-    
+
             x_part += x_subpart.dot(r_si.dot(Vsh[s]))
 
-        x += lm1_s.dot(x_part)
+    x += lm1_s.dot(x_part)
 
-    if not lm2 is None:
+    if Cm1 is not None:
         Cm1T = sp.transpose(Cm1, axes=(1, 0, 2, 3))
         x_part.fill(0)
         for s in xrange(q):     #~2nd line
