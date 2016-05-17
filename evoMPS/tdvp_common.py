@@ -397,12 +397,12 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
             else:
                 x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
             
-            if not Kp1 is None:
+            if Kp1 is not None:
                 x_subpart += A[s].dot(Kp1) #~3rd line
 
             x_part += x_subpart.dot(r_si.dot(Vsh[s]))
 
-    x += lm1_s.dot(x_part)
+        x += lm1_s.dot(x_part)
 
     if Cm1 is not None:
         Cm1T = sp.transpose(Cm1, axes=(1, 0, 2, 3))

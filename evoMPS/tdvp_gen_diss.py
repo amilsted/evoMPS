@@ -8,6 +8,40 @@ import mps_gen as mg
 import tdvp_common as tm
 import matmul as mm
 import tdvp_gen as TDVP
+import copy
+
+# def _add_local_ops(*ops):
+    # lmax = max(map(len, ops))
+    # resop = [None] * lmax
+    # for n in xrange(1, lmax):
+        # resop[n] = add_local_ops_n([op[n] if n < len(op) else None for op in ops])
+    # return resop
+
+# def _add_local_ops_n(ops):
+    # res = None
+    # for op in ops:
+        # if op is not None:
+            # if res is None:
+                # res = op
+            # elif res.shape == op.shape:
+                # res += op
+            # else:
+                # if sp.ndim(op) > sp.ndim(res):
+                    # res = add_ops(op, res)
+                # else:
+                    # res = add_ops(res, op)
+                    
+# def _add_ops(lr, sr):
+    # n_lr = sp.ndim(lr) / 2
+    # n_sr = sp.ndim(sr) / 2
+    # q = lr.shape[:n_lr]
+    # assert sr.shape[:n_sr] == q
+    # srMdim = sp.prod(sr.shape[:n_sr])
+    # sr = sr.reshape((srMdim, srMdim))
+    # sr = sp.kron(sr, sp.eye(sp.prod(sr.shape[n_sr:n_lr])))
+    # sr = sr.reshape(lr.shape)
+    
+    # return sr + lr
 
 class EvoMPS_TDVP_Generic_Dissipative(TDVP.EvoMPS_TDVP_Generic):
     """ Class derived from TDVP.EvoMPS_TDVP_Generic.
@@ -39,67 +73,71 @@ class EvoMPS_TDVP_Generic_Dissipative(TDVP.EvoMPS_TDVP_Generic):
         The system Hamiltonian determines the drift part, while the Lindblad operators
         determine the diffusion part.
         
-        The Lindblad operators must be supplied in the same form as the system Hamiltonian.
-        In other words, each Lindblad operator must be a sum of nearest-neighbour 
-        (or next-nearest neighbour) terms.
+        Each Lindblad operator Lj must be a single, local operator with the same dimensions
+        as the Hamiltonian terms. They must be supplied as tuples, where (n, Lj) is the operator
+        Lj acting on sites n to n + [the range of Lj].
         
-        linds[j] = [None, Lj_12, Lj_23, Lj_34, ..., Lj_(N-1)N]
+        linds = [(n, L1), (m, L2), ...]
         
         Parameters
         ----------
         dt : real
             The step size (smaller step sizes result in smaller errors)
-        lines : Sequence of sequences of ndarrays
-            Each entry in linds represents a Lindblad operator with the same form as the Hamiltonian.
-            In other words, linds[j] is a sequence of local terms with linds[j][n] acting on sites n and (n+1) (and (n+2)).
+        linds : Sequence of tuples (int, ndarray)
             
         """
         nL = len(linds)
         
-        #Compute tangent vector arising from system Hamiltonian evolution
+        #Use precomputed C and K to get the Hamiltonian contribution
         B_H = self.calc_B()
         
-        L_expect = sp.zeros((nL,), dtype=sp.complex128)
-        B_L = sp.empty((nL, self.N + 1), dtype=sp.ndarray) 
-        
         ham = self.ham
-        ham_sites = self.ham_sites
         
-        for al in xrange(nL):
-            #replace Hamiltonian with the Lindblad operator linds[al]
-            #and compute corresponding tangent vector
-            #(alternatively, we could combine the Lindblad operators first, together with the Wiener samples, 
-            # then compute a single tangent vector as one operation)
-            self.ham = linds[al]
-            prev_ham_sites = self.ham_sites
-            self.ham_sites = 0
-            for n in xrange(len(linds[al])):
-                if not linds[al][n] is None:
-                    self.ham_sites = len(linds[al][n].shape) / 2
-                    break
-            if self.ham_sites == 0:
-                continue
-            self.calc_C(calc_AA=self.ham_sites != prev_ham_sites) #This computes AA (AAA) only if ham_sites changed
-            self.calc_K()
-            B_L[al,:] = self.calc_B()
-            L_expect[al] = self.H_expect
-                
-        self.ham = ham
-        self.ham_sites = ham_sites
+        q = self.q
         
-        #Apply Hamiltonian evolution step
-        for n in xrange(1, self.N):
-            if not B_H[n] is None:
-                self.A[n] += dt * 1.j * B_H[n]
-               
-        #Apply diffusion step
-        for al in xrange(nL):
-            #sample complex Wiener process
+        if self.ham_sites == 2:
+            Ls = [(n, L, L.reshape((q[n]*q[n+1], q[n]*q[n+1])), self.expect_2s(L, n)) for (n, L) in linds]
+        elif self.ham_sites == 3:
+            Ls = [(n, L, L.reshape((q[n]*q[n+1]*q[n+2], q[n]*q[n+1]*q[n+2])), self.expect_3s(L, n)) for (n, L) in linds]
+        else:
+            assert False, "Range of Hamiltonian terms must be 2 or 3 sites."
+        
+        Leffs = []
+        for (n, L, Lr, Le) in Ls:
             u = sp.random.normal(0, sp.sqrt(dt), (2,))
             W = (u[0] + 1.j * u[1]) / sp.sqrt(2)
-            for n in xrange(1, self.N):
-                if not B_L[al,n] is None:
-                    self.A[n] += B_L[al,n] * (W + (L_expect[al] * dt))
+            
+            Leff = -0.5 * Lr.conj().T.dot(Lr).reshape(L.shape)
+            Leff += (sp.conj(Le) + W/dt) * L
+            
+            Leffs.append((n, Leff))
+                
+        #An alternative approach is to put the Hamiltonian and dissipative parts together,
+        #and compute only one tangent vector. This is the most efficient way, but it would
+        #require more modifications to the class to avoid computing unneeded stuff.
+        #HL = [-1.j * hn if hn is not None else None for hn in ham]
+        
+        HL = [None] * (self.N + 1)
+        for (n, Leff) in Leffs:
+            if HL[n] is None:
+                HL[n] = Leff
+            else:
+                HL[n] += Leff
+        
+        #Compute the combined dissipative contribution. 
+        #C is only computed where it is nonzero, so this should be fairly quick.
+        self.ham = HL
+        self.calc_C()
+        self.calc_K()
+        B_Leff = self.calc_B()
+        
+        self.ham = ham
+        
+        for n in xrange(1, self.N):
+            if B_Leff[n] is not None:
+                self.A[n] += dt * B_Leff[n]
+            if B_H[n] is not None:
+                self.A[n] += -1.j * dt * B_H[n]
 
 
     def get_op_A_1s(self,op,n):
