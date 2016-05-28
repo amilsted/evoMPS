@@ -14,9 +14,7 @@ See: T. Prosen, Phys. Rev. Lett. 107, 137201 (2011)
 import math as ma
 import scipy as sp
 import evoMPS.tdvp_gen_diss as tdvp
-#import evoMPS.tdvp_gen as tdvp
 import time
-import Queue as qu
 from multiprocessing import Pool, Queue, Manager
 from multiprocessing.pool import ThreadPool
 import copy
@@ -24,17 +22,17 @@ import copy
 """
 First, we set up some global variables to be used as parameters.
 """
-N = 101                       #The length of the finite spin chain.
-bond_dim = 32                 #The maximum bond dimension
+N = 10                       #The length of the finite spin chain.
+bond_dim = 64                 #The maximum bond dimension
 
-N_samp = 16                   #Number of samples
+N_samp = 2                   #Number of samples
 
 lam = 1.0
-eps = 1.0
+eps = 2.0
 
 N_steps = 100000
-res_every = 1
-dt = 0.001                     #Real-time step size
+res_every = 100
+dt = 0.0001                     #Real-time step size
 
 load_saved_ground = True      #Whether to load a saved ground state
 
@@ -243,10 +241,10 @@ if __name__ == '__main__':
     N_proc = N_samp
     pp = Pool(processes=N_proc)
     resQ = Manager().Queue()
-    workers = [pp.apply_async(go, kwds={'load_from': None, 'N_steps': N_steps, 
+    workers = [pp.apply_async(go_exact, kwds={'load_from': None, 'N_steps': N_steps, 
                                         'resQ': resQ, 'pid': n}) for n in xrange(N_proc)]
     
-    save_every = 1000
+    save_every = 10
     
     N_res = N_steps / res_every
     res_array = sp.zeros((N_res, N))
