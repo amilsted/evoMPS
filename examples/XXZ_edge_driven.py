@@ -6,8 +6,14 @@ A demonstration of simulating open system dynamics by sampling
 over randomized pure state trajectories.
 
 This simulates the dynamics of an edge-driven XXZ chain,
-which has an analytic solution for certain parameter combinations.
+which has an analytic solution for lam = 1.0, eps = 2.0.
 See: T. Prosen, Phys. Rev. Lett. 107, 137201 (2011)
+
+For comparison, with short spin chains this script also
+evolves the full density matrix corresponding to the sample
+trajectories using Euler integration of the Lindblad master equation.
+
+The starting state is a random state composed of N_samp random pure states.
 
 @author: Ashley Milsted
 """
@@ -15,36 +21,48 @@ import math as ma
 import scipy as sp
 import evoMPS.tdvp_gen_diss as tdvp
 import time
-from multiprocessing import Pool, Queue, Manager
-from multiprocessing.pool import ThreadPool
 import copy
+import multiprocessing as mp
 
 """
 First, we set up some global variables to be used as parameters.
 """
-N = 10                       #The length of the finite spin chain.
+N = 6                         #The length of the finite spin chain.
 bond_dim = 64                 #The maximum bond dimension
 
-N_samp = 2                   #Number of samples
+Nmax_fullrho = 8              #Maximum chain length for computing the full density matrix
 
+num_procs = mp.cpu_count()    #Number of parallel processes to use
+
+live_plot_mode = True         #Attempt to show a live plot of expectation values during evolution
+                              #If False, save results to a file instead!
+                              
+plot_saved_data = False       #Do not simulate. Instead load and plot saved data.
+plot_res = -1                 #Which result to plot. -1 means the last result.
+
+#Set number of sample trajectories based on available cores if live plotting
+if live_plot_mode:
+    if N <= Nmax_fullrho:
+        N_samp = num_procs - 1  #the density matrix computation requires a process too
+    else:
+        N_samp = num_procs
+else:
+    N_samp = 20 #number of samples to compute when saving data to a file
+
+#System parameters
 lam = 1.0
 eps = 2.0
 
-N_steps = 100000
-res_every = 100
-dt = 0.0001                     #Real-time step size
+dt = 0.001                   #Time-step size for Euler integration
+N_steps = 1000               #Number of steps to compute
+res_every = 20               #Number of steps to wait between computation of results (expectation values)
 
-load_saved_ground = True      #Whether to load a saved ground state
-
-auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
-zero_tol = 0                  #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
-
-plot_results = True
-
-sanity_checks = False         #Whether to perform additional (verbose) sanity checks
+random_seed = 1              #Seed used to generate the pseudo-random starting state.
+                             #The same random number generator is used to simulate the Wiener processes needed to
+                             #integrate the stochastic differential equation.
 
 """
-Next, we define our Hamiltonian and some observables.
+Next, we define the operators used, including the Hamiltonian and the Lindblad operators.
 """
 Sx = sp.array([[0., 1.],
                [1., 0.]])
@@ -75,6 +93,7 @@ def get_linds(N, eps):
 """
 The bond dimension for each site is given as a vector, length N + 1.
 Here we set the bond dimension = bond_dim for all sites.
+evoMPS will adjust it to the maximum useful value near the ends of the chain.
 """
 D = [bond_dim] * (N + 1)
 
@@ -91,11 +110,10 @@ def get_full_state(s):
         A = 1.0
         for n in xrange(N, 0, -1):
             A = s.A[n][ind[n-1]].dot(A)
-        #print A, psi[ind]
+
         psi[ind] = A[0,0]
     psi = psi.ravel()
-    assert psi.shape[0] == 2**N
-    print "norm", sp.vdot(psi, psi)
+
     return psi
     
 def get_full_op(op):
@@ -107,27 +125,59 @@ def get_full_op(op):
         n_sites = len(op[n].shape) / 2
         opn = op[n].reshape(2**n_sites, 2**n_sites)
         fop_n = sp.kron(sp.eye(2**(n - 1)), sp.kron(opn, sp.eye(2**(N - n - n_sites + 1))))
-#        print n, n_sites, fop.shape, fop_n.shape, N - n - n_sites + 1
+
         assert fop.shape == fop_n.shape
         fop += fop_n
     return fop
+
+def go(load_from=None, N_steps=100, resQ=None, pid=None, stateQ=None):
+    sp.random.seed(random_seed + pid)
     
-def go_exact(load_from=None, resQ=None, pid=None, N_steps=100):
-    sp.random.seed(pid)
-    
-    s_start = tdvp.EvoMPS_TDVP_Generic_Dissipative(N, D, q, get_ham(N, lam))
-    #s_start = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, lam))
+    s_start = tdvp.EvoMPS_TDVP_Generic_Dissipative(N, D, q, get_ham(N, lam), get_linds(N, eps))
+    print "Starting MPS sample", pid
 
     if load_from is not None:
         s_start.load_state(load_from)
     else:
         s_start.randomize()
         
-    #print "mps_sZ", sp.array([s_start.expect_1s(Sz, n).real for n in xrange(1, s_start.N + 1)])
-        
-    psi = get_full_state(s_start)
-    s_start = None
+    s = s_start
     
+    #Send the state to the density matrix simulator
+    if N <= Nmax_fullrho and stateQ is not None:
+        psi = get_full_state(s)
+        stateQ.put([pid, psi])
+
+    eta = 1
+    Hexp = 0
+    for i in xrange(N_steps + 1):
+        s.update()
+
+        Szs = [s.expect_1s(Sz, n).real for n in xrange(1, s.N + 1)]
+        pHexp = Hexp
+        Hexp = s.H_expect
+        if i % res_every == 0:
+            if resQ is not None:
+                resQ.put([pid, i, Szs])
+            else:
+                print pid, i / res_every, Hexp.real, Hexp.real - pHexp.real, Szs
+
+        s.take_step_dissipative(dt)
+    
+def fullrho(qu, squ):
+    print "#Starting full density matrix simulation!"
+    
+    #Build state from pure states received from the MPS processes
+    rho = sp.zeros((2**N, 2**N), dtype=sp.complex128)
+    psis = [None] * N_samp
+    for n in range(N_samp):
+        pnum, psi = squ.get()
+        psis[pnum] = psi
+        rho += sp.outer(psi, psi.conj())
+        squ.task_done()
+        
+    rho /= sp.trace(rho)
+
     Hfull = get_full_op(get_ham(N, lam))
 
     linds = get_linds(N, eps)
@@ -138,138 +188,191 @@ def go_exact(load_from=None, resQ=None, pid=None, N_steps=100):
 
     Qfull = -1.j * Hfull - 0.5 * sp.sum([L.conj().T.dot(L) for L in linds_full], axis=0)
 
-    Szfull = []
-    for n in xrange(1, N + 1):
-        Szn = [None] * (N + 1)
-        Szn[n] = Sz
-        Szfull.append(get_full_op(Szn))
-        
-    #print Szfull
-    Hexp = 0
-    for i in xrange(N_steps):
-        Szs = sp.array([sp.vdot(psi, Szfull[n].dot(psi)).real for n in xrange(N)])
-        
-        pHExp = Hexp
-        Hexp = sp.vdot(psi, Hfull.dot(psi))
-        Qexp = sp.vdot(psi, Qfull.dot(psi))
-        
+    szs = [None] + [sp.kron(sp.kron(sp.eye(2**(n - 1)), Sz), sp.eye(2**(N - n))) for n in range(1, N + 1)]
+    
+    for i in range(N_steps + 1):
+        rho /= sp.trace(rho)
+        esz = []
+        for n in xrange(1, N + 1):
+            esz.append(sp.trace(szs[n].dot(rho)).real)
+
         if i % res_every == 0:
-            if resQ is not None:
-                resQ.put([pid, i / res_every, Szs])
+            if qu is None:
+                print esz
             else:
-                print pid, i / res_every, Hexp.real, Hexp.real-pHExp.real, Szs
+                qu.put([-1, i, esz])
+                qu.put([-2, i, [sp.NaN] * N]) #this slot is reserved for a second "exact" result
         
-        dpsi = dt * (Qfull.dot(psi) - Qexp * psi) #norm-preservation
-        #error is about 10* more than expected for Euler integration
-        
-        for L in linds_full:
-            u = sp.random.normal(0, sp.sqrt(dt), (2,))
-            W = (u[0] + 1.j * u[1]) / sp.sqrt(2)
-            Lexp = sp.vdot(psi, L.dot(psi))
-            dpsi += (W + sp.conj(Lexp) * dt) * (L.dot(psi) - Lexp * psi)
-        
-        #print (sp.vdot(psi, Qfull.dot(Qfull).dot(psi)) - Qexp**2).real * dt**2 
-        #error is from this. **why not in mps case?**... the variance is quite large...
-        psi += dpsi
-        psi /= sp.sqrt(sp.vdot(psi, psi))
-
-        
-def compute_ground(s, tol=1E-6, step=0.05):
-    j = 0
-    eta = 1000
-    while eta > tol:
-        s.update()
-        if j % 10 == 9:
-            s.vari_opt_ss_sweep()
-        else:
-            s.take_step(step)
-        eta = s.eta.real
-        print eta
-        j += 1
-        
-def go(load_from=None, N_steps=100, resQ=None, pid=None):
-    sp.random.seed(pid)
+        #Do Euler steps, approximately integrating the Lindblad master equation
+        rho += dt * (Qfull.dot(rho) + rho.dot(Qfull.conj().T) +
+                       sum([L.dot(rho).dot(L.conj().T) for L in linds_full]))
     
-    s_start = tdvp.EvoMPS_TDVP_Generic_Dissipative(N, D, q, get_ham(N, lam))
-    #s_start = tdvp.EvoMPS_TDVP_Generic(N, D, q, get_ham(N, lam))
-    print s_start.D
-
-    if load_from is not None:
-        s_start.load_state(load_from)
-    else:
-        s_start.randomize()
-
-    s = s_start
-
-    linds = get_linds(N, eps)
-
-    eta = 1
-    Hexp = 0
-    for i in xrange(N_steps):
-        s.update()
-
-        """
-        Compute expectation values!
-        """
-        Szs = sp.array([s.expect_1s(Sz, n).real for n in xrange(1, s.N + 1)])
-        pHexp = Hexp
-        Hexp = s.H_expect
-        if i % res_every == 0:
-            if resQ is not None:
-                resQ.put([pid, i / res_every, Szs])
-            else:
-                print pid, i / res_every, Hexp.real, Hexp.real - pHexp.real, Szs
-
-        """
-        Carry out next step!
-        """
-        s.take_step_dissipative(dt, linds)
-
-        
-if __name__ == '__main__':
-    #
-    #s_start_pure = tdvp.EvoMPS_TDVP_Generic_Dissipative(N, D, q, get_ham(N, lam))
-    #s_start_pure.zero_tol = zero_tol
-    #s_start_pure.sanity_checks = sanity_checks
-    #compute_ground(s_start_pure)
-    #s_start_pure.save_state("XXZ_start_s.npy")
-    
-    #go_exact(load_from=None, N_steps=N_steps, pid=1)
-    #go(load_from=None, N_steps=N_steps, pid=1)
-    #exit()
-    
-    N_proc = N_samp
-    pp = Pool(processes=N_proc)
-    resQ = Manager().Queue()
-    workers = [pp.apply_async(go_exact, kwds={'load_from': None, 'N_steps': N_steps, 
-                                        'resQ': resQ, 'pid': n}) for n in xrange(N_proc)]
-    
-    save_every = 10
-    
-    N_res = N_steps / res_every
-    res_array = sp.zeros((N_res, N))
-    res_count = sp.zeros((N_res), int)
-    while True:
-        try:
-            pid, i, res = resQ.get(True, 5)
-            res_array[i] += sp.array(res)
-            res_count[i] += 1
-
-            if res_count[i] == N_samp:
-                print i, res_array[i] / N_samp
-                
-                if i % save_every or i == N_res - 1:
-                    sp.save("XXZ_res.npy", res_array)
-                    sp.save("XXZ_res_count.npy", res_count)
-                
-                if i == N_res - 1:
-                    print "**all results in**"
-                    break
-                
-        except qu.Empty:
-            continue
-    
-    
+def plotter(q):
+    import matplotlib
+    matplotlib.use("wxagg")
     import matplotlib.pyplot as plt
-    plt.plot((res_array / N_samp)[-1, :])
+
+    fig = plt.figure()
+    lns = [plt.plot([0]*N, ':')[0] for n in range(N_samp)]
+    av = plt.plot([0]*N, 'k-', linewidth=2.0)[0]
+    av_err1 = plt.plot([0]*N, 'k-', linewidth=1.0)[0]
+    av_err2 = plt.plot([0]*N, 'k-', linewidth=1.0)[0]
+    exa = plt.plot([0]*N, 'r-', linewidth=2.0)[0]
+    #exa_s = plt.plot([0]*N, 'm--', linewidth=2.0)[0]
+    
+    plt.legend([exa, av], ["Density matrix", "Sample average"])
+    plt.xlabel(r"$n$")
+    plt.ylabel(r"$\langle \sigma^z_n \rangle$")
+    
+    plt.ylim((-1, 1))
+    plt.xlim((0, N - 1))
+    plt.ion()
     plt.show()
+    i_buf = 0
+    data_buf = [[None] * (N_samp + 2)]
+    
+    if N <= Nmax_fullrho:
+        effbuflen = (N_samp + 2)
+    else:
+        effbuflen = N_samp
+    
+    while True:
+        data = q.get()
+        if data is None:
+            break
+        num = data[0]
+        i = data[1]
+        ys = data[2]
+        
+        i_off = (i - i_buf) / res_every
+        if i_off >= len(data_buf):
+            for j in range(len(data_buf), i_off + 1):
+                data_buf.append([None] * (N_samp + 2))
+        data_buf[i_off][num] = ys
+        
+        if not None in data_buf[0][:effbuflen]:
+            print "Plotting results for step", i_buf, "buffer length", len(data_buf)
+
+            for j in range(N_samp):
+                lns[j].set_ydata(data_buf[0][j])
+            av_ys = sp.zeros_like(ys)
+            for da in data_buf[0][:-2]:
+                av_ys += da
+            av_ys /= N_samp
+            av.set_ydata(av_ys)
+            
+            #Compute stdev and use it to display error
+            av_ys_var = 1./(N_samp - 1) / N_samp * sp.sum([(da - av_ys)**2 for da in data_buf[0][:-2]], axis=0)
+            av_ys_e1 = av_ys + sp.sqrt(av_ys_var)
+            av_ys_e2 = av_ys - sp.sqrt(av_ys_var)
+
+            av_err1.set_ydata(av_ys_e1)
+            av_err2.set_ydata(av_ys_e2)
+
+            exa.set_ydata(data_buf[0][-1])
+
+            #exa_s.set_ydata(data_buf[0][-2])
+            
+            fig.canvas.draw()
+
+            data_buf.pop(0)
+            i_buf += res_every
+            plt.pause(0.01)
+            
+        q.task_done()
+        
+    plt.ioff()
+    plt.show()
+
+def get_filename():
+    return 'sample_data_eps%g_lam%g_N%u_ns%u_ts%u_dt%g_resev%u_maxD%u.bin' % (eps, lam, N, N_samp, 
+                                                                              N_steps, dt, res_every, 
+                                                                              bond_dim)
+                       
+def writer(q):
+    df = sp.memmap(get_filename(), dtype=sp.float64, mode='w+', shape=(N_samp + 2, N_steps / res_every + 1, N))
+    while True:
+        data = q.get()
+        if data is None:
+            break
+        num = data[0]
+        i = data[1]
+        ys = data[2]
+
+        df[num, i / res_every, :] = ys
+
+        if i == N_steps:
+            df.flush()
+            print "Sample", num, "finished. Data saved."
+            
+    del df
+
+def plot_saved():
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    data = sp.memmap(get_filename(), dtype=sp.float64, mode='r', shape=(N_samp + 2, N_steps / res_every + 1, N))
+    
+    exa = data[-1]
+    
+    data = data[:-2]
+    
+    fins = sp.array([d[plot_res] for d in data if not sp.all(d[plot_res] == 0)])
+    nsam = len(fins)
+    print "Samples:", nsam
+    av = fins.sum(axis=0) / nsam
+
+    av_var = 1./(nsam - 1) / nsam * sp.sum((fins/nsam - av)**2, axis=0) 
+    av_e1 = av + sp.sqrt(av_var)
+    av_e2 = av - sp.sqrt(av_var)
+
+    
+    plt.figure()
+    pav = plt.plot(av, 'k-')[0]
+    plt.plot(av_e1, 'k--')
+    plt.plot(av_e2, 'k--')
+
+    if not sp.all(exa[-1] == 0):
+        pexa = plt.plot(exa[-1], 'r-')[0]
+        plt.legend([pexa, pav], ["Density matrix", "Sample average"])
+    
+    plt.ylim((-1, 1))
+    
+    plt.xlabel(r"$n$")
+    plt.ylabel(r"$\langle \sigma^z_n \rangle$")
+    
+    plt.show()
+    
+
+def f(args):
+    pid, resQ, stateQ = args
+    go(load_from=None, N_steps=N_steps, resQ=resQ, pid=pid, stateQ=stateQ)
+        
+if __name__ == "__main__":
+    if plot_saved_data:
+        plot_saved()
+    else:
+        mpm = mp.Manager()
+        qu = mpm.Queue()
+        state_q = mpm.Queue()
+        
+        if live_plot_mode:
+            res_handler = plotter
+        else:
+            res_handler = writer
+        
+        resp = mp.Process(target=res_handler, args=(qu,))
+        resp.start()
+        
+        p = mp.Pool(num_procs)
+        
+        if N <= Nmax_fullrho:
+            exa = p.apply_async(fullrho, args=(qu, state_q))
+        
+        p.map(f, zip(range(N_samp), [qu] * N_samp, [state_q] * N_samp))
+
+        if N <= Nmax_fullrho:
+            exa.get()
+        
+        qu.put(None)
+        resp.join()
