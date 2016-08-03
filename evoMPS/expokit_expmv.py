@@ -31,9 +31,9 @@ def zexpmv(A, v, t, norm_est=1., m=5, tol=0., trace=False, A_is_Herm=False):
     wsp = sp.zeros((nwsp,), dtype=A.dtype)
     
     niwsp = max(7, m + 2)
-    iwsp = sp.zeros((niwsp,), dtype=sp.int64)
+    iwsp = sp.zeros((niwsp,), dtype=sp.int32)
     
-    iflag = sp.zeros((1,), dtype=sp.int64)
+    iflag = sp.zeros((1,), dtype=sp.int32)
     itrace = sp.array([int(trace)])
     
     if A_is_Herm:
@@ -44,13 +44,15 @@ def zexpmv(A, v, t, norm_est=1., m=5, tol=0., trace=False, A_is_Herm=False):
         expokit.zgexpv(m, [t], v, vf, [tol], [norm_est], 
                        wsp, iwsp, A.matvec, itrace, iflag, n=[xn], 
                        lwsp=[len(wsp)], liwsp=[len(iwsp)])
-                   
+
     if iflag[0] == 1:
         print "Max steps reached!"
     elif iflag[0] == 2:
         print "Tolerance too high!"
     elif iflag[0] < 0:
         print "Bad arguments!"
+    elif iflag[0] > 0:
+        print "Unknown error!"
         
     return vf
     
