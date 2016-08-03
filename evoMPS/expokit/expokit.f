@@ -2403,7 +2403,7 @@ Cf2py intent(out) iflag
      .                   wsp,lwsp, iwsp,liwsp, matvec, itrace,iflag )
 
       implicit none
-      integer          n, m, lwsp, liwsp, itrace, iflag, iwsp(liwsp)
+      integer*4        n, m, lwsp, liwsp, itrace, iflag, iwsp(liwsp)
       double precision t, tol, anorm
       complex*16       v(n), w(n), wsp(lwsp)
       external         matvec
@@ -2789,7 +2789,7 @@ Cf2py intent(out) iflag
      .                   wsp,lwsp, iwsp,liwsp, matvec, itrace,iflag )
 
       implicit none
-      integer          n, m, lwsp, liwsp, itrace, iflag, iwsp(liwsp)
+      integer*4        n, m, lwsp, liwsp, itrace, iflag, iwsp(liwsp)
       double precision t, tol, anorm
       complex*16       v(n), w(n), wsp(lwsp)
       external         matvec
