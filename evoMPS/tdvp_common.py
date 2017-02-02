@@ -423,7 +423,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
     x = np.zeros((Dm1, q * D - Dm1), dtype=A.dtype)
     x_part = np.empty_like(x, order='C')
     
-    assert not (C is None and not Kp1 is None)
+    assert not (not C is None and Kp1 is None)
     if not C is None:
         x_part.fill(0)
         for s in xrange(q):            
