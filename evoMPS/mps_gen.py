@@ -151,6 +151,32 @@ class EvoMPS_MPS_Generic(object):
                         y = 0
                         s += 1
     
+
+    def set_state_product(self, psi, do_update=True):
+        """Initializes the parameter tensors self.A from a pure product state.
+        The state psi is given as a list of self.N self.q-dimensional vectors.
+        The bond dimensions will be the same as specified in self.D, hence the
+        result may have low rank. 
+        
+        It is recommended to use this method together with a bond dimension 
+        of 1 if you plan to use the TDVP (with bond-dimension expansion) to 
+        evolve the state.
+
+        Parameters
+        ----------
+        psi : list of vectors
+            The product state to be transformed into an MPS.
+
+        """
+
+        for n in xrange(self.N):
+            self.A[n+1].fill(0)
+            for q in xrange(self.q[n]):
+                self.A[n+1][q,0,0] = psi[n][q]
+
+        if do_update:
+            self.update()
+
     
     def randomize(self, do_update=True):
         """Randomizes the parameter tensors self.A.
