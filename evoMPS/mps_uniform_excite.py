@@ -320,7 +320,13 @@ class Excite_H_Op:
                 subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2 -ive of that it should be....
                 subres += exp(-1.j * p) * tm.eps_l_op_2s_AA12_C34(eye2, C_AhlAA_conj[s, :, :], BA_).dot(Vr_[s].conj().T) #4b
                 subres += exp(-2.j * p) * tm.eps_l_op_2s_AA12_C34(l.dot(B[s]), AA, C_AA_Vrh[s, :, :]) #4c
-                subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_.dot_left(B[s]), C_AhlAA[s, :, :], Vri_A_) #3b
+                
+                try:
+                    Bs_r = r_.dot_left(B[s])
+                except AttributeError:
+                    Bs_r = B[s].dot(r_)
+                subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(Bs_r, C_AhlAA[s, :, :], Vri_A_) #3b
+                    
                 #for t in xrange(self.q):
                     #subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
                     #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[s, t])) #4
