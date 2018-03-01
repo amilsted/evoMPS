@@ -8,7 +8,7 @@ import scipy.linalg as la
 
 def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None):
     num_steps = int(t / dt)
-    for i in xrange(num_steps + 1):
+    for i in range(num_steps + 1):
         sys.update()
         B = sys.calc_B()
 
@@ -123,7 +123,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
     h = 0
     dh_pred = 0
     expand_wait = 0
-    for i in xrange(max_itr + 1):
+    for i in range(max_itr + 1):
         sys.update(auto_truncate=auto_trunc)
         B = sys.calc_B()
 
@@ -166,7 +166,7 @@ def opt_conj_grad(sys, tol=1E-6, h_init=0.01, h0_prev=None, reset_every=20,
     BgdotBg = 0
 
     i = -1
-    for i in xrange(max_itr + 1):
+    for i in range(max_itr + 1):
         reset = i % reset_every == 0 or i == max_itr
         sys.update(restore_CF=reset) #This simple CG works much better without restore_CF within a run.
                                      #With restore_CF, one would have to transform B_prev to match.
@@ -225,7 +225,7 @@ def opt_grad_descent(sys, tol=1E-6, h_init=0.01, max_itr=10000, im_gap=5,
 def _opt_conj_grad2_f(x, sys, pars):
     sys.A = list((x[:pars] + 1.j * x[pars:]).reshape((sys.L, sys.q, sys.D, sys.D)))
     sys.update(restore_CF=False)
-    print "f:", sys.h_expect.real
+    print("f:", sys.h_expect.real)
     return sys.h_expect.real
 
 def _opt_conj_grad2_g(x, sys, pars):
@@ -234,7 +234,7 @@ def _opt_conj_grad2_g(x, sys, pars):
     B = sys.calc_B()
     B = sp.array(B).ravel()
     B = sp.concatenate((B.real * 2, B.imag * 2))
-    print "g:", sys.eta, la.norm(B)
+    print("g:", sys.eta, la.norm(B))
     return B
     
 def opt_conj_grad2(sys, tol=1E-6):
@@ -252,5 +252,5 @@ def opt_conj_grad2(sys, tol=1E-6):
     sys.A = list((xo[:pars] + 1.j * xo[pars:]).reshape((sys.L, sys.q, sys.D, sys.D)))
     sys.update()
     sys.calc_B()
-    print sys.h_expect.real, sys.eta
+    print(sys.h_expect.real, sys.eta)
     

@@ -7,9 +7,9 @@ Created on Tue Oct 21 15:56:10 2014
 
 import scipy as sp
 try:
-    import expokit
-except ImportError, e:
-    print "ERROR: expokit not available! The extension module may not have been compiled."
+    from . import expokit
+except ImportError as e:
+    print("ERROR: expokit not available! The extension module may not have been compiled.")
     raise e
     
 ideg = 6
@@ -46,13 +46,13 @@ def zexpmv(A, v, t, norm_est=1., m=5, tol=0., trace=False, A_is_Herm=False):
                        lwsp=[len(wsp)], liwsp=[len(iwsp)])
 
     if iflag[0] == 1:
-        print "Max steps reached!"
+        print("Max steps reached!")
     elif iflag[0] == 2:
-        print "Tolerance too high!"
+        print("Tolerance too high!")
     elif iflag[0] < 0:
-        print "Bad arguments!"
+        print("Bad arguments!")
     elif iflag[0] > 0:
-        print "Unknown error!"
+        print("Unknown error!")
         
     return vf
     

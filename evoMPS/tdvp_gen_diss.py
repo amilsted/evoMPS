@@ -4,11 +4,11 @@
 
 import scipy as sp
 import scipy.linalg as la
-import mps_gen as mg
-import tdvp_common as tm
-import matmul as mm
-import mps_gen as mps
-import tdvp_gen as TDVP
+from . import mps_gen as mg
+from . import tdvp_common as tm
+from . import matmul as mm
+from . import mps_gen as mps
+from . import tdvp_gen as TDVP
 import copy
         
 class EvoMPS_TDVP_Generic_Dissipative(TDVP.EvoMPS_TDVP_Generic):
@@ -192,8 +192,8 @@ class EvoMPS_TDVP_Generic_Dissipative(TDVP.EvoMPS_TDVP_Generic):
             
         newAn = sp.zeros_like(self.A[n])
         
-        for s in xrange(self.q[n]):
-            for t in xrange(self.q[n]):
+        for s in range(self.q[n]):
+            for t in range(self.q[n]):
                 newAn[s] += self.A[n][t] * op[s, t]
                 
         r_nm1 = TDVP.tm.eps_r_noop(self.r[n], newAn, newAn)

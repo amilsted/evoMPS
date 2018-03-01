@@ -21,7 +21,7 @@ import heisenberg_af_uniform as hu
 
 N = 120                             #Number of sites in the non-uniform region
 
-imp_pos = N/2                       #Position (of the first site) of the impurity
+imp_pos = N//2                       #Position (of the first site) of the impurity
 lam = -2.3                          #Factor by which to multiply the Ham. term at imp_pos
 
 dtau = 0.08                         #Imaginary time step size
@@ -59,14 +59,14 @@ if __name__ == "__main__":
     if plot_results:
         import matplotlib.pyplot as plt
 
-        plt.plot(range(-10, sim.N + 11), map(lambda n: sim.expect_1s(Sx, n).real, range(-10, sim.N + 11)), label='Sx')
-        plt.plot(range(-10, sim.N + 11), map(lambda n: sim.expect_1s(Sy, n).real, range(-10, sim.N + 11)), label='Sy')
-        plt.plot(range(-10, sim.N + 11), map(lambda n: sim.expect_1s(Sz, n).real, range(-10, sim.N + 11)), label='Sz')
+        plt.plot(list(range(-10, sim.N + 11)), [sim.expect_1s(Sx, n).real for n in range(-10, sim.N + 11)], label='Sx')
+        plt.plot(list(range(-10, sim.N + 11)), [sim.expect_1s(Sy, n).real for n in range(-10, sim.N + 11)], label='Sy')
+        plt.plot(list(range(-10, sim.N + 11)), [sim.expect_1s(Sz, n).real for n in range(-10, sim.N + 11)], label='Sz')
         plt.xlabel('site')
         plt.legend()
 
         plt.figure()
-        plt.plot(map(lambda n: sim.expect_2s(get_h_nn(n), n).real, range(-10, sim.N + 11)))
+        plt.plot([sim.expect_2s(get_h_nn(n), n).real for n in range(-10, sim.N + 11)])
         plt.xlabel('site')
         plt.ylabel('h')
         plt.show()

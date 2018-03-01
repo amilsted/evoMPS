@@ -7,9 +7,9 @@ Created on Thu Oct 13 17:29:27 2011
 """
 import scipy as sp
 import scipy.linalg as la
-import matmul as mm
-import tdvp_common as tm
-from mps_sandwich import EvoMPS_MPS_Sandwich
+from . import matmul as mm
+from . import tdvp_common as tm
+from .mps_sandwich import EvoMPS_MPS_Sandwich
 import time
 
 def go(sim, tau, steps, force_calc_lr=False, RK4=False,
@@ -38,7 +38,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             try:
                 endata = sp.genfromtxt(en_save_as).tolist()
             except:
-                print "No previous  en-data, or error loading!"
+                print("No previous  en-data, or error loading!")
                 pass
             enf = open(en_save_as, "a")
         else:
@@ -50,7 +50,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             try:
                 Sdata = sp.genfromtxt(entropy_save_as).tolist()
             except:
-                print "No previous  entropy-data, or error loading!"
+                print("No previous  entropy-data, or error loading!")
                 pass
             Sf = open(entropy_save_as, "a")
         else:
@@ -62,7 +62,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             try:
                 etadata = sp.genfromtxt(eta_save_as).tolist()
             except:
-                print "No previous  eta-data, or error loading!"
+                print("No previous  eta-data, or error loading!")
                 pass
             etaf = open(eta_save_as, "a")
         else:
@@ -73,7 +73,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             try:
                 data = sp.genfromtxt(op_save_as).tolist()
             except:
-                print "No previous  op-data, or error loading!"
+                print("No previous  op-data, or error loading!")
                 pass
             opf = open(op_save_as, "a")
         else:
@@ -85,7 +85,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             try:
                 oldata = sp.genfromtxt(overlap_save_as).tolist()
             except:
-                print "No previous  overlap data, or error loading!"
+                print("No previous  overlap data, or error loading!")
                 pass
             olf = open(overlap_save_as, "a")
         else:
@@ -99,8 +99,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         
     header = "\t".join(["Step", "CPU", "t", "eta", "E_nonuniform", "E - E_prev", "grown_left", 
                         "grown_right"])
-    print header
-    print
+    print(header)
+    print()
     if not csv_file is None:
         csvf.write(header + "\n")
     
@@ -112,7 +112,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     if t_start is None:
         t_start = counter_start * tau
     t_cpu0 = time.clock()
-    for i in xrange(counter_start, steps + 1):
+    for i in range(counter_start, steps + 1):
         rewrite_opf = False
         if i > counter_start:
             if RK4:
@@ -128,7 +128,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             if autogrow and sim.N < autogrow_max_N:
                 if etasqs[0] > sim.eta_sq_uni.mean() * 10:
                     rewrite_opf = True
-                    print "Growing left by: %u" % autogrow_amount
+                    print("Growing left by: %u" % autogrow_amount)
                     sim.grow_left(autogrow_amount)
                     if not overlap_with is None:
                         overlap_with.grow_left(autogrow_amount)
@@ -144,7 +144,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
     
                 if etasqs[-1] > sim.eta_sq_uni.mean() * 10:
                     rewrite_opf = True
-                    print "Growing right by: %u" % autogrow_amount
+                    print("Growing right by: %u" % autogrow_amount)
                     sim.grow_right(autogrow_amount)
                     if not overlap_with is None:
                         overlap_with.grow_right(autogrow_amount)
@@ -186,16 +186,16 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
             sim.save_state(save_as) #+ "_%u" % i)
 
         if i % 20 == 19:
-            print header
+            print(header)
             
         t = abs((i - counter_start) * tau) + abs(t_start)
         t_cpu = time.clock() - t_cpu0
         line = "\t".join(map(str, (i, "%.1f" % t_cpu, t, eta, h.real, (h - h_prev).real, 
                                    sim.grown_left, sim.grown_right)))
-        print line
+        print(line)
         if print_eta_n:
-            print "eta_n:"
-            print etasqs.real
+            print("eta_n:")
+            print(etasqs.real)
         
         if not csv_file is None:
             csvf.write(line + "\n")
@@ -204,8 +204,8 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
         h_prev = h
 
         if (not op is None) and (i % op_every == 0):
-            op_range = range(-10, sim.N + 10)
-            row = map(lambda n: sim.expect_1s(op, n).real, op_range)
+            op_range = list(range(-10, sim.N + 10))
+            row = [sim.expect_1s(op, n).real for n in op_range]
             data.append(row)
             if not op_save_as is None:
                 if rewrite_opf:
@@ -265,7 +265,7 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
                 olf.flush()
             
         if i > counter_start and eta < tol:
-            print "Tolerance reached!"
+            print("Tolerance reached!")
             break
             
     if not op_save_as is None:
@@ -299,7 +299,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.uni_l.calc_B()
         self.eta_sq_uni = self.uni_l.eta_sq
-        print "Bulk eta: ", self.eta_sq_uni
+        print("Bulk eta: ", self.eta_sq_uni)
         
         self.h_nn = None
         """The Hamiltonian for the nonuniform region. 
@@ -329,11 +329,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         self.K_l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
-        for n in xrange(1, self.N_centre + 1):
+        for n in range(1, self.N_centre + 1):
             self.K_l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
-        for n in xrange(self.N_centre, self.N + 2):
+        for n in range(self.N_centre, self.N + 2):
             self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)
             
         self.eta_sq = sp.zeros((self.N + 1), dtype=self.typ)
@@ -387,11 +387,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             n_high = self.N + 1
         
         if callable(self.h_nn):
-            for n in xrange(n_low, n_high):
+            for n in range(n_low, n_high):
                 self.C[n] = tm.calc_C_func_op(lambda s,t,u,v: self.h_nn(n,s,t,u,v), 
                                               self.get_A(n), self.get_A(n + 1))
         else:
-            for n in xrange(n_low, n_high):                   
+            for n in range(n_low, n_high):                   
                 self.AA[n] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
                 
                 self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn[n], self.AA[n])
@@ -416,13 +416,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.K_l[0][:] = K_left[-1]
 
-        for n in xrange(self.N, self.N_centre - 1, -1):
+        for n in range(self.N, self.N_centre - 1, -1):
             self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
                                       self.r[n + 1], self.A[n], self.get_AA(n))
                 
             self.h_expect[n] = he
 
-        for n in xrange(1, self.N_centre + 1):
+        for n in range(1, self.N_centre + 1):
             self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
                                           self.r[n], self.A[n], self.get_AA(n - 1))
                 
@@ -522,13 +522,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         Cc = self.C[Nc] - self.h_expect[Nc] * self.AA[Nc]
         Ccm1 = self.C[Nc - 1] - self.h_expect[Nc - 1] * self.AA[Nc - 1]
         
-        for s in xrange(self.q[1]):
+        for s in range(self.q[1]):
             try: #3
                 Bc[s] = Ac[s].dot(rc_i.dot_left(Kcp1))
             except AttributeError:
                 Bc[s] = Ac[s].dot(Kcp1.dot(rc_i))
             
-            for t in xrange(self.q[2]): #1
+            for t in range(self.q[2]): #1
                 try:
                     Bc[s] += Cc[s, t].dot(rcp1.dot(rc_i.dot_left(mm.H(Acp1[t]))))
                 except AttributeError:
@@ -536,7 +536,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
             Bcsbit = K_l_cm1.dot(Ac[s]) #4
                             
-            for t in xrange(self.q[0]): #2
+            for t in range(self.q[0]): #2
                 Bcsbit += mm.H(Acm1[t]).dot(lcm2.dot(Ccm1[t,s]))
                 
             Bc[s] += lcm1_i.dot(Bcsbit)
@@ -568,25 +568,25 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=True)
                 
                 B = sp.empty_like(self.A[n])
-                for s in xrange(self.q[n]):
+                for s in range(self.q[n]):
                     B[s] = mm.mmul(l_sqrt_inv, x, mm.H(Vsh[s]), r_sqrt_inv)
                     
                 if self.sanity_checks:
                     M = tm.eps_r_noop(self.r[n], B, self.A[n])
                     if not sp.allclose(M, 0):
-                        print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
+                        print("Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n)
             else:
                 Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
                 x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=False)
                 
                 B = sp.empty_like(self.A[n])
-                for s in xrange(self.q[n]):
+                for s in range(self.q[n]):
                     B[s] = mm.mmul(l_sqrt_inv, mm.H(Vsh[s]), x, r_sqrt_inv)
                     
                 if self.sanity_checks:
                     M = tm.eps_l_noop(self.l[n - 1], B, self.A[n])
                     if not sp.allclose(M, 0):
-                        print "Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n
+                        print("Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n)
             
             if set_eta:
                 self.eta_sq[n] = mm.adot(x, x)
@@ -648,11 +648,11 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.eta_sq.fill(0)
         
         B = [None]
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B.append(self.calc_B(n))
             eta_tot += self.eta_sq[n]
             
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] += -dtau * B[n]
                 B[n] = None
@@ -672,20 +672,20 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         #Take a copy of the current state
         A0 = sp.empty_like(self.A)
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             A0[n] = self.A[n].copy()
 
         B_fin = [None]
 
         B = [None]
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B.append(self.calc_B(n)) #k1
             eta_tot += self.eta_sq[n]
             B_fin.append(B[-1])
             
         self.eta = sp.sqrt(eta_tot)
         
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B[n] = None
@@ -693,10 +693,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.update(restore_CF=False, normalize=False)
         
         B = [None]
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B.append(self.calc_B(n, set_eta=False)) #k2
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B_fin[n] += 2 * B[n]
@@ -705,10 +705,10 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.update(restore_CF=False, normalize=False)
 
         B = [None]
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B.append(self.calc_B(n, set_eta=False)) #k3
             
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau * B[n]
                 B_fin[n] += 2 * B[n]
@@ -716,12 +716,12 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         self.update(restore_CF=False, normalize=False)
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B = self.calc_B(n, set_eta=False) #k4
             if not B is None:
                 B_fin[n] += B
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau /6 * B_fin[n]
         
@@ -761,16 +761,16 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         try:
             if toload.shape[0] != 9:
-                print "Error loading state: Bad data!"
+                print("Error loading state: Bad data!")
                 return
                 
             if autogrow and toload[0].shape[0] != self.A.shape[0]:
                 newN = toload[0].shape[0] - 3
-                print "Changing N to: %u" % newN
+                print("Changing N to: %u" % newN)
                 self.grow_left(newN - self.N)
                 
             if toload[0].shape != self.A.shape:
-                print "Cannot load state: Dimension mismatch!"
+                print("Cannot load state: Dimension mismatch!")
                 return
             
             self.A = toload[0]
@@ -812,7 +812,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.A[0] = None
             self.A[self.N + 1] = None
 
-            print "loaded."
+            print("loaded.")
             
             if do_update:
                 self.update()
@@ -820,5 +820,5 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             return toload[8]
             
         except AttributeError:
-            print "Error loading state: Bad data!"
+            print("Error loading state: Bad data!")
             return

@@ -4,7 +4,7 @@ Created on Sat Jul  7 15:26:57 2012
 
 @author: ash
 """
-import matmul as m
+from . import matmul as m
 import scipy as sp
 import scipy.linalg as la
 import pycuda.autoinit
@@ -22,7 +22,7 @@ def eps_l(x, A1, A2, out, handle):
     out.fill(0)    
     #tmp = garr.empty((A1[0].shape[1], x.shape[1]), dtype=x.dtype)
     #tmp2 = garr.empty((tmp.shape[0], A2[0].shape[1]), dtype=x.dtype)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         tmp = cla.dot(A1[s], x, transa='C', handle=handle)
         tmp2 = cla.dot(tmp, A2[s], handle=handle)
         out += tmp2
@@ -33,7 +33,7 @@ def eps_r(x, A1, A2, out, handle):
     out.fill(0)    
     #tmp = garr.empty((A1[0].shape[0], x.shape[1]), dtype=A1[0].dtype)
     #tmp2 = garr.empty((tmp.shape[0], A2[0].shape[0]), dtype=A1[0].dtype)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         tmp = cla.dot(A1[s], x, handle=handle)
         tmp2 = cla.dot(tmp, A2[s], transb='C', handle=handle)
         out += tmp2
@@ -42,12 +42,12 @@ def eps_r(x, A1, A2, out, handle):
 
 def get_streams(A):
     streams = []
-    for s in xrange(len(A)):
+    for s in range(len(A)):
         streams.append(cd.Stream())
     return streams
     
 def sync_streams(streams):
-    for s in xrange(len(streams)):
+    for s in range(len(streams)):
         streams.pop().synchronize()
 
 def cublasZgemm_dev(handle, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc):
@@ -75,7 +75,7 @@ def eps_r_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle)
 
     cb._libcublas.cublasSetPointerMode_v2(handle, 1)
  
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
         cublasZgemm_dev(handle, 'N', 'N', D, Dm1, D, ones[s].gpudata, x.gpudata, D, 
                        A1[s].gpudata, D, zeros[s].gpudata, tmp[s].gpudata, D)
@@ -89,7 +89,7 @@ def eps_r_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle)
         
     cb.cublasSetStream(handle, 0)
     out.fill(0)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         #cb.cublasZgeam(handle, 'N', 'N', Dm1, Dm1, 0. if s == 0 else 1., out.gpudata, Dm1, 1., tmp2[s].gpudata, Dm1, out.gpudata, Dm1)
         cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
     	
@@ -99,7 +99,7 @@ def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
     Dm1 = D
 
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
         cb.cublasZgemm(handle, 'N', 'N', D, Dm1, D, 1., x.gpudata, D, 
                        A1[s].gpudata, D, 0., tmp[s].gpudata, D)
@@ -111,14 +111,14 @@ def eps_r_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
 
     cb.cublasSetStream(handle, 0)
     out.fill(0)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         #cb.cublasZgeam(handle, 'N', 'N', Dm1, Dm1, 0. if s == 0 else 1., out.gpudata, Dm1, 1., tmp2[s].gpudata, Dm1, out.gpudata, Dm1)
         cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
     	
     return out
     
 def get_batch_ptrs(arrs):
-    return garr.to_gpu(sp.array(map(lambda x: int(x.gpudata), arrs)))
+    return garr.to_gpu(sp.array([int(x.gpudata) for x in arrs]))
     
 def eps_r_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, handle):
     D = out.shape[0]
@@ -131,7 +131,7 @@ def eps_r_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, h
                           tmp_ptrs.gpudata, D, 0., tmp2_ptrs.gpudata, Dm1, d)
                           
     out.fill(0)
-    for s in xrange(d):
+    for s in range(d):
         cb.cublasZaxpy(handle, Dm1 * Dm1, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
     	
     return out
@@ -139,7 +139,7 @@ def eps_r_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, h
 def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
     D = A1[0].shape[0]
     
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
         cb.cublasZgemm(handle, 'N', 'C', D, D, D, 1., x.gpudata, D, 
                        A1[s].gpudata, D, 0., tmp[s].gpudata, D)
@@ -151,7 +151,7 @@ def eps_l_noop_strm(x, A1, A2, out, tmp, tmp2, streams, handle):
         
     cb.cublasSetStream(handle, 0)
     out.fill(0)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
         
     return out
@@ -161,7 +161,7 @@ def eps_l_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle)
 
     cb._libcublas.cublasSetPointerMode_v2(handle, 1)
  
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasSetStream(handle, streams[s].handle)
         cublasZgemm_dev(handle, 'N', 'C', D, D, D, ones[s].gpudata, x.gpudata, D, 
                        A1[s].gpudata, D, zeros[s].gpudata, tmp[s].gpudata, D)
@@ -175,7 +175,7 @@ def eps_l_noop_strm_dev(x, A1, A2, out, tmp, tmp2, ones, zeros, streams, handle)
         
     cb.cublasSetStream(handle, 0)
     out.fill(0)
-    for s in xrange(len(A1)):
+    for s in range(len(A1)):
         cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
         
     return out
@@ -190,7 +190,7 @@ def eps_l_noop_batch(x_ptrs, A1_ptrs, A2_ptrs, out, tmp_ptrs, tmp2_ptrs, tmp2, h
                           tmp_ptrs.gpudata, D, 0., tmp2_ptrs.gpudata, D, d)
                           
     out.fill(0)
-    for s in xrange(d):
+    for s in range(d):
         cb.cublasZaxpy(handle, D * D, 1., tmp2[s].gpudata, 1, out.gpudata, 1)
     	
     return out
@@ -209,19 +209,19 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     r_s = garr.to_gpu(sp.asarray(r_s))
     r_si = garr.to_gpu(sp.asarray(r_si))
     
-    A = map(garr.to_gpu, A)
+    A = list(map(garr.to_gpu, A))
     if not Am1 is None:
-        Am1 = map(garr.to_gpu, Am1)
+        Am1 = list(map(garr.to_gpu, Am1))
     if not Ap1 is None:
-        Ap1 = map(garr.to_gpu, Ap1)
+        Ap1 = list(map(garr.to_gpu, Ap1))
     
-    Vsh = map(garr.to_gpu, Vsh)
+    Vsh = list(map(garr.to_gpu, Vsh))
     
     if not Cm1 is None:
-        Cm1 = [[garr.to_gpu(Cm1[t, s]) for t in xrange(Cm1.shape[1])] for s in xrange(Cm1.shape[0])]
+        Cm1 = [[garr.to_gpu(Cm1[t, s]) for t in range(Cm1.shape[1])] for s in range(Cm1.shape[0])]
         
     if not (C is None and Kp1 is None):
-        C = [[garr.to_gpu(C[s, t]) for t in xrange(C.shape[1])] for s in xrange(C.shape[0])]
+        C = [[garr.to_gpu(C[s, t]) for t in range(C.shape[1])] for s in range(C.shape[0])]
         Kp1 = garr.to_gpu(Kp1)
     
     x = calc_x_G(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh, handle=handle)
@@ -242,7 +242,7 @@ def calc_x_G(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh, 
     if not (C is None and Kp1 is None):
         assert (not C is None) and (not Kp1 is None)
         x_part.fill(0)
-        for s in xrange(q):
+        for s in range(q):
             x_subpart = eps_r(rp1, C[s], Ap1, x_subpart, handle) #~1st line
             
             x_subpart += cla.dot(A[s], Kp1, handle=handle) #~3rd line
@@ -253,7 +253,7 @@ def calc_x_G(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh, 
 
     if not lm2 is None:
         x_part.fill(0)
-        for s in xrange(q):     #~2nd line
+        for s in range(q):     #~2nd line
             x_subpart = eps_l(lm2, Am1, Cm1[s], x_subpart, handle)
             x_part += cla.dot(x_subpart, cla.dot(r_s, Vsh[s], handle=handle), handle=handle)
         x += cla.dot(lm1_si, x_part, handle=handle)
@@ -275,7 +275,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     Gl = []
     Gl_s = []
     Gl_si = []
-    for n in xrange(len(l)):
+    for n in range(len(l)):
         if l[n] is None:
             Gl.append(None)
             Gl_s.append(None)
@@ -291,7 +291,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     Gr = []
     Gr_s = []
     Gr_si = []
-    for n in xrange(len(r)):
+    for n in range(len(r)):
         if r[n] is None:
             Gr.append(None)
             Gr_s.append(None)
@@ -305,7 +305,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     Gr_si.append(None)
 
     GK = []
-    for n in xrange(len(K)):
+    for n in range(len(K)):
         if K[n] is None:
             GK.append(None)
         else:
@@ -313,38 +313,38 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     GK.append(None)
             
     GVsh = []
-    for n in xrange(len(Vsh)):
+    for n in range(len(Vsh)):
         if Vsh[n] is None:
             GVsh.append(None)
         else:
             GVshn = []
-            for s in xrange(Vsh[n].shape[0]):
+            for s in range(Vsh[n].shape[0]):
                 GVshn.append(garr.to_gpu(Vsh[n][s]))
             GVsh.append(GVshn)
     
     GC = []
-    for n in xrange(len(C)):
+    for n in range(len(C)):
         if C[n] is None:
             GC.append(None)
         else:
             GCn = []
-            for s in xrange(C[n].shape[0]):
+            for s in range(C[n].shape[0]):
                 GCns = []
-                for t in xrange(C[n].shape[1]):
+                for t in range(C[n].shape[1]):
                     GCns.append(garr.to_gpu(C[n][s, t]))
                 GCn.append(GCns)
             GC.append(GCn)
     GC.append(None)
     
     GCts = []
-    for n in xrange(len(GC)):
+    for n in range(len(GC)):
         if GC[n] is None:
             GCts.append(None)
         else:
             GCtsn = []
-            for t in xrange(len(GC[n])):
+            for t in range(len(GC[n])):
                 GCtsns = []
-                for s in xrange(len(GC[n][0])):
+                for s in range(len(GC[n][0])):
                     GCtsns.append(GC[n][s][t])
                 GCtsn.append(GCtsns)
             GCts.append(GCtsn)
@@ -355,19 +355,19 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     
     curr_stream = cb.cublasGetStream(hdl)
     
-    sites_per_strm = max((N) / num_strms, 1)
+    sites_per_strm = max((N) // num_strms, 1)
     #print "sites_per_stream = ", sites_per_strm
     
     strms = []
-    for i in xrange(N / sites_per_strm):
+    for i in range(N // sites_per_strm):
         strms.append(cd.Stream())
     
     GB = [None]
-    for n in xrange(1, N + 1):
+    for n in range(1, N + 1):
         if (n - 1) % sites_per_strm == 0:
             #print n
-            #print "strm = ", (n - 1) / sites_per_strm
-            cb.cublasSetStream(hdl, strms[(n - 1) / sites_per_strm].handle)
+            #print "strm = ", (n - 1) // sites_per_strm
+            cb.cublasSetStream(hdl, strms[(n - 1) // sites_per_strm].handle)
         if not Vsh[n] is None:
             if n > 1:
                 Glm2 = Gl[n - 2]
@@ -377,7 +377,7 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
             Gx = calc_x_G(GK[n + 1], GC[n], GCts[n - 1], Gr[n + 1], Glm2, GA[n - 1], GA[n],
                           GA[n + 1], Gl_s[n - 1], Gl_si[n - 1], Gr_s[n], Gr_si[n], GVsh[n], handle=hdl)
             GBn = []
-            for s in xrange(A[n].shape[0]):
+            for s in range(A[n].shape[0]):
                 GBns = cla.dot(Gl_si[n - 1], Gx, handle=hdl) 
                 GBns = cla.dot(GBns, GVsh[n][s], transb='C', handle=hdl)
                 GBns = cla.dot(GBns, Gr_si[n], handle=hdl)
@@ -390,12 +390,12 @@ def calc_Bs(N, A, l, l_s, l_si, r, r_s, r_si, C, K, Vsh):
     cb.cublasDestroy(hdl)
     
     B = [None]
-    for n in xrange(1, N + 1):
+    for n in range(1, N + 1):
         if GB[n] is None:
             B.append(None)
         else:
             Bn = sp.empty_like(A[n])
-            for s in xrange(A[n].shape[0]):
+            for s in range(A[n].shape[0]):
                 Bn[s] = GB[n][s].get()
             B.append(Bn)
         
@@ -416,10 +416,10 @@ class EOp_CUDA:
         left : bool
             Whether to multiply with a vector to the left (or to the right).
         """
-        self.A1G = [map(garr.to_gpu, A1k) for A1k in A1]
-        self.A2G = [map(garr.to_gpu, A2k) for A2k in A2]
-        self.tmp = map(garr.empty_like, self.A1G[0])
-        self.tmp2 = map(garr.empty_like, self.A1G[0])
+        self.A1G = [list(map(garr.to_gpu, A1k)) for A1k in A1]
+        self.A2G = [list(map(garr.to_gpu, A2k)) for A2k in A2]
+        self.tmp = list(map(garr.empty_like, self.A1G[0]))
+        self.tmp2 = list(map(garr.empty_like, self.A1G[0]))
         
         self.use_batch = use_batch
         self.left = left
@@ -434,8 +434,8 @@ class EOp_CUDA:
         self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
 
         if use_batch:
-            self.A1G_p = map(get_batch_ptrs, self.A1G)
-            self.A2G_p = map(get_batch_ptrs, self.A2G)
+            self.A1G_p = list(map(get_batch_ptrs, self.A1G))
+            self.A2G_p = list(map(get_batch_ptrs, self.A2G))
             self.tmp_p = get_batch_ptrs(self.tmp)
             self.tmp2_p = get_batch_ptrs(self.tmp2)
             self.xG_p = get_batch_ptrs([self.xG] * len(A1[0]))
@@ -448,12 +448,12 @@ class EOp_CUDA:
             self.xG_p = None
             self.out_p = None
 
-            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in range(len(A1[0]))]
             self.ones = [one.fill(1) for one in self.ones]
-            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in range(len(A1[0]))]
             
             self.streams = []
-            for s in xrange(A1[0].shape[0]):
+            for s in range(A1[0].shape[0]):
                 self.streams.append(cd.Stream())
         
         self.hdl = cb.cublasCreate()
@@ -468,7 +468,7 @@ class EOp_CUDA:
         x = [self.out, self.out_p]
         
         if self.left:
-            for k in xrange(len(self.A1G)):
+            for k in range(len(self.A1G)):
                 x, xnext = xnext, x
                 if self.use_batch:
                     eps_l_noop_batch(x[1], self.A1G_p[k], self.A2G_p[k], xnext[0], 
@@ -478,7 +478,7 @@ class EOp_CUDA:
                                         self.tmp, self.tmp2, self.ones, self.zeros, 
                                         self.streams, self.hdl)
         else:
-            for k in xrange(len(self.A2G) - 1, -1, -1):
+            for k in range(len(self.A2G) - 1, -1, -1):
                 x, xnext = xnext, x
                 if self.use_batch:
                     eps_r_noop_batch(x[1], self.A1G_p[k], self.A2G_p[k], xnext[0], 
@@ -514,10 +514,10 @@ class PinvOp_CUDA:
         self.shape = (self.D**2, self.D**2)
         self.dtype = A1[0].dtype
         
-        self.A1G = [map(garr.to_gpu, A1k) for A1k in A1]
-        self.A2G = [map(garr.to_gpu, A2k) for A2k in A2]
-        self.tmp = map(garr.empty_like, self.A1G[0])
-        self.tmp2 = map(garr.empty_like, self.A1G[0])
+        self.A1G = [list(map(garr.to_gpu, A1k)) for A1k in A1]
+        self.A2G = [list(map(garr.to_gpu, A2k)) for A2k in A2]
+        self.tmp = list(map(garr.empty_like, self.A1G[0]))
+        self.tmp2 = list(map(garr.empty_like, self.A1G[0]))
 
         self.l = l
         self.r = r
@@ -529,8 +529,8 @@ class PinvOp_CUDA:
         self.xG = garr.empty((self.D, self.D), dtype=self.dtype)
         
         if use_batch:
-            self.A1G_p = map(get_batch_ptrs, self.A1G)
-            self.A2G_p = map(get_batch_ptrs, self.A2G)
+            self.A1G_p = list(map(get_batch_ptrs, self.A1G))
+            self.A2G_p = list(map(get_batch_ptrs, self.A2G))
             self.tmp_p = get_batch_ptrs(self.tmp)
             self.tmp2_p = get_batch_ptrs(self.tmp2)
             self.xG_p = get_batch_ptrs([self.xG] * len(A1[0]))
@@ -545,12 +545,12 @@ class PinvOp_CUDA:
             self.out_p = None
             self.out2_p = None
 
-            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.ones = [garr.zeros((1), dtype=sp.complex128) for s in range(len(A1[0]))]
             self.ones = [one.fill(1) for one in self.ones]
-            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in xrange(len(A1[0]))]
+            self.zeros = [garr.zeros((1), dtype=sp.complex128) for s in range(len(A1[0]))]
             
             self.streams = []
-            for s in xrange(A1[0].shape[0]):
+            for s in range(A1[0].shape[0]):
                 self.streams.append(cd.Stream())
         
         self.hdl = cb.cublasCreate()
@@ -567,7 +567,7 @@ class PinvOp_CUDA:
         out2 = [self.out2, self.out2_p]
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            for k in xrange(len(self.A1G)):
+            for k in range(len(self.A1G)):
                 if self.use_batch:
                     eps_l_noop_batch(out2[1], self.A1G_p[k], self.A2G_p[k], out[0], 
                                      self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)
@@ -590,7 +590,7 @@ class PinvOp_CUDA:
                                Ehx.gpudata, 1, self.xG.gpudata, 1)
                 res = self.xG
         else:
-            for k in xrange(len(self.A2G) - 1, -1, -1):
+            for k in range(len(self.A2G) - 1, -1, -1):
                 if self.use_batch:
                     eps_r_noop_batch(out2[1], self.A1G_p[k], self.A2G_p[k], out[0], 
                                      self.tmp_p, self.tmp2_p, self.tmp2, self.hdl)

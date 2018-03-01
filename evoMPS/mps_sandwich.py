@@ -7,9 +7,9 @@ Created on Thu Oct 13 17:29:27 2011
 """
 import scipy as sp
 import scipy.linalg as la
-import matmul as mm
-import tdvp_common as tm
-from mps_gen import EvoMPS_MPS_Generic
+from . import matmul as mm
+from . import tdvp_common as tm
+from .mps_gen import EvoMPS_MPS_Generic
 import copy
 
 
@@ -28,7 +28,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.N = N
         """The number of sites. Do not change after initializing."""
         
-        self.N_centre = N / 2
+        self.N_centre = N // 2
         """The 'centre' site. This affects the gauge-fixing and canonical
            form. It is the site between the left-gauge parts and the 
            right-gauge parts."""
@@ -47,7 +47,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.uni_l.update()
         
         if not N % self.uni_l.L == 0:
-            print "Warning: Length of nonuniform window is not a multiple of the uniform block size."
+            print("Warning: Length of nonuniform window is not a multiple of the uniform block size.")
 
         self.uni_r = copy.deepcopy(self.uni_l)
 
@@ -58,10 +58,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         self._init_arrays()
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.A[n][:] = self.uni_l.A[(n - 1) % self.uni_l.L]
         
-        for n in xrange(self.N + 2):
+        for n in range(self.N + 2):
             self.r[n][:] = sp.asarray(self.uni_l.r[(n - 1) % self.uni_l.L])
             self.l[n][:] = sp.asarray(self.uni_l.l[(n - 1) % self.uni_l.L])
 
@@ -76,7 +76,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
         self.A[0] = None
-        for n in xrange(0, self.N + 2):
+        for n in range(0, self.N + 2):
             self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             if 0 < n <= self.N:
@@ -152,14 +152,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.calc_r(n_high=self.N_centre)
 
     def restore_CF_dbg(self):
-        for n in xrange(self.N + 2):
-            print (n, self.l[n].trace().real, self.r[n].trace().real,
-                   mm.adot(self.l[n], self.r[n]).real)
+        for n in range(self.N + 2):
+            print((n, self.l[n].trace().real, self.r[n].trace().real,
+                   mm.adot(self.l[n], self.r[n]).real))
 
         norm_r = mm.adot(self.uni_r.l[-1], self.r[self.N])
         norm_l = mm.adot(self.l[0], self.uni_l.r[-1])
-        print "norm of uni_r: ", norm_r
-        print "norm of uni_l: ", norm_l
+        print("norm of uni_r: ", norm_r)
+        print("norm of uni_l: ", norm_l)
 
         #r_m1 = self.eps_r(0, self.r[0])
         #print mm.adot(self.l[0], r_m1).real
@@ -168,7 +168,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         
         try:
             h = sp.empty((self.N + 1), dtype=self.typ)
-            for n in xrange(self.N + 1):
+            for n in range(self.N + 1):
                 h[n] = self.expect_2s(self.h_nn[n], n)
             h *= 1/norm
     
@@ -196,7 +196,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         Gi = uGs[-1] #Inverse is on the other side in the uniform code.
         self.r[self.N] = self.uni_r.r[-1]
         
-        for n in xrange(self.N, nc, -1):
+        for n in range(self.N, nc, -1):
             self.r[n - 1], Gm1, Gm1_i = tm.restore_RCF_r(self.A[n], self.r[n],
                                              Gi, zero_tol=self.zero_tol,
                                              sanity_checks=self.sanity_checks)
@@ -206,7 +206,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.r[self.N + 1] = self.r[self.N]
 
         #G is now G_nc
-        for s in xrange(self.q[nc]):
+        for s in range(self.q[nc]):
             self.A[nc][s] = self.A[nc][s].dot(Gi)
 
         #Now want: l[n < nc] = eye
@@ -214,7 +214,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         Gm1 = uG_is[-1]
         self.l[0] = self.uni_l.l[-1]
         lm1 = self.l[0]
-        for n in xrange(1, nc):
+        for n in range(1, nc):
             self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], lm1, Gm1,
                                                 zero_tol=self.zero_tol,
                                                 sanity_checks=self.sanity_checks)
@@ -223,7 +223,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             Gm1 = G
 
         #Gm1 is now G_nc-1
-        for s in xrange(self.q[nc]):
+        for s in range(self.q[nc]):
             self.A[nc][s] = Gm1.dot(self.A[nc][s])
 
 
@@ -232,14 +232,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         #Want: r[0 <= n < nc] diagonal
         Ui = sp.eye(self.D[nc], dtype=self.typ)
-        for n in xrange(nc, 0, -1):
+        for n in range(nc, 0, -1):
             self.r[n - 1], Um1, Um1_i = tm.restore_LCF_r(self.A[n], self.r[n],
                                                          Ui, sanity_checks=self.sanity_checks)
             Ui = Um1_i
 
         #Now U is U_0
         U = Um1
-        for s in xrange(self.q[0]):
+        for s in range(self.q[0]):
             self.uni_l.A[0][s] = U.dot(self.uni_l.A[0][s])
             self.uni_l.A[-1][s] = self.uni_l.A[-1][s].dot(Ui)
         self.uni_l.r[-1] = U.dot(self.uni_l.r[-1].dot(U.conj().T))
@@ -249,14 +249,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             Um1 = sp.eye(self.D[nc - 1], dtype=self.typ)
         else:
             Um1 = mm.eyemat(self.D[nc - 1], dtype=self.typ) #FIXME: This only works if l[nc - 1] is a special matrix type        
-        for n in xrange(nc, self.N + 1):
+        for n in range(nc, self.N + 1):
             self.l[n], U, Ui = tm.restore_RCF_l(self.A[n], self.l[n - 1], Um1,
                                                 sanity_checks=self.sanity_checks)
             Um1 = U
 
         #Now, Um1 = U_N
         Um1_i = Ui
-        for s in xrange(self.q[0]):
+        for s in range(self.q[0]):
             self.uni_r.A[0][s] = Um1.dot(self.uni_r.A[0][s])
             self.uni_r.A[-1][s] = self.uni_r.A[-1][s].dot(Um1_i)
         self.uni_r.l[-1] = Um1_i.conj().T.dot(self.uni_r.l[-1].dot(Um1_i))
@@ -266,14 +266,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.calc_l()
             self.calc_r()
             self.simple_renorm()
-            print "BEFORE..."
+            print("BEFORE...")
             h_before, h_left_before, h_right_before = self.restore_CF_dbg()
 
-            print (h_left_before, h_before, h_right_before)
+            print((h_left_before, h_before, h_right_before))
 
         self.uni_l.calc_lr() #Ensures largest ev of E=1
         if dbg:
-            print "uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r)
+            print("uni_l calc_lr iterations: ", (self.uni_l.itr_l, self.uni_l.itr_r))
 
 #        if self.sanity_checks:
 #            if not sp.allclose(self.uni_l.l, self.l[0], atol=1E-12, rtol=1E-12):
@@ -290,7 +290,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         self.uni_r.calc_lr() #Ensures largest ev of E=1
         if dbg:
-            print "uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r)
+            print("uni_r calc_lr iterations: ", (self.uni_r.itr_l, self.uni_r.itr_r))
 #        if self.sanity_checks:
 #            if not sp.allclose(self.uni_r.A, self.A[self.N + 1], atol=1E-12, rtol=1E-12):
 #                print "Sanity Fail in restore_CF!: A[R] was scaled! ", la.norm(self.A[self.N + 1] - self.uni_r.A)
@@ -313,10 +313,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if dbg:
             self.calc_l()
             self.calc_r()
-            print "AFTER ONR..."
+            print("AFTER ONR...")
             h_mid, h_left_mid, h_right_mid = self.restore_CF_dbg()
 
-            print (h_left_mid, h_mid, h_right_mid)
+            print((h_left_mid, h_mid, h_right_mid))
 
         self._restore_CF_diag(dbg=dbg)
 
@@ -335,26 +335,26 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         if self.sanity_checks:
             l_n = self.l[0]
-            for n in xrange(1, self.N + 1):
+            for n in range(1, self.N + 1):
                 l_n = tm.eps_l_noop(l_n, self.A[n], self.A[n])
                 if not sp.allclose(l_n, self.l[n], atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_CF!: l_%u is bad" % n
+                    print("Sanity Fail in restore_CF!: l_%u is bad" % n)
 
             r_nm1 = self.r[self.N]
-            for n in reversed(xrange(1, self.N)):
+            for n in reversed(range(1, self.N)):
                 r_nm1 = tm.eps_r_noop(r_nm1, self.A[n], self.A[n])
                 if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-12, rtol=1E-12):
-                    print "Sanity Fail in restore_CF!: r_%u is bad" % (n - 1)
+                    print("Sanity Fail in restore_CF!: r_%u is bad" % (n - 1))
         if dbg:
-            print "AFTER..."
+            print("AFTER...")
             h_after, h_left_after, h_right_after = self.restore_CF_dbg()
 
-            print (h_left_after, h_after, h_right_after)
+            print((h_left_after, h_after, h_right_after))
 
-            print h_after - h_before
+            print(h_after - h_before)
 
-            print (h_after.sum() - h_before.sum() + h_left_after - h_left_before
-                   + h_right_after - h_right_before)
+            print((h_after.sum() - h_before.sum() + h_left_after - h_left_before
+                   + h_right_after - h_right_before))
 
 
     def check_RCF(self):
@@ -385,10 +385,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.N = self.N + m
         self._init_arrays()
 
-        for n in xrange(m):
+        for n in range(m):
             self.A[n + 1][:] = self.uni_l.A[n % self.uni_l.L]
 
-        for n in xrange(m + 1, self.N + 1):
+        for n in range(m + 1, self.N + 1):
             self.A[n][:] = oldA[n - m]
 
         self.l[0] = oldl_0
@@ -423,10 +423,10 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         self.N = self.N + m
         self._init_arrays()
 
-        for n in xrange(1, self.N - m + 1):
+        for n in range(1, self.N - m + 1):
             self.A[n][:] = oldA[n]
 
-        for n in xrange(m):
+        for n in range(m):
             self.A[self.N - m + 1 + n][:] = self.uni_r.A[n % self.uni_r.L]
 
         self.l[0] = oldl_0
@@ -559,7 +559,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         r_n = tm.eps_r_op_1s(self.get_r(n2), A2, A2, op2)
 
-        for n in reversed(xrange(n1 + 1, n2)):
+        for n in reversed(range(n1 + 1, n2)):
             r_n = tm.eps_r_noop(r_n, self.get_A(n), self.get_A(n))
 
         r_n = tm.eps_r_op_1s(r_n, A1, A1, op1)
@@ -583,16 +583,16 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         r_n1 = sp.empty_like(self.r[n1 - 1])
         ln1m1 = self.get_l(n1 - 1)
 
-        for s2 in xrange(self.q[n2]):
-            for t2 in xrange(self.q[n2]):
+        for s2 in range(self.q[n2]):
+            for t2 in range(self.q[n2]):
                 r_n2 = mm.mmul(self.A[n2][t2], self.r[n2], mm.H(self.A[n2][s2]))
 
                 r_n = r_n2
-                for n in reversed(xrange(n1 + 1, n2)):
+                for n in reversed(range(n1 + 1, n2)):
                     r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
 
-                for s1 in xrange(self.q[n1]):
-                    for t1 in xrange(self.q[n1]):
+                for s1 in range(self.q[n1]):
+                    for t1 in range(self.q[n1]):
                         r_n1 = mm.mmul(self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
                         tmp = mm.adot(ln1m1, r_n1)
                         rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
@@ -613,23 +613,23 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (self.q[n], self.q[n]))
 
-        for s in xrange(self.q[n]):
-            for t in xrange(self.q[n]):
+        for s in range(self.q[n]):
+            for t in range(self.q[n]):
                 newA[s] += self.A[n][t] * op[s, t]
 
         self.A[n] = newA
 
     def overlap(self, other, sanity_checks=False):
         if not self.N == other.N:
-            print "States must have same number of non-uniform sites!"
+            print("States must have same number of non-uniform sites!")
             return
 
         if not sp.all(self.D == other.D):
-            print "States must have same bond-dimensions!"
+            print("States must have same bond-dimensions!")
             return
 
         if not sp.all(self.q == other.q):
-            print "States must have same Hilbert-space dimensions!"
+            print("States must have same Hilbert-space dimensions!")
             return
 
         dL, phiL, gLl = self.uni_l.fidelity_per_site(other.uni_l, full_output=True, left=True)
@@ -656,7 +656,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         if sanity_checks:
             r *= fac
-            print la.norm(r - self.uni_r.r[-1])
+            print(la.norm(r - self.uni_r.r[-1]))
 
 #            AN = other.A[self.N].copy()
 #            for s in xrange(AN.shape[0]):
@@ -675,31 +675,31 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         if sanity_checks:
             l *= fac
-            print la.norm(l - self.uni_l.l[-1])
+            print(la.norm(l - self.uni_l.l[-1]))
 
             l = mm.H(gli).dot(sp.asarray(other.uni_l.l[-1])).dot(gli)
-            print la.norm(l - self.uni_l.l[-1])
+            print(la.norm(l - self.uni_l.l[-1]))
 
         #print (dL, dR, phiL, phiR)
 
         if not abs(dL - 1) < 1E-12:
-            print "Left bulk states do not match!"
+            print("Left bulk states do not match!")
             return 0
 
         if not abs(dR - 1) < 1E-12:
-            print "Right bulk states do not match!"
+            print("Right bulk states do not match!")
             return 0
 
         AN = other.A[self.N].copy()
-        for s in xrange(AN.shape[0]):
+        for s in range(AN.shape[0]):
             AN[s] = AN[s].dot(gri)
 
         A1 = other.A[1].copy()
-        for s in xrange(A1.shape[0]):
+        for s in range(A1.shape[0]):
             A1[s] = gl.dot(A1[s])
 
         r = tm.eps_r_noop(self.uni_r.r[-1], self.A[self.N], AN)
-        for n in xrange(self.N - 1, 1, -1):
+        for n in range(self.N - 1, 1, -1):
             r = tm.eps_r_noop(r, self.A[n], other.A[n])
         r = tm.eps_r_noop(r, self.A[1], A1)
 

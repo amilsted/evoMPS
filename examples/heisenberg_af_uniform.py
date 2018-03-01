@@ -79,7 +79,7 @@ elif S == 1:
     Sy = Sy_s1
     Sx = Sx_s1
 else:
-    print "Only S = 1 or S = 1/2 are supported!"
+    print("Only S = 1 or S = 1/2 are supported!")
     exit()
 
 """
@@ -127,11 +127,11 @@ if load_saved_ground:
         a_file.close
         real_time = True
         loaded = True
-        print 'Using saved ground state: ' + grnd_fname
+        print('Using saved ground state: ' + grnd_fname)
     except IOError as e:
         real_time = False
         loaded = False
-        print 'No existing ground state could be opened.'
+        print('No existing ground state could be opened.')
 else:
     real_time = False
     loaded = False
@@ -141,12 +141,12 @@ if __name__ == '__main__':
     """
     Print a table header.
     """
-    print "Bond dimensions: " + str(s.D)
-    print
+    print("Bond dimensions: " + str(s.D))
+    print()
     col_heads = ["Step", "t", "<h>", "d<h>",
                  "Sz", "eta"]
-    print "\t".join(col_heads)
-    print
+    print("\t".join(col_heads))
+    print()
     
     """
     Define a function to print information after each step.
@@ -170,7 +170,7 @@ if __name__ == '__main__':
         Compute expectation values!
         """
         exSzs = []
-        for k in xrange(s.L):
+        for k in range(s.L):
             exSzs.append("%.3g" % s.expect_1s(Sz, k=k).real)
         row += exSzs
         
@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
         row.append(str(kwargs))
 
-        print "\t".join(row)
+        print("\t".join(row))
 
     """
     Find the ground state using the TDVP and the nonlinear conjugate gradient method
@@ -190,12 +190,12 @@ if __name__ == '__main__':
     """
     Find excitations if we have the ground state.
     """
-    print 'Finding excitations!'
+    print('Finding excitations!')
 
     ex_ev = []
     ex_p = []
     for p in sp.linspace(0, sp.pi, num=num_momenta):
-        print "p = ", p
+        print("p = ", p)
         ex_ev.append(s.excite_top_triv(p, nev=num_excitations, ncv=num_excitations * 4))
         ex_p.append([p] * num_excitations)
 

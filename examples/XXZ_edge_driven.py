@@ -108,7 +108,7 @@ def get_full_state(s):
     
     for ind in sp.ndindex(psi.shape):
         A = 1.0
-        for n in xrange(N, 0, -1):
+        for n in range(N, 0, -1):
             A = s.A[n][ind[n-1]].dot(A)
 
         psi[ind] = A[0,0]
@@ -118,7 +118,7 @@ def get_full_state(s):
     
 def get_full_op(op):
     fop = sp.zeros((2**N, 2**N), dtype=sp.complex128)
-    for n in xrange(1, min(len(op), N + 1)):
+    for n in range(1, min(len(op), N + 1)):
         if op[n] is None:
             continue
             
@@ -134,7 +134,7 @@ def go(load_from=None, N_steps=100, resQ=None, pid=None, stateQ=None):
     sp.random.seed(random_seed + pid)
     
     s_start = tdvp.EvoMPS_TDVP_Generic_Dissipative(N, D, q, get_ham(N, lam), get_linds(N, eps))
-    print "Starting MPS sample", pid
+    print("Starting MPS sample", pid)
 
     if load_from is not None:
         s_start.load_state(load_from)
@@ -150,22 +150,22 @@ def go(load_from=None, N_steps=100, resQ=None, pid=None, stateQ=None):
 
     eta = 1
     Hexp = 0
-    for i in xrange(N_steps + 1):
+    for i in range(N_steps + 1):
         s.update()
 
-        Szs = [s.expect_1s(Sz, n).real for n in xrange(1, s.N + 1)]
+        Szs = [s.expect_1s(Sz, n).real for n in range(1, s.N + 1)]
         pHexp = Hexp
         Hexp = s.H_expect
         if i % res_every == 0:
             if resQ is not None:
                 resQ.put([pid, i, Szs])
             else:
-                print pid, i / res_every, Hexp.real, Hexp.real - pHexp.real, Szs
+                print(pid, i / res_every, Hexp.real, Hexp.real - pHexp.real, Szs)
 
         s.take_step_dissipative(dt)
     
 def fullrho(qu, squ):
-    print "#Starting full density matrix simulation!"
+    print("#Starting full density matrix simulation!")
     
     #Build state from pure states received from the MPS processes
     rho = sp.zeros((2**N, 2**N), dtype=sp.complex128)
@@ -193,12 +193,12 @@ def fullrho(qu, squ):
     for i in range(N_steps + 1):
         rho /= sp.trace(rho)
         esz = []
-        for n in xrange(1, N + 1):
+        for n in range(1, N + 1):
             esz.append(sp.trace(szs[n].dot(rho)).real)
 
         if i % res_every == 0:
             if qu is None:
-                print esz
+                print(esz)
             else:
                 qu.put([-1, i, esz])
                 qu.put([-2, i, [sp.NaN] * N]) #this slot is reserved for a second "exact" result
@@ -251,7 +251,7 @@ def plotter(q):
         data_buf[i_off][num] = ys
         
         if not None in data_buf[0][:effbuflen]:
-            print "Plotting results for step", i_buf, "buffer length", len(data_buf)
+            print("Plotting results for step", i_buf, "buffer length", len(data_buf))
 
             for j in range(N_samp):
                 lns[j].set_ydata(data_buf[0][j])
@@ -303,7 +303,7 @@ def writer(q):
 
         if i == N_steps:
             df.flush()
-            print "Sample", num, "finished. Data saved."
+            print("Sample", num, "finished. Data saved.")
             
     del df
 
@@ -319,7 +319,7 @@ def plot_saved():
     
     fins = sp.array([d[plot_res] for d in data if not sp.all(d[plot_res] == 0)])
     nsam = len(fins)
-    print "Samples:", nsam
+    print("Samples:", nsam)
     av = fins.sum(axis=0) / nsam
 
     av_var = 1./(nsam - 1) / nsam * sp.sum((fins/nsam - av)**2, axis=0) 
@@ -369,7 +369,7 @@ if __name__ == "__main__":
         if N <= Nmax_fullrho:
             exa = p.apply_async(fullrho, args=(qu, state_q))
         
-        p.map(f, zip(range(N_samp), [qu] * N_samp, [state_q] * N_samp))
+        p.map(f, list(zip(list(range(N_samp)), [qu] * N_samp, [state_q] * N_samp)))
 
         if N <= Nmax_fullrho:
             exa.get()

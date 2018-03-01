@@ -18,16 +18,16 @@ import evoMPS.tdvp_uniform as tdvp
 First, we set up some global variables to be used as parameters.
 """
 
-bond_dim = 8                  #The maximum bond dimension
+bond_dim = 8                 #The maximum bond dimension
 
 J = 1.00                      #Interaction factor
-h = 0.90                      #Transverse field factor
+h = 0.9                      #Transverse field factor
 
 tol_im = 1E-10                #Ground state tolerance (norm of projected evolution vector)
 
 step = 0.08                   #Imaginary time step size
 
-load_saved_ground = False     #Whether to load a saved ground state (if it exists)
+load_saved_ground = True      #Whether to load a saved ground state (if it exists)
 
 auto_truncate = False         #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
@@ -66,7 +66,7 @@ def get_ham(J, h):
     return ham
 
 lam = J / h
-print "Exact energy = ", -h * 2 / sp.pi * (1 + lam) * spe.ellipe((4 * lam / (1 + lam)**2))
+print("Exact energy = ", -h * 2 / sp.pi * (1 + lam) * spe.ellipe((4 * lam / (1 + lam)**2)))
 
 """
 Now we are ready to create an instance of the evoMPS class.
@@ -88,11 +88,11 @@ if load_saved_ground:
         a_file.close
         real_time = True
         loaded = True
-        print 'Using saved ground state: ' + grnd_fname
+        print('Using saved ground state: ' + grnd_fname)
     except IOError as e:
         real_time = False
         loaded = False
-        print 'No existing ground state could be opened.'
+        print('No existing ground state could be opened.')
 else:
     real_time = False
     loaded = False
@@ -111,13 +111,13 @@ if __name__ == '__main__':
     """
     Print a table header.
     """
-    print "Bond dimensions: " + str(s.D)
-    print
+    print("Bond dimensions: " + str(s.D))
+    print()
     col_heads = ["Step", "t", "<h>", "d<h>",
                  "sig_x", "sig_y", "sig_z",
                  "eta"] #These last three are for testing the midpoint method.
-    print "\t".join(col_heads)
-    print
+    print("\t".join(col_heads))
+    print()
 
     """
     The following loop performs Euler integration of imaginary time evolution.
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         eta = s.eta.real
         row.append("%.6g" % eta)
 
-        print "\t".join(row)
+        print("\t".join(row))
 
         i += 1
 
@@ -179,17 +179,17 @@ if __name__ == '__main__':
     """
     Find excitations once we have the ground state.
     """
-    print 'Finding excitations!'
+    print('Finding excitations!')
     if top_non_triv:
         s2 = copy.deepcopy(s)
         s2.apply_op_1s(Sz)
         s2.update()
-        print "Energy density difference with spin flip:", s.h_expect.real - s2.h_expect.real
+        print("Energy density difference with spin flip:", s.h_expect.real - s2.h_expect.real)
     ex_ev = []
     ex_ev_nt = []
     ex_p = []
     for p in sp.linspace(0, sp.pi, num=num_momenta):
-        print "p = ", p
+        print("p = ", p)
         ex_ev.append(s.excite_top_triv(p, nev=num_excitations, ncv=num_excitations * 4))
         if top_non_triv:
             ex_ev_nt.append(s.excite_top_nontriv(s2, p, nev=num_excitations, ncv=num_excitations * 4))

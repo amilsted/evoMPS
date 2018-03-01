@@ -7,8 +7,8 @@ Created on Thu Oct 13 17:29:27 2011
 """
 import scipy as sp
 import scipy.linalg as la
-import matmul as m
-import tdvp_common as tm
+from . import matmul as m
+from . import tdvp_common as tm
 import copy
 import logging
 
@@ -21,7 +21,7 @@ def correct_bond_dim_open_chain(D, q):
     D[N] = 1
 
     qacc = 1
-    for n in xrange(N - 1, -1, -1):
+    for n in range(N - 1, -1, -1):
         if qacc < D.max(): #Avoid overflow!
             qacc *= q[n + 1]
 
@@ -29,7 +29,7 @@ def correct_bond_dim_open_chain(D, q):
             D[n] = qacc
             
     qacc = 1
-    for n in xrange(1, N + 1):
+    for n in range(1, N + 1):
         if qacc < D.max(): #Avoid overflow!
             qacc *= q[n]
 
@@ -114,7 +114,7 @@ class EvoMPS_MPS_Generic(object):
         self.r[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)  
         self.l[0] = m.eyemat(self.D[0], dtype=self.typ)
     
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.r[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.A[n] = sp.zeros((self.q[n], self.D[n - 1], self.D[n]), dtype=self.typ, order=self.odr)
@@ -124,13 +124,13 @@ class EvoMPS_MPS_Generic(object):
     def initialize_state(self):
         """Initializes the state to a hard-coded full rank state with norm 1.
         """
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.A[n].fill(0)
             
             f = sp.sqrt(1. / self.q[n])
             
             if self.D[n-1] == self.D[n]:
-                for s in xrange(self.q[n]):
+                for s in range(self.q[n]):
                     sp.fill_diagonal(self.A[n][s], f)
             else:
                 x = 0
@@ -140,7 +140,7 @@ class EvoMPS_MPS_Generic(object):
                 if self.D[n] > self.D[n - 1]:
                     f = 1.
                 
-                for i in xrange(max((self.D[n], self.D[n - 1]))):
+                for i in range(max((self.D[n], self.D[n - 1]))):
                     self.A[n][s, x, y] = f
                     x += 1
                     y += 1
@@ -169,9 +169,9 @@ class EvoMPS_MPS_Generic(object):
 
         """
 
-        for n in xrange(self.N):
+        for n in range(self.N):
             self.A[n+1].fill(0)
-            for q in xrange(self.q[n]):
+            for q in range(self.q[n]):
                 self.A[n+1][q,0,0] = psi[n][q]
 
         if do_update:
@@ -186,7 +186,7 @@ class EvoMPS_MPS_Generic(object):
         do_update : bool (True)
             Whether to perform self.update() after randomizing.
         """
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.A[n] = ((sp.rand(*self.A[n].shape) - 0.5) 
                          + 1.j * (sp.rand(*self.A[n].shape) - 0.5))
             self.A[n] /= la.norm(self.A[n])
@@ -206,7 +206,7 @@ class EvoMPS_MPS_Generic(object):
         do_update : bool (True)
             Whether to perform self.update() after randomizing.
         """
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.A[n].real += (sp.rand(*self.A[n].shape) - 0.5) * 2 * fac
             self.A[n].imag += (sp.rand(*self.A[n].shape) - 0.5) * 2 * fac
             
@@ -276,7 +276,7 @@ class EvoMPS_MPS_Generic(object):
             n_low = 1
         if n_high < 0:
             n_high = self.N
-        for n in xrange(n_low, n_high + 1):
+        for n in range(n_low, n_high + 1):
             self.l[n] = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
     
     def calc_r(self, n_low=-1, n_high=-1):
@@ -289,7 +289,7 @@ class EvoMPS_MPS_Generic(object):
             n_low = 0
         if n_high < 0:
             n_high = self.N - 1
-        for n in xrange(n_high, n_low - 1, -1):
+        for n in range(n_high, n_low - 1, -1):
             self.r[n] = tm.eps_r_noop(self.r[n + 1], self.A[n + 1], self.A[n + 1])
     
     def simple_renorm(self, update_r=True):
@@ -319,7 +319,7 @@ class EvoMPS_MPS_Generic(object):
         self.l[self.N][:] *= 1 / norm
         
         if update_r:
-            for n in xrange(self.N):
+            for n in range(self.N):
                 self.r[n] *= 1 / norm    
                 
     def restore_CF(self, use_QR=True):
@@ -351,7 +351,7 @@ class EvoMPS_MPS_Generic(object):
                                      sc_data="restore_RCF_r")
         else:
             G_n_i = sp.eye(self.D[self.N], dtype=self.typ) #This is actually just the number 1
-            for n in xrange(self.N, 0, -1):
+            for n in range(self.N, 0, -1):
                 self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
                                                              G_n_i, sc_data=('site', n),
                                                              zero_tol=self.zero_tol,
@@ -370,7 +370,7 @@ class EvoMPS_MPS_Generic(object):
                     log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
                     log.warning("l_N = %s", self.l[self.N].squeeze().real)
                 
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     r_nm1 = tm.eps_r_noop(self.r[n], self.A[n], self.A[n])
                     #r_nm1 = tm.eps_r_noop(m.eyemat(self.D[n], self.typ), self.A[n], self.A[n])
                     if not sp.allclose(r_nm1, self.r[n - 1], atol=1E-11, rtol=1E-11):
@@ -388,7 +388,7 @@ class EvoMPS_MPS_Generic(object):
                                      sc_data="restore_LCF_l")
         else:
             G = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
-            for n in xrange(1, self.N + 1):
+            for n in range(1, self.N + 1):
                 self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], G,
                                                     zero_tol=self.zero_tol,
                                                     sanity_checks=self.sanity_checks)
@@ -407,7 +407,7 @@ class EvoMPS_MPS_Generic(object):
                     log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
                     log.warning("r_0 = %s", self.r[0].squeeze().real)
                 
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     l = tm.eps_l_noop(self.l[n - 1], self.A[n], self.A[n])
                     if not sp.allclose(l, self.l[n], atol=1E-11, rtol=1E-11):
                         log.warning("Sanity Fail in restore_LCF!: l_%u is bad (off by %g)", n, la.norm(l - self.l[n]))
@@ -441,7 +441,7 @@ class EvoMPS_MPS_Generic(object):
         new_D = self.D.copy()
         
         if self.canonical_form == 'right':
-            for n in xrange(1, self.N + 1):
+            for n in range(1, self.N + 1):
                 try:
                     ldiag = self.l[n].diag
                 except AttributeError:
@@ -449,7 +449,7 @@ class EvoMPS_MPS_Generic(object):
                 
                 new_D[n] = sp.count_nonzero(abs(ldiag) > zero_tol)
         else:
-            for n in xrange(1, self.N + 1):
+            for n in range(1, self.N + 1):
                 try:
                     rdiag = self.r[n].diag
                 except AttributeError:
@@ -510,7 +510,7 @@ class EvoMPS_MPS_Generic(object):
         self.D = new_D
         self._init_arrays()
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.A[n][:] = tmp_A[n][:, -self.D[n - 1]:, -self.D[n]:]
         
         if update:
@@ -523,24 +523,24 @@ class EvoMPS_MPS_Generic(object):
         if self.canonical_form == 'right':
             self.r[0][0, 0] = 1
             
-            for n in xrange(1, self.N):
+            for n in range(1, self.N):
                 self.l[n] = m.simple_diag_matrix(old_l[n].diag[-self.D[n]:], dtype=self.typ)
                 
             self.l[self.N][0, 0] = 1
             
-            for n in xrange(self.N - 1, n_last_trunc - 1, - 1):
+            for n in range(self.N - 1, n_last_trunc - 1, - 1):
                 self.r[n] = m.eyemat(self.D[n], dtype=self.typ)
                 
             self.calc_r(n_high=n_last_trunc - 1)
         else:
             self.l[0][0, 0] = 1
             
-            for n in xrange(1, self.N):
+            for n in range(1, self.N):
                 self.r[n] = m.simple_diag_matrix(old_r[n].diag[-self.D[n]:], dtype=self.typ)
                 
             self.r[0][0, 0] = 1
             
-            for n in xrange(1, n_first_trunc):
+            for n in range(1, n_first_trunc):
                 self.l[n] = m.eyemat(self.D[n], dtype=self.typ)
                 
             self.calc_l(n_low=n_first_trunc)
@@ -572,7 +572,7 @@ class EvoMPS_MPS_Generic(object):
         ls_pos = True
         ls_diag = True
         
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             rnsOK = rnsOK and sp.allclose(self.r[n], sp.eye(self.r[n].shape[0]), atol=self.eps*2, rtol=0)
             ls_herm = ls_herm and sp.allclose(self.l[n] - m.H(self.l[n]), 0, atol=self.eps*2)
             ls_trOK = ls_trOK and sp.allclose(sp.trace(self.l[n]), 1, atol=self.eps*1000, rtol=0)
@@ -786,7 +786,7 @@ class EvoMPS_MPS_Generic(object):
         if return_intermediates:
             res[0] = self.expect_1s(op1.dot(op1), n1)
 
-        for j in xrange(1, d + 1):
+        for j in range(1, d + 1):
             if return_intermediates or j == d:
                 lj_op = tm.eps_l_op_1s(lj, self.A[n1 + j], self.A[n1 + j], op2)
                 res[j] = m.adot(lj_op, self.r[n1 + j])
@@ -832,25 +832,25 @@ class EvoMPS_MPS_Generic(object):
             See ex1.
         """
         ex1 = sp.zeros((d + 1), dtype=sp.complex128)
-        for j in xrange(d + 1):
+        for j in range(d + 1):
             ex1[j] = self.expect_1s(op1, n1 + j)
             
         if op1 is op2:
             ex2 = ex1
         else:
             ex2 = sp.zeros((d + 1), dtype=sp.complex128)
-            for j in xrange(d + 1):
+            for j in range(d + 1):
                 ex2[j] = self.expect_1s(op2, n1 + j)
             
         cf = self.expect_1s_1s(op1, op2, n1, n1 + d, return_intermediates=True)
             
         ccf = sp.zeros((d + 1), dtype=sp.complex128)
-        for j in xrange(d + 1):
+        for j in range(d + 1):
             ccf[j] = cf[j] - ex1[0] * ex2[j]
             
         if return_exvals:
-            ex1_ = sp.tile(ex1, [(d + 1) / d + 1])[:d + 1]
-            ex2_ = sp.tile(ex1, [(d + 1) / d + 1])[:d + 1]
+            ex1_ = sp.tile(ex1, [(d + 1) // d + 1])[:d + 1]
+            ex2_ = sp.tile(ex1, [(d + 1) // d + 1])[:d + 1]
             return ccf, ex1_, ex2_
         else:
             return ccf
@@ -865,7 +865,7 @@ class EvoMPS_MPS_Generic(object):
         
         res = sp.zeros((d), dtype=self.A[1].dtype)
         x = self.l[n - 1]
-        for j in xrange(n, n + d + 1):
+        for j in range(n, n + d + 1):
             Aop = sp.tensordot(op, self.A[j], axes=([1],[0]))
             x = tm.eps_l_noop(x, self.A[j], Aop)
             res[j - n - 1] = m.adot(x, self.r[j])
@@ -894,8 +894,8 @@ class EvoMPS_MPS_Generic(object):
                     
         r_n = self.r[n]
         r_nm1 = sp.empty_like(self.r[n - 1])
-        for s in xrange(self.q[n]):
-            for t in xrange(self.q[n]):
+        for s in range(self.q[n]):
+            for t in range(self.q[n]):
                 r_nm1 = m.mmul(self.A[n][t], r_n, m.H(self.A[n][s]))                
                 rho[s, t] = m.adot(self.l[n - 1], r_nm1)
         return rho
@@ -922,16 +922,16 @@ class EvoMPS_MPS_Generic(object):
         """
         rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
         
-        for s2 in xrange(self.q[n2]):
-            for t2 in xrange(self.q[n2]):
+        for s2 in range(self.q[n2]):
+            for t2 in range(self.q[n2]):
                 r_n2 = m.mmul(self.A[n2][t2], self.r[n2], m.H(self.A[n2][s2]))
                 
                 r_n = r_n2
-                for n in reversed(xrange(n1 + 1, n2)):
+                for n in reversed(range(n1 + 1, n2)):
                     r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])        
                     
-                for s1 in xrange(self.q[n1]):
-                    for t1 in xrange(self.q[n1]):
+                for s1 in range(self.q[n1]):
+                    for t1 in range(self.q[n1]):
                         r_n1 = m.mmul(self.A[n1][t1], r_n, m.H(self.A[n1][s1]))
                         tmp = m.adot(self.l[n1 - 1], r_n1)
                         rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
@@ -958,8 +958,8 @@ class EvoMPS_MPS_Generic(object):
             
         newAn = sp.zeros_like(self.A[n])
         
-        for s in xrange(self.q[n]):
-            for t in xrange(self.q[n]):
+        for s in range(self.q[n]):
+            for t in range(self.q[n]):
                 newAn[s] += self.A[n][t] * op[s, t]
                 
         self.A[n] = newAn
@@ -994,7 +994,7 @@ class EvoMPS_MPS_Generic(object):
         tmp_A = sp.load(file)
 
         self.D[0] = 1
-        for n in xrange(self.N):
+        for n in range(self.N):
             self.D[n + 1] = tmp_A[n + 1].shape[2]
         self._init_arrays()
         self.A = tmp_A

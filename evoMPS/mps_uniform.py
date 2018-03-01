@@ -9,8 +9,8 @@ import numpy as np
 import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
-import tdvp_common as tm
-import matmul as m
+from . import tdvp_common as tm
+from . import matmul as m
 import math as ma
 import logging
 
@@ -64,13 +64,13 @@ class EOp:
         res[:] = x #we should *not* modify x, since it belongs to ARPACK's workspace
         
         if self.left:           
-            for n in xrange(len(self.A1)):
+            for n in range(len(self.A1)):
                 out = self.eps(res, self.A1[n], self.A2[n], out)
                 tmp = res
                 res = out
                 out = tmp
         else:
-            for n in xrange(len(self.A1) - 1, -1, -1):
+            for n in range(len(self.A1) - 1, -1, -1):
                 out = self.eps(res, self.A1[n], self.A2[n], out)
                 tmp = res
                 res = out
@@ -81,10 +81,10 @@ class EOp:
         #if res is F-ordered, this will make a copy
         return res.ravel() #the return value gets copied into ARPACK's workspace.
         
-class EvoMPSNoConvergence(StandardError):
+class EvoMPSNoConvergence(Exception):
     pass
         
-class EvoMPSNormError(StandardError):
+class EvoMPSNormError(Exception):
     pass
 
 class EvoMPS_MPS_Uniform(object):   
@@ -221,13 +221,13 @@ class EvoMPS_MPS_Uniform(object):
         q = self.q
         newq = q**L
         if newq > 1024:
-            print "Warning: Local dimension will be", newq
+            print("Warning: Local dimension will be", newq)
         
         newA = sp.zeros((newq, self.D, self.D), dtype=self.typ)
-        for s in xrange(newq):
+        for s in range(newq):
             newA[s] = sp.eye(self.D)
-            for k in xrange(L):
-                t = (s / q**k) % q
+            for k in range(L):
+                t = (s // q**k) % q
                 newA[s] = self.A[L - k - 1][t].dot(newA[s])
                 
         newlL = sp.asarray(self.l[-1])
@@ -251,7 +251,7 @@ class EvoMPS_MPS_Uniform(object):
         self.AA = []
         self.l = []
         self.r = []
-        for m in xrange(L):
+        for m in range(L):
             self.A.append(np.zeros((q, D, D), dtype=self.typ, order=self.odr))
             self.AA.append(np.zeros((q, q, D, D), dtype=self.typ, order=self.odr))
             self.l.append(np.ones_like(self.A[0][0]))
@@ -267,10 +267,10 @@ class EvoMPS_MPS_Uniform(object):
         
     def _get_dense_transfer_op_block(self):
         E = m.eyemat(self.D**2)
-        for k in xrange(self.L):
+        for k in range(self.L):
             A = self.A[k]
             Ek = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
-            for s in xrange(A.shape[0]):
+            for s in range(A.shape[0]):
                 Ek += sp.kron(A[s], A[s].conj())
             E = E.dot(Ek)
         return E
@@ -295,7 +295,7 @@ class EvoMPS_MPS_Uniform(object):
         
     def _get_EOP(self, A1, A2, left):
         if self.ev_arpack_CUDA:
-            import cuda_alternatives as tcu
+            from . import cuda_alternatives as tcu
             opE = tcu.EOp_CUDA(A1, A2, left, use_batch=(self.D <= self.CUDA_batch_maxD))
         else:
             opE = EOp(A1, A2, left)
@@ -312,14 +312,14 @@ class EvoMPS_MPS_Uniform(object):
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
             
-        symmetric = sp.all([A1[j] is A2[j] for j in xrange(len(A1))])
+        symmetric = sp.all([A1[j] is A2[j] for j in range(len(A1))])
                         
         n = x.size #we will scale x so that stuff doesn't get too small
         
         opE = self._get_EOP(A1, A2, calc_l)
         x *= n / la.norm(x.ravel())
         v0 = x.ravel()
-        for i in xrange(max_retries):
+        for i in range(max_retries):
             if i > 0:
                 log.warning("_calc_lr_ARPACK: Retry #%u (%s)", i, "l" if calc_l else "r")
             try:
@@ -389,7 +389,7 @@ class EvoMPS_MPS_Uniform(object):
         else:
             v0 = np.asarray(self.r[(k - 1) % self.L])
         
-        for i in xrange(max_retries):
+        for i in range(max_retries):
             try:
                 res = las.eigs(opE, which='LM', k=nev, v0=v0.ravel(), tol=tol, 
                               ncv=ncv, return_eigenvectors=return_eigenvectors)
@@ -498,7 +498,7 @@ class EvoMPS_MPS_Uniform(object):
         if A2 is None:
             A2 = self.A
             
-        symmetric = sp.all([A1[j] is A2[j] for j in xrange(len(A1))])
+        symmetric = sp.all([A1[j] is A2[j] for j in range(len(A1))])
                         
         n = x.size #we will scale x so that stuff doesn't get too small
         
@@ -509,7 +509,7 @@ class EvoMPS_MPS_Uniform(object):
 
         x *= n / la.norm(x)
         tmp[:] = x
-        for i in xrange(max_itr):
+        for i in range(max_itr):
             x[:] = tmp
             tmp[:] = opE.matvec(x)
                     
@@ -557,7 +557,7 @@ class EvoMPS_MPS_Uniform(object):
         self.lL_before_CF = np.asarray(self.lL_before_CF)
         self.rL_before_CF = np.asarray(self.rL_before_CF)
         
-        for retries in xrange(2):
+        for retries in range(2):
             if self.ev_brute or self.D <= 3:
                 self.l[-1], self.r[-1] = self._calc_lr_brute()
             else:
@@ -607,14 +607,14 @@ class EvoMPS_MPS_Uniform(object):
             self.r[-1] *= fac
 
         #compute eigenvectors for other block boundaries
-        for k in xrange(len(self.A) - 1, 0, -1):
+        for k in range(len(self.A) - 1, 0, -1):
             self.r[k - 1] = tm.eps_r_noop(self.r[k], self.A[k], self.A[k])
             
-        for k in xrange(0, len(self.A) - 1):
+        for k in range(0, len(self.A) - 1):
             self.l[k] = tm.eps_l_noop(self.l[k - 1], self.A[k], self.A[k])
             
         if self.sanity_checks:
-            for k in xrange(self.L):
+            for k in range(self.L):
                 l = self.l[k]
                 for j in sp.arange(k + 1, k + self.L + 1) % self.L:
                     l = tm.eps_l_noop(l, self.A[j], self.A[j])
@@ -667,7 +667,7 @@ class EvoMPS_MPS_Uniform(object):
         if zero_tol is None:
             zero_tol = self.zero_tol
         
-        for k in xrange(self.L):
+        for k in range(self.L):
             try:
                 X = tm.herm_fac_with_inv(self.r[k], lower=True, zero_tol=zero_tol,
                                              force_evd=force_evd, calc_inv=False,
@@ -696,7 +696,7 @@ class EvoMPS_MPS_Uniform(object):
             g_i = Srti.dot_left(X.dot(Vh.conj().T))
             
             j = (k + 1) % self.L
-            for s in xrange(self.q):
+            for s in range(self.q):
                 self.A[j][s] = g.dot(self.A[j][s])
                 self.A[k][s] = self.A[k][s].dot(g_i)
                     
@@ -769,7 +769,7 @@ class EvoMPS_MPS_Uniform(object):
             zero_tol = self.zero_tol
         
         if ks is None:
-            ks = range(self.L)
+            ks = list(range(self.L))
         
         G = [None] * self.L
         G_i = [None] * self.L
@@ -794,7 +794,7 @@ class EvoMPS_MPS_Uniform(object):
                 self.l[k] = m.simple_diag_matrix(ev, dtype=self.typ)
             
             j = (k + 1) % self.L
-            for s in xrange(self.q):
+            for s in range(self.q):
                 self.A[j][s] = G_i[k].dot(self.A[j][s])
                 self.A[k][s] = self.A[k][s].dot(G[k])
             
@@ -867,7 +867,7 @@ class EvoMPS_MPS_Uniform(object):
             zero_tol = self.zero_tol
         
         if ks is None:
-            ks = range(self.L)
+            ks = list(range(self.L))
         
         G = [None] * self.L
         G_i = [None] * self.L
@@ -889,7 +889,7 @@ class EvoMPS_MPS_Uniform(object):
                 self.r[k] = m.simple_diag_matrix(ev, dtype=self.typ)
             
             j = (k + 1) % self.L
-            for s in xrange(self.q):
+            for s in range(self.q):
                 self.A[j][s] = G_i[k].dot(self.A[j][s])
                 self.A[k][s] = self.A[k][s].dot(G[k])
             
@@ -948,7 +948,7 @@ class EvoMPS_MPS_Uniform(object):
             zero_tol = self.zero_tol
         
         new_D_l = 1
-        for k in xrange(self.L):
+        for k in range(self.L):
             new_D_l = max(np.count_nonzero(self.l[k].diag > zero_tol), new_D_l)
         
         if 0 < new_D_l < self.A[0].shape[1]:
@@ -965,17 +965,17 @@ class EvoMPS_MPS_Uniform(object):
         assert newD < self.D, 'new bond-dimension must be smaller!'
         
         tmp_As = self.A
-        tmp_ls = map(lambda x: x.diag, self.l)
+        tmp_ls = [x.diag for x in self.l]
         
         self._init_arrays(newD, self.q, self.L)
         
         if self.symm_gauge:
-            for k in xrange(self.L):
+            for k in range(self.L):
                 self.l[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
                 self.r[k] = m.simple_diag_matrix(tmp_ls[k][:self.D], dtype=self.typ)
                 self.A[k] = tmp_As[k][:, :self.D, :self.D]
         else:
-            for k in xrange(self.L):
+            for k in range(self.L):
                 self.l[k] = m.simple_diag_matrix(tmp_ls[k][-self.D:], dtype=self.typ)
                 self.r[k] = m.eyemat(self.D, dtype=self.typ)
                 self.A[k] = tmp_As[k][:, -self.D:, -self.D:]
@@ -990,7 +990,7 @@ class EvoMPS_MPS_Uniform(object):
         """Calculates the products A[s] A[t] for s, t in range(self.q).
         The result is stored in self.AA.
         """
-        for k in xrange(len(self.A)):
+        for k in range(len(self.A)):
             self.AA[k] = tm.calc_AA(self.A[k], self.A[(k + 1) % self.L])
         
         
@@ -1065,18 +1065,18 @@ class EvoMPS_MPS_Uniform(object):
         assert self.q == other.q, "Hilbert spaces must have same dimensions!"
         
         from fractions import gcd
-        L_ = self.L * other.L / gcd(self.L, other.L)
+        L_ = self.L * other.L // gcd(self.L, other.L)
 
-        As1 = list(self.A) * (L_ / self.L)
-        As2 = list(other.A) * (L_ / other.L)
+        As1 = list(self.A) * (L_ // self.L)
+        As2 = list(other.A) * (L_ // other.L)
 
         ED = self.D * other.D
         
         if ED == 1:
             ev = 1
-            for k in xrange(L_):
+            for k in range(L_):
                 evk = 0
-                for s in xrange(self.q):    
+                for s in range(self.q):    
                     evk += As1[k][s] * As2[k][s].conj()
                 ev *= evk
             if left:
@@ -1087,9 +1087,9 @@ class EvoMPS_MPS_Uniform(object):
                 return abs(ev)**(1./L_), ev
         elif (ED <= dense_cutoff or force_dense) and not force_sparse:
             E = m.eyemat(ED, dtype=As1[0].dtype)
-            for k in xrange(L_):
+            for k in range(L_):
                 Ek = sp.zeros((ED, ED), dtype=As1[0].dtype)
-                for s in xrange(As1[k].shape[0]):
+                for s in range(As1[k].shape[0]):
                     Ek += sp.kron(As1[k][s], As2[k][s].conj())
                 E = E.dot(Ek)
                 
@@ -1179,7 +1179,7 @@ class EvoMPS_MPS_Uniform(object):
         g = [None] * self.L
         gi = [None] * self.L
                 
-        for k in xrange(self.L - 1, -1, -1):
+        for k in range(self.L - 1, -1, -1):
             if k == self.L - 1:
                 gRk = gRL
             else:
@@ -1193,7 +1193,7 @@ class EvoMPS_MPS_Uniform(object):
             gi[k] = la.inv(g[k])
             
             j = (k + 1) % self.L
-            for s in xrange(self.q):
+            for s in range(self.q):
                 self.A[j][s] = gi[k].dot(self.A[j][s])
                 self.A[k][s] = self.A[k][s].dot(g[k])
                 
@@ -1339,7 +1339,7 @@ class EvoMPS_MPS_Uniform(object):
         if return_intermediates:
             res[0] = self.expect_1s(op1.dot(op2), k=k)
 
-        for j in xrange(1, d + 1):
+        for j in range(1, d + 1):
             if return_intermediates or j == d:
                 lj_op = tm.eps_l_op_1s(lj, self.A[(k + j) % L], self.A[(k + j) % L], op2)
                 res[j] = m.adot(lj_op, self.r[(k + j) % L])
@@ -1386,25 +1386,25 @@ class EvoMPS_MPS_Uniform(object):
         """
         L = self.L
         ex1 = sp.zeros((L), dtype=sp.complex128)
-        for j in xrange(L):
+        for j in range(L):
             ex1[j] = self.expect_1s(op1, (k + j) % L)
             
         if op1 is op2:
             ex2 = ex1
         else:
             ex2 = sp.zeros((L), dtype=sp.complex128)
-            for j in xrange(L):
+            for j in range(L):
                 ex2[j] = self.expect_1s(op2, (k + j) % L)
             
         cf = self.expect_1s_1s(op1, op2, d, k=k, return_intermediates=True)
             
         ccf = sp.zeros((d + 1), dtype=sp.complex128)
-        for n in xrange(d + 1):
+        for n in range(d + 1):
             ccf[n] = cf[n] - ex1[0] * ex2[n % L]
             
         if return_exvals:
-            ex1_ = sp.tile(ex1, [(d + 1) / L + 1])[:d + 1]
-            ex2_ = sp.tile(ex1, [(d + 1) / L + 1])[:d + 1]
+            ex1_ = sp.tile(ex1, [(d + 1) // L + 1])[:d + 1]
+            ex2_ = sp.tile(ex1, [(d + 1) // L + 1])[:d + 1]
             return ccf, ex1_, ex2_
         else:
             return ccf
@@ -1518,8 +1518,8 @@ class EvoMPS_MPS_Uniform(object):
             Reduced density matrix in the number basis.
         """
         rho = np.empty((self.q, self.q), dtype=self.typ)
-        for s in xrange(self.q):
-            for t in xrange(self.q):                
+        for s in range(self.q):
+            for t in range(self.q):                
                 rho[s, t] = m.adot(self.l[k - 1], m.mmul(self.A[k][t], self.r[k], m.H(self.A[k][s])))
         return rho
                 
@@ -1547,8 +1547,8 @@ class EvoMPS_MPS_Uniform(object):
             
         newAk = sp.zeros_like(self.A[k])
         
-        for s in xrange(self.q):
-            for t in xrange(self.q):
+        for s in range(self.q):
+            for t in range(self.q):
                 newAk[s] += self.A[k][t] * op[s, t]
                 
         self.A[k] = newAk
@@ -1598,13 +1598,13 @@ class EvoMPS_MPS_Uniform(object):
             
         Ashift = self.A[k:] + self.A[:k]
             
-        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), Ashift)
+        Aop = [np.tensordot(op, A, axes=([1],[0])) for A in Ashift]
         
         if self.D == 1:
             ev = 1
-            for j in xrange(self.L):
+            for j in range(self.L):
                 evk = 0
-                for s in xrange(self.q):
+                for s in range(self.q):
                     evk += Aop[j][s] * Ashift[j][s].conj()
                 ev *= evk
             eV = sp.ones((1), dtype=sp.complex128)
@@ -1657,13 +1657,13 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
         
-        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.A)
+        Aop = [np.tensordot(op, A, axes=([1],[0])) for A in self.A]
         
         if self.D == 1:
             ev = 1
-            for k in xrange(self.L):
+            for k in range(self.L):
                 evk = 0
-                for s in xrange(self.q):
+                for s in range(self.q):
                     evk += Aop[k][s] * self.A[k][s].conj()
                 ev *= evk
             return ev**(1./self.L)
@@ -1680,11 +1680,11 @@ class EvoMPS_MPS_Uniform(object):
             op = np.vectorize(op, otypes=[np.complex128])
             op = np.fromfunction(op, (self.q, self.q))
         
-        Aop = map(lambda A: np.tensordot(op, A, axes=([1],[0])), self.A)
+        Aop = [np.tensordot(op, A, axes=([1],[0])) for A in self.A]
         
         res = sp.zeros((d), dtype=self.A[0].dtype)
         x = self.l[(k - 1) % self.L]
-        for n in xrange(k, k + d + 1):
+        for n in range(k, k + d + 1):
             nm = n % self.L
             x = tm.eps_l_noop(x, self.A[nm], Aop[nm])
             res[n - k - 1] = m.adot(x, self.r[nm])
@@ -1697,7 +1697,7 @@ class EvoMPS_MPS_Uniform(object):
         l = self.l
         r = self.r
         res = [m.adot(l[(k - 1) % L], A[k][s].dot(r[k].dot(A[k][s].conj().T))) 
-               for s in xrange(self.q)]
+               for s in range(self.q)]
         return sp.array(res).real
                 
     def set_q(self, newq, offset=0):
@@ -1723,7 +1723,7 @@ class EvoMPS_MPS_Uniform(object):
         
         for A in self.A:
             A.fill(0)
-        for k in xrange(self.L):
+        for k in range(self.L):
             if self.q > oldq:
                 self.A[k][offset:oldq + offset, :, :] = oldA[k]
             else:
@@ -1752,12 +1752,12 @@ class EvoMPS_MPS_Uniform(object):
         
         oldl = self.l
         oldr = self.r
-        oldl = map(np.asarray, oldl)
-        oldr = map(np.asarray, oldr)
+        oldl = list(map(np.asarray, oldl))
+        oldr = list(map(np.asarray, oldr))
         
         self._init_arrays(newD, self.q, self.L)
         
-        for k in xrange(self.L):
+        for k in range(self.L):
             realnorm = la.norm(oldA[k].real.ravel())
             imagnorm = la.norm(oldA[k].imag.ravel())
             realfac = (realnorm / oldA[k].size) * refac

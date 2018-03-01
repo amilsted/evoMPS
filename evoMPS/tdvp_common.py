@@ -11,8 +11,8 @@ TODO:
 import scipy as sp
 import scipy.linalg as la
 import numpy as np
-import matmul as mm
-import nullspace as ns   
+from . import matmul as mm
+from . import nullspace as ns   
 import logging
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ try:
     from evoMPS.eps_maps_c import eps_l_noop, eps_r_noop, \
                                   eps_l_noop_inplace, eps_r_noop_inplace
 except ImportError:
-    print "INFO: No c versions of epsilon maps. Compile extension modules for a boost at low bond-dimensions."
+    print("INFO: No c versions of epsilon maps. Compile extension modules for a boost at low bond-dimensions.")
     from evoMPS.core_common import eps_l_noop, eps_r_noop, \
                                    eps_l_noop_inplace, eps_r_noop_inplace
                                    
@@ -48,8 +48,8 @@ def eps_l_op_2s_AA12_C34(x, AA12, C34):
 
 def eps_l_op_2s_A1_A2_C34(x, A1, A2, C34):
     res = np.zeros((A2.shape[2], C34.shape[3]), dtype=C34.dtype)
-    for u in xrange(C34.shape[0]):
-        for v in xrange(C34.shape[1]):
+    for u in range(C34.shape[0]):
+        for v in range(C34.shape[1]):
             res += (A1[u].dot(A2[v])).conj().T.dot(x.dot(C34[u, v]))
     return res
 
@@ -119,13 +119,13 @@ def calc_C_tp(op_tp, A, Ap1):
 
 def eps_l_op_2s_C34_tp(x, A1, A2, C34_tp):
     res = 0
-    for al in xrange(len(C34_tp)):
+    for al in range(len(C34_tp)):
         res += eps_l_noop(eps_l_noop(x, A1, C34_tp[al][0]), A2, C34_tp[al][1])
     return res
     
 def eps_r_op_2s_C12_tp(x, C12_tp, A1, A2):
     res = 0
-    for al in xrange(len(C12_tp)):
+    for al in range(len(C12_tp)):
         res += eps_r_noop(eps_r_noop(x, C12_tp[al][1], A2), C12_tp[al][0], A1)
     return res
 
@@ -282,7 +282,7 @@ def calc_Vsh(A, r_s, sanity_checks=False):
     
     R = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
 
-    for s in xrange(q):
+    for s in range(q):
         R[:,s,:] = r_s.dot(A[s].conj().T)
 
     R = R.reshape((q * D, Dm1))
@@ -317,7 +317,7 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
     
     L = sp.zeros((D, q, Dm1), dtype=A.dtype, order='C')
 
-    for s in xrange(q):
+    for s in range(q):
         L[:,s,:] = lm1_sqrt.dot(A[s]).conj().T
 
     L = L.reshape((D, q * Dm1))
@@ -371,7 +371,7 @@ def calc_x_tp(Kp1, C_tp, Cm1_tp, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si
         x += lm1_s.dot(eps_r_op_2s_C12_tp(rp1, C_tp, Vri, Ap1)) #1
         
     if not Cm1_tp is None:
-        for al in xrange(len(Cm1_tp)):
+        for al in range(len(Cm1_tp)):
             x += lm1_si.dot(eps_l_noop(lm2, Am1, Cm1_tp[al][0]).dot(eps_r_noop(r_s, Cm1_tp[al][1], V))) #2
             
     if not Kp1 is None:
@@ -391,7 +391,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     #assert not (C is None and not Kp1 is None) #existence of Kp1 implies existence of C
 
     if C is not None or Kp1 is not None:
-        for s in xrange(q):
+        for s in range(q):
             if C is None:
                 x_subpart.fill(0)
             else:
@@ -407,7 +407,7 @@ def calc_x(Kp1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     if Cm1 is not None:
         Cm1T = sp.transpose(Cm1, axes=(1, 0, 2, 3))
         x_part.fill(0)
-        for s in xrange(q):     #~2nd line
+        for s in range(q):     #~2nd line
             x_subpart = eps_l_noop_inplace(lm2, Am1, Cm1T[s, :], x_subpart)
             x_part += x_subpart.dot(r_s.dot(Vsh[s]))
         x += lm1_si.dot(x_part)
@@ -426,7 +426,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
     assert not (C is None and not Kp1 is None)
     if not C is None:
         x_part.fill(0)
-        for s in xrange(q):            
+        for s in range(q):            
             x_subpart = eps_r_op_2s_C12_AA34(rp2, C[s], Ap1Ap2) #~1st line
             
             if not Kp1 is None:
@@ -441,9 +441,9 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
         x_subsubpart = np.empty((Cm1[0, 0].shape[1], D), dtype=A.dtype, order='C')
         qm1 = Am1.shape[0]
         x_part.fill(0)
-        for t in xrange(q):     #~2nd line
+        for t in range(q):     #~2nd line
             x_subpart.fill(0)
-            for s in xrange(qm1):
+            for s in range(qm1):
                 eps_r_noop_inplace(rp1, Cm1[s, t], Ap1, x_subsubpart)
                 x_subpart += (lm2.dot(Am1[s])).conj().T.dot(x_subsubpart)
             x_part += x_subpart.dot(r_si.dot(Vsh[t]))
@@ -451,7 +451,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
 
     if not lm3 is None:
         x_part.fill(0)
-        for u in xrange(q):     #~2nd line
+        for u in range(q):     #~2nd line
             x_subpart = eps_l_op_2s_AA12_C34(lm3, Am2Am1, Cm2[:, :, u])
             x_part += x_subpart.dot(r_s.dot(Vsh[u]))
         x += lm1_si.dot(x_part)
@@ -469,7 +469,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
     
     if not C is None:
         x_part.fill(0)
-        for s in xrange(q):
+        for s in range(q):
             x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
             x_part += Vsh[s].dot(lm1_s.dot(x_subpart))
             
@@ -480,7 +480,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
 
     
     x_part.fill(0)
-    for s in xrange(q):     #~2nd line
+    for s in range(q):     #~2nd line
         x_subpart.fill(0)
 
         if not lm2 is None:
@@ -502,7 +502,7 @@ def calc_BB_Y_2s_tp(C_tp, Vlh, Vrh_p1, l_s_m1, r_s_p1):
     Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj().copy()
 
     Y = 0
-    for al in xrange(len(C_tp)):
+    for al in range(len(C_tp)):
         Y += eps_l_noop(l_s_m1, Vl, C_tp[al][0]).dot(eps_r_noop(r_s_p1, C_tp[al][1], Vr_p1))
 
     etaBB_sq = mm.adot(Y, Y)
@@ -513,7 +513,7 @@ def calc_BB_Y_2s(C, Vlh, Vrh_p1, l_s_m1, r_s_p1):
     Vr_p1 = sp.transpose(Vrh_p1, axes=(0, 2, 1)).conj()
 
     Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=C.dtype)
-    for s in xrange(Vlh.shape[0]):
+    for s in range(Vlh.shape[0]):
         Y += Vlh[s].dot(l_s_m1.dot(eps_r_noop(r_s_p1, C[s], Vr_p1)))
 
     etaBB_sq = mm.adot(Y, Y)
@@ -525,23 +525,23 @@ def calc_BB_Y_2s_ham_3s(A_m1, A_p2, C, C_m1, Vlh, Vrh_p1, l_m2, r_p2, l_s_m1, l_
     
     Vrri_p1 = sp.zeros_like(Vr_p1)
     try:
-        for s in xrange(Vrri_p1.shape[0]):
+        for s in range(Vrri_p1.shape[0]):
             Vrri_p1[s] = r_si_p1.dot_left(Vr_p1[s])
     except AttributeError:
-        for s in xrange(Vrri_p1.shape[0]):
+        for s in range(Vrri_p1.shape[0]):
             Vrri_p1[s] = Vr_p1[s].dot(r_si_p1)
     
     Vl = sp.transpose(Vlh, axes=(0, 2, 1)).conj()        
     liVl = sp.zeros_like(Vl)            
-    for s in xrange(liVl.shape[0]):
+    for s in range(liVl.shape[0]):
         liVl[s] = l_si_m1.dot(Vl[s])
 
     Y = sp.zeros((Vlh.shape[1], Vrh_p1.shape[2]), dtype=Vrh_p1.dtype)
     if not A_p2 is None:
-        for s in xrange(C.shape[0]):
+        for s in range(C.shape[0]):
             Y += Vlh[s].dot(l_s_m1.dot(eps_r_op_2s_C12(r_p2, C[s], Vrri_p1, A_p2)))
     if not A_m1 is None:
-        for u in xrange(C_m1.shape[2]):
+        for u in range(C_m1.shape[2]):
             Y += eps_l_op_2s_A1_A2_C34(l_m2, A_m1, liVl, C_m1[:, :, u]).dot(r_s_p1.dot(Vrh_p1[u]))
 
     etaBB_sq = mm.adot(Y, Y)
@@ -566,16 +566,16 @@ def calc_BB_2s(Y, Vlh, Vrh_p1, l_si_m1, r_si_p1, dD_max=16, sv_tol=1E-14):
     
     BB12n = sp.zeros((Vlh.shape[0], l_si_m1.shape[0], dDn), dtype=Y.dtype)
     
-    for s in xrange(Vlh.shape[0]):
+    for s in range(Vlh.shape[0]):
         BB12n[s] = l_si_m1.dot(Vlh[s].conj().T).dot(Z1)
     
     BB21np1 = sp.zeros((Vrh_p1.shape[0], dDn, Vrh_p1.shape[1]), dtype=Y.dtype)
     
     try:
-        for s in xrange(Vrh_p1.shape[0]):
+        for s in range(Vrh_p1.shape[0]):
             BB21np1[s] = r_si_p1.dot_left(Z2.dot(Vrh_p1[s].conj().T))
     except AttributeError:
-        for s in xrange(Vrh_p1.shape[0]):
+        for s in range(Vrh_p1.shape[0]):
             BB21np1[s] = Z2.dot(Vrh_p1[s].conj().T).dot(r_si_p1)
         
     return BB12n, BB21np1, dDn
@@ -730,7 +730,7 @@ def restore_RCF_r_seq(A, r, GN=None, sanity_checks=False, sc_data=''):
         Gh = mm.eyemat(A[-1].shape[2], dtype=A[-1].dtype)
     else:
         Gh = GN.conj().T
-    for n in xrange(len(A) - 1, 0, -1):
+    for n in range(len(A) - 1, 0, -1):
         q, Dm1, D = A[n].shape
         AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * D, Dm1))
         Q, R = la.qr(AG, mode='economic')
@@ -775,7 +775,7 @@ def restore_RCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
     else:
         G = G0
         
-    for n in xrange(1, len(A)):
+    for n in range(1, len(A)):
         l[n], G, Gi = restore_RCF_l(A[n], l[n - 1], G, sanity_checks)
     
     return G
@@ -845,7 +845,7 @@ def restore_RCF_r(A, r, G_n_i, zero_tol=1E-15, sanity_checks=False, sc_data=''):
             log.warning("Sanity Fail in restore_RCF_r!: Bad GT! %s %s",
                         la.norm(GiG.dot(As).dot(G_n_i) - As.dot(G_n_i)), sc_data)
 
-    for s in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
         A[s] = G_nm1.dot(A[s]).dot(G_n_i)
 
     if new_D == A.shape[1]:
@@ -921,7 +921,7 @@ def restore_RCF_l(A, lm1, Gm1, sanity_checks=False):
         Gm1 = EV.conj().T #for left uniform case
         lm1 = l #for sanity check
 
-    for s in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
         A[s] = Gm1.dot(A[s].dot(G_i))
 
     if sanity_checks:
@@ -962,7 +962,7 @@ def restore_LCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
     else:
         G = G0
 
-    for n in xrange(1, len(A)):
+    for n in range(1, len(A)):
         q, Dm1, D = A[n].shape
         GA = sp.array([G.dot(As) for As in A[n]])
         GA = GA.reshape((q * Dm1, D))
@@ -1005,7 +1005,7 @@ def restore_LCF_r_seq(A, r, GiN=None, sanity_checks=False, sc_data=''):
         Gi = sp.eye(A[-1].shape[2], dtype=A[-1].dtype)
     else:
         Gi = GiN
-    for n in xrange(len(A) - 1, 0, -1):
+    for n in range(len(A) - 1, 0, -1):
         r[n - 1], G, Gi = restore_LCF_r(A[n], r[n], Gi, sanity_checks)
 
     return Gi
@@ -1033,7 +1033,7 @@ def restore_LCF_l(A, lm1, Gm1, sanity_checks=False, zero_tol=1E-15):
         if not sp.allclose(G.dot(Gi), eye, atol=1E-13, rtol=1E-13):
             log.warning("Sanity Fail in restore_LCF_l!: Bad GT!")
 
-    for s in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
         A[s] = Gm1.dot(A[s]).dot(Gi)
 
     if new_D == A.shape[2]:
@@ -1071,7 +1071,7 @@ def restore_LCF_r(A, r, Gi, sanity_checks=False):
         Gi = EV #for left uniform case
         r = rm1 #for sanity check
 
-    for s in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
         A[s] = Gm1.dot(A[s].dot(Gi))
 
     if sanity_checks:
