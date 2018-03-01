@@ -1207,7 +1207,7 @@ class EvoMPS_MPS_Uniform(object):
         """Returns the squared Schmidt coefficients for a left-right parition.
         
         The chain can be split into two parts between any two sites.
-        This returns the sqaured coefficients of the corresponding Schmidt
+        This returns the squared coefficients of the corresponding Schmidt
         decomposition, which are equal to the eigenvalues of the corresponding
         reduced density matrix.
         
