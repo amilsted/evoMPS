@@ -25,7 +25,7 @@ def get_ham(N, J, h):
     return [None] + [ham] * (N - 2) + [ham_end] 
 
 def get_E_crit(N):
-    return - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) / (2 * (2 * N + 1)))).sum()
+    return - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) // (2 * (2 * N + 1)))).sum()
 
 class TestOps(unittest.TestCase):
     def test_ising_crit_im_tdvp(self):
@@ -137,7 +137,7 @@ class TestOps(unittest.TestCase):
             eta = s.eta.real.sum()
             itr += 1
             
-        self.assertTrue(s.D[N/2] < D)
+        self.assertTrue(s.D[N//2] < D)
         
     def test_ising_crit_im_tdvp_dynexp(self):
         N = 8
