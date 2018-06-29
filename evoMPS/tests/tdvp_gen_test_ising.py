@@ -25,7 +25,7 @@ def get_ham(N, J, h):
     return [None] + [ham] * (N - 2) + [ham_end] 
 
 def get_E_crit(N):
-    return - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) // (2 * (2 * N + 1)))).sum()
+    return - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) / (2 * (2 * N + 1)))).sum()
 
 class TestOps(unittest.TestCase):
     def test_ising_crit_im_tdvp(self):
@@ -52,7 +52,18 @@ class TestOps(unittest.TestCase):
         self.assertLessEqual(s.expect_1s(x_ss, 1), 10 * tol)
         
         self.assertLessEqual(s.expect_1s(y_ss, 1), 10 * tol)
-        
+
+        rtstep = 0.01
+        s.ham = get_ham(N, 1.0, 1.1)
+        s.update()
+        H1 = s.H_expect
+        for j in range(10):
+            s.take_step(rtstep*1.j)
+            s.update()
+        H2 = s.H_expect
+        print("E1=",H1," E2=",H2," difference=",abs(H1-H2))
+        self.assertTrue(abs(H1-H2) < rtstep)
+
     def test_ising_crit_im_tdvp_RK4(self):
         N = 5
         D = 8
@@ -70,7 +81,20 @@ class TestOps(unittest.TestCase):
             s.take_step_RK4(0.1)
             eta = s.eta.real.sum()
             
+        print("E=",E," E_mps=",H," difference=",abs(E-H))
         self.assertTrue(sp.allclose(E, H))
+
+        rtstep = 0.1
+        s.ham = get_ham(N, 1.0, 1.1)
+        s.update()
+        H1 = s.H_expect
+        for j in range(10):
+            s.take_step_RK4(rtstep*1.j)
+            s.update()
+        H2 = s.H_expect
+        print("E1=",H1," E2=",H2," difference=",abs(H1-H2))
+        self.assertTrue(abs(H1-H2) < rtstep**4)
+
         
     def test_ising_crit_im_tdvp_split_step(self):
         N = 5
@@ -82,17 +106,34 @@ class TestOps(unittest.TestCase):
         
         tol = 1E-5 #Should result in correct energy to ~1E-12
         
+        itr = 1
         eta = 1
         while eta > tol:
             s.update()
+            B = s.calc_B() #ensure eta is set!
+            eta = s.eta.real.sum()
             H = s.H_expect
+            print(itr,": eta = ",eta, " E_mps = ", H)
             if eta < 1E-2:
                 s.take_step_split(0.1)
             else:
-                s.take_step(0.1)
-            eta = s.eta.real.sum()
+                s.take_step(0.1, B=B)
             
+            itr += 1
+
+        print("E=",E," E_mps=",H," difference=",abs(E-H))
         self.assertTrue(sp.allclose(E, H))
+
+        rtstep = 0.1
+        s.ham = get_ham(N, 1.0, 1.1)
+        s.update()
+        H1 = s.H_expect
+        for j in range(10):
+            s.take_step_split(rtstep*1.j)
+        s.update()
+        H2 = s.H_expect
+        print("E1=",H1," E2=",H2," difference=",abs(H1-H2))
+        self.assertTrue(abs(H1-H2) < rtstep**4)
         
     def test_ising_crit_im_tdvp_DMRG(self):
         N = 5
@@ -115,7 +156,8 @@ class TestOps(unittest.TestCase):
                 s.take_step(0.1)            
             eta = s.eta.real.sum()
             itr += 1
-            
+        
+        print("E=",E," E_mps=",H," difference=",abs(E-H))
         self.assertTrue(sp.allclose(E, H))
         
     def test_ising_crit_im_tdvp_auto_trunc(self):
@@ -157,7 +199,8 @@ class TestOps(unittest.TestCase):
             s.take_step(0.1, dynexp=True, dD_max=1)
             eta = s.eta.real.sum()
             itr += 1
-            
+        
+        print("E=",E," E_mps=",H," difference=",abs(E-H))
         self.assertTrue(sp.allclose(E, H))
 
         

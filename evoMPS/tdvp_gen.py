@@ -1151,7 +1151,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
                 
     def take_step_split(self, dtau, ham_is_Herm=True, HMPO=None, 
-                        use_local_ham=True, ncv=10, tol=1E-14, DMRG=False,
+                        use_local_ham=True, ncv=20, tol=1E-14, DMRG=False,
                         print_progress=True):
         """Take a time-step dtau using the split-step integrator.
         
@@ -1163,10 +1163,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         iteratively computing two matrix exponentials per site, and thus
         has less predictable CPU time requirements than the Euler or RK4 
         methods.
-        
-        NOTE:
-        This requires the expokit extension, which is included in evoMPS but 
-        must be compiled, for example using setup.py to build all extensions.
         
         Parameters
         ----------
@@ -1181,7 +1177,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         if not DMRG:
             dtau *= -1
-            from .expokit_expmv import zexpmv
+            from .sexpmv import gexpmv
     
             if sp.iscomplex(dtau):
                 op_is_herm = False
@@ -1219,8 +1215,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                           use_local_ham=use_local_ham,
                                           sanity_checks=self.sanity_checks)
             An_old = self.A[n].ravel()
-            An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
-                        A_is_Herm=op_is_herm)
+            #An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+            #            A_is_Herm=op_is_herm)
+            #FIXME: Currently we don't take advantage of Hermiticity.
+            ncv_An = min(ncv, len(An_old)-1)
+            An, conv, nstep, brkdown, mb = gexpmv(lop, An_old, dtau/2., norm_est, m=ncv_An, tol=tol)
+            if not conv:
+                log.warn("Krylov exp(M)*v solver for An did not converge in %u steps for site %u.", nstep, n)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.A[n] /= sp.sqrt(m.adot(self.A[n], self.A[n]))
             
@@ -1230,8 +1231,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                   use_local_ham=use_local_ham,
                                   sanity_checks=self.sanity_checks)
             Gold = G.ravel()
-            G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
-                       A_is_Herm=op_is_herm)
+            #G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+            #           A_is_Herm=op_is_herm)
+            ncv_G = min(ncv, len(Gold)-1)
+            G, conv, nstep, brkdown, mb = gexpmv(lop2, Gold, -dtau/2., norm_est, m=ncv_G, tol=tol)
+            if not conv:
+                log.warn("Krylov exp(M)*v solver for G did not converge in %u steps for site %u.", nstep, n)
             G = G.reshape((self.D[n], self.D[n]))
             G /= sp.sqrt(m.adot(G, G))
             return G

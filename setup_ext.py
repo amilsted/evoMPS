@@ -5,10 +5,7 @@ import numpy as np
 ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.c"]),
                Extension("evoMPS.core_common", ["evoMPS/core_common.c"]),
                Extension("evoMPS.allclose", ["evoMPS/allclose.c"]),
-               Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.c"]),
-               Extension("evoMPS.expokit", ["evoMPS/expokit/expokit.f", 
-                                            "evoMPS/expokit/expokit.pyf"],
-                         libraries = ['blas', 'lapack'])
+               Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.c"])
               ]
 
 setup(name='evoMPS-ext',
