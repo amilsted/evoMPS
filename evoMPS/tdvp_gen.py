@@ -117,6 +117,7 @@ class Vari_Opt_Single_Site_Op:
         
         n = self.n
         
+        #x = sp.asarray(x, dtype=self.dtype) #ensure the type is right!
         An = x.reshape((self.q[n], self.D[n - 1], self.D[n]))
         
         res = sp.zeros_like(An)
@@ -1152,7 +1153,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
     def take_step_split(self, dtau, ham_is_Herm=True, HMPO=None, 
                         use_local_ham=True, ncv=20, tol=1E-14, DMRG=False,
-                        print_progress=True):
+                        print_progress=True, norm_est=1.0):
         """Take a time-step dtau using the split-step integrator.
         
         This is the one-site version of a DMRG-like time integrator described
@@ -1209,12 +1210,18 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
                 HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
                 
-        def evolve_A(n):
+        def evolve_A(n, norm_est, calc_norm_est=False):
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, 
                                           HML=HML[n - 1], HMR=HMR[n], HMn=HM[n],
                                           use_local_ham=use_local_ham,
                                           sanity_checks=self.sanity_checks)
             An_old = self.A[n].ravel()
+
+            if calc_norm_est: #simple attempt at approximating the norm
+                nres = lop.matvec(sp.asarray(sp.randn(len(An_old)), dtype=An_old.dtype))
+                norm_est = max(norm_est, la.norm(nres, ord=2))
+                #print("norm_est=", norm_est)
+            
             #An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
             #            A_is_Herm=op_is_herm)
             #FIXME: Currently we don't take advantage of Hermiticity.
@@ -1224,8 +1231,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 log.warn("Krylov exp(M)*v solver for An did not converge in %u steps for site %u.", nstep, n)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.A[n] /= sp.sqrt(m.adot(self.A[n], self.A[n]))
+            return norm_est
             
-        def evolve_G(n, G):
+        def evolve_G(n, G, norm_est):
             lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac,
                                   HML=HML[n], HMR=HMR[n],
                                   use_local_ham=use_local_ham,
@@ -1291,8 +1299,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if not HMPO is None:
                 HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
                 HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
-            
-        norm_est = abs(self.H_expect.real)
         
 #        A_old = [An.copy() for An in self.A[1:self.N + 1]]
     
@@ -1303,7 +1309,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if DMRG:
                 opt_A(n)
             else:
-                evolve_A(n)
+                norm_est = evolve_A(n, norm_est, calc_norm_est=True)
             
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
@@ -1313,7 +1319,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
             if n < self.N:
                 if not DMRG:
-                    G = evolve_G(n, G)
+                    G = evolve_G(n, G, norm_est)
                 
                 for s in range(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])                
@@ -1327,7 +1333,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if DMRG:
                 opt_A(n)
             else:
-                evolve_A(n)
+                evolve_A(n, norm_est)
             
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
@@ -1337,7 +1343,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
             if n > 1:
                 if not DMRG:
-                    Gi = evolve_G(n - 1, Gi)
+                    Gi = evolve_G(n - 1, Gi, norm_est)
 
                 for s in range(self.q[n - 1]):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
