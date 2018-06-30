@@ -17,7 +17,7 @@ First, we set up some global variables to be used as parameters.
 """
 S = 1                         #Spin: Can be 0.5 or 1.
 N = 10                        #The length of the finite spin chain.
-bond_dim = 32                 #The maximum bond dimension
+bond_dim = 16                 #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
 Jy = 1.00
@@ -33,7 +33,7 @@ step = 0.1                    #Imaginary time step size
 realstep = 0.01               #Real time step size
 real_steps = 1000             #Number of real time steps to simulate
 
-use_split_step = True         #Use the one-site split step integrator from http://arxiv.org/abs/1408.5056 (requires building evoMPS extension modules)
+use_split_step = True         #Use the one-site split step integrator from http://arxiv.org/abs/1408.5056
 
 load_saved_ground = True      #Whether to load a saved ground state
 
