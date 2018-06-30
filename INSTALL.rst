@@ -22,9 +22,9 @@ install a numerics-oriented Python distribution such as
 The full installation of either of these includes everything you need.
 Otherwise, the following are required:
 
-* Python 2 <http://www.python.org> (tested on Python 2.7)
-* Numpy <http://numpy.scipy.org> (tested on 1.6.1)
-* Scipy <http://www.scipy.org> (version 0.7.0 or newer - tested on 0.10)
+* Python 3 <http://www.python.org> (tested on Python 3.6)
+* Numpy <http://numpy.scipy.org> (tested on 1.14.0)
+* Scipy <http://www.scipy.org> (version 0.7.0 or newer - tested on 1.0.0)
 
 Numpy/Scipy should be compiled with a LAPACK library, preferably
 an optimized one such as the MKL from Intel <https://software.intel.com/en-us/intel-mkl>
@@ -35,9 +35,6 @@ If present, a c compiler may be used to compile some parts of evoMPS,
 resulting in performance gains, especially at low bond dimensions.
 
 To setup a c compiler on Windows, see <https://github.com/cython/cython/wiki/CythonExtensionsOnWindows>.
-
-Some parts of evoMPS *require* compilation, such as the split-step
-integrator, which needs the (included) expokit FORTRAN program.
 
 To run the included examples, the following is also required:
 
