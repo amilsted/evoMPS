@@ -1221,7 +1221,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
 
             if calc_norm_est: #simple attempt at approximating the norm
                 nres = lop.matvec(sp.asarray(sp.randn(len(An_old)), dtype=An_old.dtype))
-                norm_est = max(norm_est, la.norm(nres, ord=2))
+                norm_est = max(norm_est, la.norm(nres, ord=sp.inf))
                 #print("norm_est=", norm_est)
             
             #An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
