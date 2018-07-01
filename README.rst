@@ -5,7 +5,14 @@
 Quantum many-particle dynamics in 1D with matrix product states
 ---------------------------------------------------------------
 
+What's new?
+-----------
+
+* Python 3 is now supported as well as Python 2 (2.7 and up)
+* Removed dependency on EXPOKIT extension module for use of the "split-step" integrator
+
 Tutorial videos:
+----------------
 
 * Installation <http://vimeo.com/user19042101/evomps-tutorial-installation>
 * Find ground state <http://vimeo.com/user19042101/evomps-tutorial-ground>
