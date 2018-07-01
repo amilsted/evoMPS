@@ -16,7 +16,7 @@ import scipy.linalg as la
 from math import sqrt, log10, copysign, trunc
 
 def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxstep=500, break_tol=None):
-      mxreject = 0
+      mxreject = 0 #matlab version has this set to 10
       delta = 1.2
       gamma = 0.9
 
@@ -62,18 +62,11 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
 
       avnorm = 0.0 #I think the EXPOKIT source relied on this being initialized to zero by the compiler
       
-      #pretty sure this just computes machine epsilon
-      eps = 0.0
-      p1 = 4.0/3.0
-      while eps == 0.0:
-            p2 = p1 - 1.0
-            p3 = 3*p2
-            eps = abs( p3-1.0 )
-      if tol <= eps: 
-            tol = sqrt( eps )
+      eps = sp.finfo(A.dtype).eps
       rndoff = eps*anorm
 
-      sgn = copysign( 1.0, t )
+      sgn = sp.sign(t)
+
       if w is None: #allow supplying a starting vector
             w = v.copy()
       else:
@@ -153,10 +146,10 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
                   
                   #local error estimation
                   if k1 == 0:
-                        err_loc = tol
+                        err_loc = tol #matlab uses break_tol
                   else:
                         p1 = abs( expH[m,0] ) * beta #wsp(iexph+m) 
-                        p2 = abs( expH[m+1,0] ) * beta * avnorm #FIXME: avnorm is not always defined....
+                        p2 = abs( expH[m+1,0] ) * beta * avnorm #avnorm is defined when k1 != 0
                         if p1 > 10.0*p2:
                               err_loc = p2
                               xm = 1.0/m
@@ -184,7 +177,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
                         ireject = ireject + 1
                         nreject = nreject + 1
                         if mxreject != 0 and ireject > mxreject:
-                              print("Failure in ZGEXPV: ---")
+                              print("Failure in gexpmv: ---")
                               print("The requested tolerance is too high.")
                               print("Rerun with a smaller value.")
                               iflag = 2
