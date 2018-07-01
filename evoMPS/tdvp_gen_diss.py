@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import scipy.linalg as la

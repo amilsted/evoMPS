@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of evoMPS by simulation of quench dynamics
 for the transverse Ising model.
 
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import scipy.linalg as la

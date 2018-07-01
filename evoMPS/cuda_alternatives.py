@@ -4,6 +4,8 @@ Created on Sat Jul  7 15:26:57 2012
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
+
 from . import matmul as m
 import scipy as sp
 import scipy.linalg as la

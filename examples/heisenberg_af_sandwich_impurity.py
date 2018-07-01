@@ -15,6 +15,7 @@ NOTE: Depending on the bond dimension D (set in heisenberg_af_uniform.py),
       N may need to be adjusted in order to accurately represent the ground
       state. Higher bond-dimensions may converge quicker (D=64 is quite good).
 """
+from __future__ import absolute_import, division, print_function
 
 import evoMPS.tdvp_sandwich as sw
 import heisenberg_af_uniform as hu

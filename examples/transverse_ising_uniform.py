@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of evoMPS: Calculation of approximate excitation spectrum
 for the transverse Ising model.
 
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
 
 import copy
 import scipy as sp

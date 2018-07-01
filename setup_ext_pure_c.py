@@ -1,9 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Mon Jan 12 14:18:20 2015
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy
 from distutils.core import setup

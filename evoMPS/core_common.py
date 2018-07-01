@@ -4,6 +4,7 @@ Created on Tue Jan 20 17:43:17 2015
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.linalg as la

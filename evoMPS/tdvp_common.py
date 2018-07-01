@@ -7,6 +7,7 @@ Created on Sun Nov 25 11:49:32 2012
 TODO:
     - Sane implementation of sanity checks (return the info to the caller)
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import scipy.linalg as la

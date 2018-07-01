@@ -5,6 +5,8 @@ Created on Thu Oct 13 17:29:27 2011
 @author: Ashley Milsted
 
 """
+from __future__ import absolute_import, division, print_function
+
 import numpy as np
 import scipy as sp
 import scipy.linalg as la

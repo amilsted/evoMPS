@@ -2,6 +2,8 @@
 """
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
+
 import scipy as sp
 import scipy.optimize as opti
 import scipy.linalg as la

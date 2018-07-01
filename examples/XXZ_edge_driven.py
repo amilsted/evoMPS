@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of simulating open system dynamics by sampling
 over randomized pure state trajectories.
@@ -17,6 +16,8 @@ The starting state is a random state composed of N_samp random pure states.
 
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
+
 import math as ma
 import scipy as sp
 import evoMPS.tdvp_gen_diss as tdvp

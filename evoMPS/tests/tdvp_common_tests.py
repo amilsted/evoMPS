@@ -4,6 +4,7 @@ Created on Fri Jan 11 18:11:02 2013
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import evoMPS.matmul as mm

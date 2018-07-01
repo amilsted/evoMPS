@@ -4,6 +4,7 @@ Created on Mon Jan 12 11:15:35 2015
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import matmul as mm
 import cython as cy
