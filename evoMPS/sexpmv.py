@@ -15,7 +15,7 @@ import scipy as sp
 import scipy.linalg as la
 from math import sqrt, log10, copysign, trunc
 
-def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxstep=500, break_tol=None):
+def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, break_tol=None):
       mxreject = 0 #matlab version has this set to 10
       delta = 1.2
       gamma = 0.9
@@ -59,8 +59,6 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
       x_error  = 0.0
       t_now    = 0.0
       t_new    = 0.0
-
-      avnorm = 0.0 #I think the EXPOKIT source relied on this being initialized to zero by the compiler
       
       eps = sp.finfo(A.dtype).eps
       rndoff = eps*anorm
@@ -112,7 +110,8 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
                   hj1j = la.norm( vs[j,:] )
                   #if the orthogonalized Krylov vector is zero, stop!
                   if hj1j <= break_tol:
-                        print('breakdown: mbrkdwn =',j,' h =',hj1j)
+                        if verbose:
+                              print('breakdown: mbrkdwn =',j,' h =',hj1j)
                         k1 = 0
                         ibrkflag = 1
                         mbrkdwn = j
@@ -145,7 +144,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
                   #nscale = nscale + ns #don't have this info
                   
                   #local error estimation
-                  if k1 == 0:
+                  if k1 == 0: #if breakdown has occured (the Krylov subspace is complete)
                         err_loc = tol #matlab uses break_tol
                   else:
                         p1 = abs( expH[m,0] ) * beta #wsp(iexph+m) 
@@ -183,7 +182,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
                               iflag = 2
                               return
                   else:
-                        break #step size OK
+                        break #step size OK (happens after a breakdown)
 
             #now update w = beta*V*exp(t_step*H)*e1 and the hump ...
             mx = mbrkdwn + max( 0, k1-1 ) #max(mx) = m+1
@@ -205,7 +204,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, itrace=0, mxs
 
             #display and keep some information ...
 
-            if itrace != 0:
+            if verbose:
                   print('integration ', nstep, ' ---------------------------------')
                   #print('scale-square = ', nscale)
                   print('step_size = ', t_step)
