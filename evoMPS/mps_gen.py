@@ -40,6 +40,23 @@ def correct_bond_dim_open_chain(D, q):
             
     return D
 
+def mps_from_tensors_gen(A, do_update=True):
+    N = len(A)-1
+    
+    assert A[0] is None, "Site zero does not exist, please set A[0] to None!"
+
+    D = [An.shape[1] for An in A[1:]] + [A[-1].shape[2]]
+    q = [0] + [An.shape[0] for An in A[1:]]
+
+    s = EvoMPS_MPS_Generic(N, D, q)
+    for n in range(1, N+1):
+        s.A[n][:] = A[n]
+
+    if do_update:
+        s.update()
+
+    return s
+
 class EvoMPS_MPS_Generic(object):
     
     def __init__(self, N, D, q):
@@ -179,7 +196,31 @@ class EvoMPS_MPS_Generic(object):
         if do_update:
             self.update()
 
-    
+    def set_state_from_tensors(self, A, do_update=True):
+        """Updates the state from a list of tensors A. Like self.A, A[0] is ignored and
+        must be set to None for this method to work. The number of sites cannot change.
+
+        Parameters
+        ----------
+        A : list of tensors, each with 3 dimensions. A[n] has dimensions (q[n],D[n-1],D[n]). A[0] is None.
+        do_update : bool (True)
+            Whether to perform self.update() after changing the tensors.
+        """
+        N = len(A)-1
+        
+        assert N == self.N, "Number of sites must match!"
+        assert A[0] is None, "Site zero does not exist, please set A[0] to None!"
+
+        self.D = sp.array([An.shape[1] for An in A[1:]] + [A[-1].shape[2]])
+        self.q = sp.array([0] + [An.shape[0] for An in A[1:]])
+        self._init_arrays()
+
+        for n in range(1, N+1):
+            self.A[n][:] = A[n]
+
+        if do_update:
+            self.update()
+
     def randomize(self, do_update=True):
         """Randomizes the parameter tensors self.A.
         
