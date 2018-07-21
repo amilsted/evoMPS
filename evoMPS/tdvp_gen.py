@@ -1393,7 +1393,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             AA = self.AA[n]
         
         if not op is None and op is self.ham[n] and self.ham_sites == 2:
-            res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
+            res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], self.C[n], AA)
             return m.adot(self.l[n - 1], res)
         else:
             return super(EvoMPS_TDVP_Generic, self).expect_2s(op, n, AA=AA)
