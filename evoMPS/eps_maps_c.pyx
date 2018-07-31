@@ -4,6 +4,7 @@ Created on Mon Jan 12 11:15:35 2015
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import matmul as mm
 import cython as cy
@@ -64,7 +65,7 @@ cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
     cdef int d = A1.shape[0]
     cdef int i, si, sf
     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)
-    cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
+    cdef int lpc = int_max(1, d // num_chunks) #loops per chunk
 
     if not A1.flags['C_CONTIGUOUS']:
         A1 = np.ascontiguousarray(A1)
@@ -144,7 +145,7 @@ cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
     cdef int d = A1.shape[0]
     cdef int i, si, sf
     cdef int num_chunks = int_min(openmp.omp_get_max_threads(), d)
-    cdef int lpc = int_max(1, d / num_chunks) #loops per chunk
+    cdef int lpc = int_max(1, d // num_chunks) #loops per chunk
     
     if not A1.flags['C_CONTIGUOUS']:
         A1 = np.ascontiguousarray(A1)

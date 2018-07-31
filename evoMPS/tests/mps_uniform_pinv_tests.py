@@ -4,6 +4,7 @@ Created on Fri Jan 11 18:11:02 2013
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import scipy.linalg as la
@@ -58,15 +59,15 @@ class TestOps(unittest.TestCase):
         pinvELOPR = upin.pinv_1mE_brute_LOP(self.A, self.B, self.x, self.y, p=p, pseudo=True, left=False)
         pinvELOPL = upin.pinv_1mE_brute_LOP(self.A, self.B, self.x, self.y, p=p, pseudo=True, left=True)
         
-        self.assertTrue(sp.allclose(pinvE, pinvELOPR, rtol=1E-15, atol=1E-15))
-        self.assertTrue(sp.allclose(pinvE, pinvELOPL, rtol=1E-15, atol=1E-15))
+        self.assertTrue(sp.allclose(pinvE, pinvELOPR, rtol=1E-14, atol=1E-14))
+        self.assertTrue(sp.allclose(pinvE, pinvELOPL, rtol=1E-14, atol=1E-14))
         
         pinvE = upin.pinv_1mE_brute(self.A, self.B, self.x, self.y, p=p, pseudo=False)
         pinvELOPR = upin.pinv_1mE_brute_LOP(self.A, self.B, self.x, self.y, p=p, pseudo=False, left=False)
         pinvELOPL = upin.pinv_1mE_brute_LOP(self.A, self.B, self.x, self.y, p=p, pseudo=False, left=True)
         
-        self.assertTrue(sp.allclose(pinvE, pinvELOPR, rtol=1E-15, atol=1E-15))
-        self.assertTrue(sp.allclose(pinvE, pinvELOPL, rtol=1E-15, atol=1E-15))
+        self.assertTrue(sp.allclose(pinvE, pinvELOPR, rtol=1E-14, atol=1E-14))
+        self.assertTrue(sp.allclose(pinvE, pinvELOPL, rtol=1E-14, atol=1E-14))
     
     def test_pinv_AA_right_p0(self):
         res = upin.pinv_1mE(self.x, self.A, self.A, self.Al, self.Ar, p=0, left=False, pseudo=True, tol=self.solver_tol)

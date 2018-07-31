@@ -5,11 +5,21 @@
 Quantum many-particle dynamics in 1D with matrix product states
 ---------------------------------------------------------------
 
+What's new?
+-----------
+
+* Python 3 is now supported as well as Python 2 (2.7 and up)
+* Removed dependency on EXPOKIT extension module for use of the "split-step" integrator
+
 Tutorial videos:
+----------------
 
 * Installation <http://vimeo.com/user19042101/evomps-tutorial-installation>
 * Find ground state <http://vimeo.com/user19042101/evomps-tutorial-ground>
 * Find excitations <http://vimeo.com/user19042101/evomps-tutorial-excitations>
+
+Note: These are based on an older version of evoMPS, but the differences are minor.
+      Most importantly, compilation of extension modules is no longer necessary.
 
 Introduction
 ------------
@@ -47,7 +57,7 @@ Key Features
 * Time-Dependent Variational Principle for simulating time evolution
 * Runge-Kutta (RK4) and split-step (finite only) integrators for greater accuracy
 * Supports local Hamiltonians: nearest-neighbour (or next-nearest neighbour)
-* Limited support for long range Hamiltonians (in development, currently finite only using MPOs)
+* Limited support for long range Hamiltonians (in development, currently for finite systems only, using MPOs)
 
 Usage
 -----

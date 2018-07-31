@@ -4,14 +4,15 @@ Created on Wed Dec 11 14:35:13 2013
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
-import tdvp_common as tm
-import matmul as m
-from mps_uniform_pinv import pinv_1mE
+from . import tdvp_common as tm
+from . import matmul as m
+from .mps_uniform_pinv import pinv_1mE
 import logging
 
 log = logging.getLogger(__name__)
@@ -101,26 +102,26 @@ class Excite_H_Op:
         
         Vri_ = sp.zeros_like(V_)
         try:
-            for s in xrange(self.q):
+            for s in range(self.q):
                 Vri_[s] = r__sqrt_i.dot_left(V_[s])
         except AttributeError:
-            for s in xrange(self.q):
+            for s in range(self.q):
                 Vri_[s] = V_[s].dot(r__sqrt_i)
 
         Vr_ = sp.zeros_like(V_)            
         try:
-            for s in xrange(self.q):
+            for s in range(self.q):
                 Vr_[s] = r__sqrt.dot_left(V_[s])
         except AttributeError:
-            for s in xrange(self.q):
+            for s in range(self.q):
                 Vr_[s] = V_[s].dot(r__sqrt)
                 
         Vri_A_ = tm.calc_AA(Vri_, A_)
                 
         if self.ham_sites == 2:
             _C_AhlA = np.empty((self.q, self.q, A.shape[2], A.shape[2]), dtype=tdvp.typ)
-            for u in xrange(self.q):
-                for s in xrange(self.q):
+            for u in range(self.q):
+                for s in range(self.q):
                     _C_AhlA[u, s] = A[u].conj().T.dot(l.dot(A[s]))
             C_AhlA = sp.tensordot(ham_, _C_AhlA, ((0, 2), (0, 1)))
             C_AhlA = sp.transpose(C_AhlA, axes=(1, 0, 2, 3)).copy(order='C')
@@ -139,63 +140,63 @@ class Excite_H_Op:
             return C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
         elif self.ham_sites == 3:
             C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
-            for s in xrange(self.q):
-                for t in xrange(self.q):
-                    for u in xrange(self.q):
+            for s in range(self.q):
+                for t in range(self.q):
+                    for u in range(self.q):
                         C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
             C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
             
             C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
                                         A_.shape[1], Vri_.shape[1]), 
                                        dtype=tdvp.typ)
-            for s in xrange(self.q):
-                for t in xrange(self.q):
-                    for u in xrange(self.q):
-                        for k in xrange(self.q):
-                            for j in xrange(self.q):
+            for s in range(self.q):
+                for t in range(self.q):
+                    for u in range(self.q):
+                        for k in range(self.q):
+                            for j in range(self.q):
                                 C_AAA_r_Ah_Vrih[s, t, u, k, j] = AAA_[s, t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
             C_AAA_r_Ah_Vrih = sp.tensordot(ham_, C_AAA_r_Ah_Vrih, ((3, 4, 5, 2, 1), (0, 1, 2, 3, 4))).copy(order='C')
             
             C_AhAhlAA = np.empty((self.q, self.q, self.q, self.q,
                                   A_.shape[2], A.shape[2]), dtype=tdvp.typ)
-            for t in xrange(self.q):
-                for j in xrange(self.q):
-                    for i in xrange(self.q):
-                        for s in xrange(self.q):
+            for t in range(self.q):
+                for j in range(self.q):
+                    for i in range(self.q):
+                        for s in range(self.q):
                             C_AhAhlAA[j, t, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
             C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (1, 0, 2, 3))).copy(order='C')
             
             C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
                                         A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
-            for t in xrange(self.q):
-                for u in xrange(self.q):
-                    for k in xrange(self.q):
-                        for j in xrange(self.q):
+            for t in range(self.q):
+                for u in range(self.q):
+                    for k in range(self.q):
+                        for j in range(self.q):
                             C_AA_r_Ah_Vrih_[u, t, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
             C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (1, 0, 2, 3))).copy(order='C')
             
             C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
                                    A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
-            for s in xrange(self.q):
-                for t in xrange(self.q):
-                    for u in xrange(self.q):
-                        for k in xrange(self.q):
+            for s in range(self.q):
+                for t in range(self.q):
+                    for u in range(self.q):
+                        for k in range(self.q):
                             C_AAA_Vrh_[s, t, u, k] = AAA_[s, t, u].dot(Vr_[k].conj().T)
             C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3))).copy(order='C')
             
             C_Vri_A_r_Ah_ = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
-            for u in xrange(self.q):
-                for k in xrange(self.q):
-                    for j in xrange(self.q):
+            for u in range(self.q):
+                for k in range(self.q):
+                    for j in range(self.q):
                         C_Vri_A_r_Ah_[u, k, j] = Vri_[j].dot(A_[k]).dot(r_.dot(A_[u].conj().T))
             C_Vri_A_r_Ah_ = sp.tensordot(ham_.conj(), C_Vri_A_r_Ah_, ((5, 2, 1), (0, 1, 2))).copy(order='C')
             
             C_AhlAA = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], A.shape[2]), dtype=tdvp.typ)
-            for j in xrange(self.q):
-                for i in xrange(self.q):
-                    for s in xrange(self.q):
+            for j in range(self.q):
+                for i in range(self.q):
+                    for s in range(self.q):
                         C_AhlAA[j, i, s] = A[s].conj().T.dot(l.dot(AA[i, j]))
             C_AhlAA_conj = sp.tensordot(ham_.conj(), C_AhlAA, ((1, 0, 3), (0, 1, 2))).copy(order='C')
             C_AhlAA = sp.tensordot(ham_, C_AhlAA, ((4, 3, 0), (0, 1, 2)))
@@ -203,9 +204,9 @@ class Excite_H_Op:
             
             C_AA_Vrh = np.empty((self.q, self.q, self.q,
                                       A_.shape[2], Vr_.shape[1]), dtype=tdvp.typ)
-            for t in xrange(self.q):
-                for u in xrange(self.q):
-                    for k in xrange(self.q):
+            for t in range(self.q):
+                for u in range(self.q):
+                    for k in range(self.q):
                         C_AA_Vrh[k, u, t] = AA_[t, u].dot(Vr_[k].conj().T)
             C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0))).copy(order='C')
             
@@ -263,7 +264,7 @@ class Excite_H_Op:
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
-            for s in xrange(self.q):
+            for s in range(self.q):
                 B2[s] = l_sqrt_i.dot(x.dot(Vri_[s]))
             if la.norm(B - B2) / la.norm(B) > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad Vri!")
@@ -313,14 +314,20 @@ class Excite_H_Op:
         if self.ham_sites == 3:
             subres += exp(-2.j * p) * tm.eps_l_noop(Mh, A, C_AAA_r_Ah_Vrih) #12
             subres += exp(-3.j * p) * tm.eps_l_op_2s_AA12_C34(Mh, AA, C_AAA_Vrh_) #12b
-            for s in xrange(self.q):
+            for s in range(self.q):
                 #subres += exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_AAA_r_Ah_Vrih[s])) #12
                 subres += tm.eps_r_noop(B[s], C_AhAhlAA[s, :], Vr_) #2b
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_AA_r_Ah_Vrih_[s, :]) #4
                 subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2 -ive of that it should be....
                 subres += exp(-1.j * p) * tm.eps_l_op_2s_AA12_C34(eye2, C_AhlAA_conj[s, :, :], BA_).dot(Vr_[s].conj().T) #4b
                 subres += exp(-2.j * p) * tm.eps_l_op_2s_AA12_C34(l.dot(B[s]), AA, C_AA_Vrh[s, :, :]) #4c
-                subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(r_.dot_left(B[s]), C_AhlAA[s, :, :], Vri_A_) #3b
+                
+                try:
+                    Bs_r = r_.dot_left(B[s])
+                except AttributeError:
+                    Bs_r = B[s].dot(r_)
+                subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(Bs_r, C_AhlAA[s, :, :], Vri_A_) #3b
+                    
                 #for t in xrange(self.q):
                     #subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
                     #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[s, t])) #4
@@ -332,7 +339,7 @@ class Excite_H_Op:
                         #subres += (exp(-1.j * p) * C_AhAhlA[s, t, u].dot(BA_[t, u]).dot(Vr_[s].conj().T)) #4b
                         #subres += (exp(-2.j * p) * AA[t, s].conj().T.dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
         else:
-            for s in xrange(self.q):
+            for s in range(self.q):
                 #subres += C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
                 subres += tm.eps_r_noop(B[s], C_AhlA[s, :], Vr_) #2
                 #+ exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[t, s]) #4 OK with 3
@@ -535,7 +542,7 @@ class Excite_H_Op_tp:
             tmp = sp.empty((A_.shape[1], V_.shape[1]), dtype=A.dtype, order='C')
             tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='C')
             rhs10 = 0
-            for al in xrange(len(A_o1)):
+            for al in range(len(A_o1)):
                 tmp2 = tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2)
                 tmp3 = m.mmul(tmp2, r__sqrt_i)
                 rhs10 += tm.eps_r_noop_inplace(tmp3, A_o1[al], V_, tmp)
@@ -586,7 +593,7 @@ class Excite_H_Op_tp:
 
         if self.sanity_checks:
             B2 = np.zeros_like(B)
-            for s in xrange(self.q):
+            for s in range(self.q):
                 B2[s] = l_sqrt_i.dot(x.dot(m.mmul(V_[s], r__sqrt_i)))
             if la.norm(B - B2) / la.norm(B) > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad Vri!")
@@ -625,7 +632,7 @@ class Excite_H_Op_tp:
             tmp = sp.empty((B.shape[1], V_.shape[1]), dtype=A.dtype, order='C')
             tmp2 = sp.empty((A_.shape[1], A_o2c[0].shape[1]), dtype=A.dtype, order='C')
             tmp3 = sp.empty_like(tmp2, order='C')
-            for al in xrange(len(Bo1)):
+            for al in range(len(Bo1)):
                 tmp3 = m.dot_inplace(tm.eps_r_noop_inplace(r_, A_, A_o2c[al], tmp2), r__sqrt_i, tmp3)
                 res_ls += tm.eps_r_noop_inplace(tmp3, Bo1[al], V_, tmp) #1
                 
@@ -643,7 +650,7 @@ class Excite_H_Op_tp:
             pass
         else:
             Bo2 = get_Aop(B, _ham_tp, 3, conj=False)
-            for al in xrange(len(AhlAo1)):
+            for al in range(len(AhlAo1)):
                 res_lsi += AhlAo1[al].dot(tm.eps_r_noop(r__sqrt, Bo2[al], V_)) #2
                 res_lsi += exp(-1.j * p) * tm.eps_l_noop(l, Ao1c[al], B).dot(A_Vr_ho2[al]) #4
                 res_lsi += exp(-2.j * p) * tm.eps_l_noop(Mh, Ao1c[al], A_).dot(A_Vr_ho2[al]) #12
@@ -661,7 +668,7 @@ class Excite_H_Op_tp:
             pass
         elif self.ham_sites == 2:
             tmp = 0
-            for al in xrange(len(A_A_o12c)):
+            for al in range(len(A_A_o12c)):
                 tmp += sp.exp(+1.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, A_, A_A_o12c[al][1]), B, A_A_o12c[al][0]) #9
                 tmp += sp.exp(+2.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, B, A_A_o12c[al][1]), A, A_A_o12c[al][0]) #11
             y = y1 + tmp #7, 9, 11
@@ -733,7 +740,7 @@ def _excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
     BBR = pinv_1mE(tm.eps_r_noop(rR, B, B), [AL], [AL], lL, rR, p=0, 
                    left=False, pseudo=True)
                    
-    print "gauge fixing:", la.norm(tm.eps_r_noop(rR, B, AR))
+    print("gauge fixing:", la.norm(tm.eps_r_noop(rR, B, AR)))
                    
     res = [0.] * (d + 1)
     
@@ -747,81 +754,81 @@ def _excite_correlation_1s_1s(AL, AR, B, lL, rR, op1, op2, d, g):
     l1 += tm.eps_l_op_1s(B1L, AR, B, op1)
     l1 += tm.eps_l_op_1s(B2L, B, AR, op1)
     l1 += tm.eps_l_op_1s(lL, B, B, op1)
-    for n in xrange(1, d + 1):
+    for n in range(1, d + 1):
         res[n] += m.adot(l1, tm.eps_r_op_1s(rR, AR, AR, op2))
         res[n] -= 2 * g[n]
         if n == d:
             break
         l1 = tm.eps_l_noop(l1, AR, AR)
         
-    print 1, res
+    print(1, res)
     
     #Terms 3, 4, 6, 7, a
     ls = [None] * (d + 1)
     ls[0] = tm.eps_l_op_1s(B1L, AR, AL, op1) + tm.eps_l_op_1s(lL, B, AL, op1)
-    for k in xrange(1, d + 1):
+    for k in range(1, d + 1):
         ls[k] = tm.eps_l_noop(ls[k - 1], AR, AL)
         
     rs = [None] * (d + 1)
     rs[d - 1] = tm.eps_r_op_1s(rR, AR, AR, op2)
-    for k in xrange(d - 1, 0, -1):
+    for k in range(d - 1, 0, -1):
         rs[k - 1] = tm.eps_r_noop(rs[k], AR, AR)
         
-    for n in xrange(2, d + 1):
-        for k in xrange(2, n):
+    for n in range(2, d + 1):
+        for k in range(2, n):
             res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], AR, B))
         
         res[n] += m.adot(ls[n - 1], tm.eps_r_op_1s(rR, AR, B, op2))
         
-    print 2, res
+    print(2, res)
         
     #Terms 3, 4, 6, 7, b
     ls = [None] * (d + 1)
     ls[0] = tm.eps_l_op_1s(B2L, AL, AR, op1) + tm.eps_l_op_1s(lL, AL, B, op1)
-    for k in xrange(1, d + 1):
+    for k in range(1, d + 1):
         ls[k] = tm.eps_l_noop(ls[k - 1], AL, AR)
         
-    for n in xrange(2, d + 1):
-        for k in xrange(2, n):
+    for n in range(2, d + 1):
+        for k in range(2, n):
             res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], B, AR))
         
         res[n] += m.adot(ls[n - 1], tm.eps_r_op_1s(rR, B, AR, op2))
         
-    print 3, res
+    print(3, res)
     
     #Term 8
     ls = [None] * (d + 1)
     ls[0] = tm.eps_l_op_1s(lL, AL, AL, op1)
-    for k in xrange(1, d + 1):
+    for k in range(1, d + 1):
         ls[k] = tm.eps_l_noop(ls[k - 1], AL, AL)
         
-    for n in xrange(2, d + 1):
-        for k in xrange(2, n):
+    for n in range(2, d + 1):
+        for k in range(2, n):
             res[n] += m.adot(ls[k - 1], tm.eps_r_noop(rs[-(n + 1):][k], B, B))
             res[n] -= g[n]
             
-    print 4, res
+    print(4, res)
             
     #Terms 9 and 10
-    for n in xrange(2, d + 1):
-        for k in xrange(2, n):
+    for n in range(2, d + 1):
+        for k in range(2, n):
             lj = tm.eps_l_noop(ls[k - 1], AL, B)
-            for j in xrange(k + 1, n):
+            for j in range(k + 1, n):
                 res[n] += m.adot(lj, tm.eps_r_noop(rs[-(n + 1):][j], B, AR))
                 lj = tm.eps_l_noop(lj, AL, AR)
             res[n] += m.adot(lj, tm.eps_r_op_1s(rR, B, AR, op2))
 
             lj = tm.eps_l_noop(ls[k - 1], B, AL)
-            for j in xrange(k + 1, n):
+            for j in range(k + 1, n):
                 res[n] += m.adot(lj, tm.eps_r_noop(rs[-(n + 1):][j], AR, B))
                 lj = tm.eps_l_noop(lj, AL, AR)
             res[n] += m.adot(lj, tm.eps_r_op_1s(rR, AR, B, op2))
             
-    print 5, res
+    print(5, res)
     
     #Term 11
     res[0] += m.adot(tm.eps_l_op_1s(lL, AL, AL, op1.dot(op2) - g[0] * sp.eye(len(op1))), BBR)
-    for n in xrange(1, d + 1):
+    for n in range(1, d + 1):
         res[n] += m.adot(tm.eps_l_op_1s(ls[n - 1], AL, AL, op2), BBR)
         res[n] -= g[n]
     
@@ -836,17 +843,17 @@ def _excite_expect_2s_tp_sep(AL, AR, B, lL, rR, op, d, n1, n2):
     As1 = [None] + [AL] * (n1 - 1) + [B] + [AR] * (d - n1 + 1)
     As2 = [None] + [AL] * (n2 - 1) + [B] + [AR] * (d - n2 + 1)
     
-    for n in xrange(1, d):
+    for n in range(1, d):
         ls[n] = tm.eps_l_noop(ls[n - 1], As1[n], As2[n])
         
-    for n in xrange(d, 0, -1):
+    for n in range(d, 0, -1):
         rs[n - 1] = tm.eps_r_noop(rs[n], As1[n], As2[n])
         
     Cs1 = [None] * (d + 1)
-    for n in xrange(1, d):
+    for n in range(1, d):
         Cs1[n] = tm.calc_C_tp(op, As1[n], As1[n + 1])
         
     res = [m.adot(ls[n - 1], tm.eps_r_op_2s_C12_tp(rs[n + 1], Cs1[n], As2[n], As2[n + 1]))
-           for n in xrange(1, d)]
+           for n in range(1, d)]
                
     return sp.array(res)

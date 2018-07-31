@@ -13,6 +13,7 @@ HOW TO USE:
     3. Run this script!
 
 """
+from __future__ import absolute_import, division, print_function
 
 import evoMPS.tdvp_sandwich as sw
 import scipy as sp
@@ -37,7 +38,7 @@ Sm = Sx - 1.j * Sy
 base_name = "heis_af_sandwich_scattering_N%u_D%u" % (sim.N, hu.s.D)
 
 if __name__ == "__main__":
-    mid = N/2
+    mid = N//2
 
     sim.apply_op_1s(Sp, mid - 15 - 5)
     sim.apply_op_1s(Sm, mid - 15 + 5)
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     sim.apply_op_1s(Sp, mid + 15 + 5)
 
     op, en, S, OL = sw.go(sim, dt*1.j, steps, RK4=True, op=Sz, op_every=1,
-                          autogrow=True, autogrow_amount=4/hu.s.L)
+                          autogrow=True, autogrow_amount=4//hu.s.L)
 
     if plot_results:
         import matplotlib.pyplot as plt

@@ -4,6 +4,7 @@ Created on Fri Oct 28 13:02:26 2011
 
 From the Scipy Cookbook
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from scipy.linalg import svd

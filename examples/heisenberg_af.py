@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of evoMPS by simulation of quench dynamics
 for the Heisenberg model.
 
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
+
 import math as ma
 import scipy as sp
 import evoMPS.tdvp_gen as tdvp
@@ -17,7 +18,7 @@ First, we set up some global variables to be used as parameters.
 """
 S = 1                         #Spin: Can be 0.5 or 1.
 N = 10                        #The length of the finite spin chain.
-bond_dim = 32                 #The maximum bond dimension
+bond_dim = 16                 #The maximum bond dimension
 
 Jx = 1.00                     #Interaction factors (Jx == Jy == Jz > 0 is the antiferromagnetic Heisenberg model)
 Jy = 1.00
@@ -33,7 +34,7 @@ step = 0.1                    #Imaginary time step size
 realstep = 0.01               #Real time step size
 real_steps = 1000             #Number of real time steps to simulate
 
-use_split_step = True         #Use the one-site split step integrator from http://arxiv.org/abs/1408.5056 (requires building evoMPS extension modules)
+use_split_step = True         #Use the one-site split step integrator from http://arxiv.org/abs/1408.5056
 
 load_saved_ground = True      #Whether to load a saved ground state
 
@@ -75,7 +76,7 @@ elif S == 1:
     Sy = Sy_s1
     Sx = Sx_s1
 else:
-    print "Only S = 1 or S = 1/2 are supported!"
+    print("Only S = 1 or S = 1/2 are supported!")
     exit()
 
 """
@@ -129,11 +130,11 @@ if load_saved_ground:
         real_time = True
         loaded = True
         s.ham = get_ham(N, Jx_quench, Jy_quench, Jz_quench)
-        print 'Using saved ground state: ' + grnd_fname
+        print('Using saved ground state: ' + grnd_fname)
     except IOError as e:
         real_time = False
         loaded = False
-        print 'No existing ground state could be opened.'
+        print('No existing ground state could be opened.')
 else:
     real_time = False
     loaded = False
@@ -156,13 +157,13 @@ if __name__ == '__main__':
     """
     Print a table header.
     """
-    print "Bond dimensions: " + str(s.D)
-    print
+    print("Bond dimensions: " + str(s.D))
+    print()
     col_heads = ["Step", "t", "<H>", "d<H>",
                  "Sx_3", "Sy_3", "Sz_3",
                  "eta"] #These last three are for testing the midpoint method.
-    print "\t".join(col_heads)
-    print
+    print("\t".join(col_heads))
+    print()
 
     if real_time:
         T = Tre
@@ -205,7 +206,7 @@ if __name__ == '__main__':
         row.append("%.3g" % Sy_3.real)
         row.append("%.3g" % Sz_3.real)
 
-        m_n = map(lambda n: s.expect_1s(Sz, n).real, xrange(1, N + 1)) #Magnetization
+        m_n = [s.expect_1s(Sz, n).real for n in range(1, N + 1)] #Magnetization
         exS.append(m_n)
 
         """
@@ -222,14 +223,14 @@ if __name__ == '__main__':
             exS = exSre
             i = 0
             t = 0
-            print 'Starting real time evolution!'
+            print('Starting real time evolution!')
 
         """
         Carry out next step!
         """
         if not real_time:
             if i % 10 == 9 and eta > 1E-5:
-                print "Doing DMRG-style sweep."
+                print("Doing DMRG-style sweep.")
                 s.vari_opt_ss_sweep()
                 eta = 100
             else:
@@ -246,7 +247,7 @@ if __name__ == '__main__':
             
         row.append("%.6g" % eta)
 
-        print "\t".join(row)
+        print("\t".join(row))
 
         i += 1
         if real_time and i > real_steps:

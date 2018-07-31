@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of evoMPS by simulation of quench dynamics
 for the transverse Ising model.
 
 @author: Ashley Milsted
 """
-
+from __future__ import absolute_import, division, print_function
 import scipy as sp
 import evoMPS.tdvp_gen as tdvp
 
@@ -82,7 +81,7 @@ Print the exact ground state energy
 """
 if h == J:
     E = - 2 * abs(sp.sin(sp.pi * (2 * sp.arange(N) + 1) / (2 * (2 * N + 1)))).sum()
-    print "Exact ground state energy = %.15g" % E
+    print("Exact ground state energy = %.15g" % E)
 
 """
 Now we are ready to create an instance of the evoMPS class.
@@ -105,11 +104,11 @@ if load_saved_ground:
         real_time = True
         loaded = True
         s.ham = get_ham(N, J, h_quench)
-        print 'Using saved ground state: ' + grnd_fname
+        print('Using saved ground state: ' + grnd_fname)
     except IOError as e:
         real_time = False
         loaded = False
-        print 'No existing ground state could be opened.'
+        print('No existing ground state could be opened.')
 else:
     real_time = False
     loaded = False
@@ -132,13 +131,13 @@ if __name__ == '__main__':
     """
     Print a table header.
     """
-    print "Bond dimensions: " + str(s.D)
-    print
+    print("Bond dimensions: " + str(s.D))
+    print()
     col_heads = ["Step", "t", "<H>", "d<H>",
                  "sig_x_3", "sig_y_3", "sig_z_3",
                  "M_x", "eta", "err"] #These last three are for testing the midpoint method.
-    print "\t".join(col_heads)
-    print
+    print("\t".join(col_heads))
+    print()
 
     if real_time:
         T = Tre
@@ -179,7 +178,7 @@ if __name__ == '__main__':
         row.append("%.3g" % Sy_3.real)
         row.append("%.3g" % Sz_3.real)
 
-        m_n = map(lambda n: s.expect_1s(Sz, n).real, xrange(1, N + 1)) #Magnetization
+        m_n = [s.expect_1s(Sz, n).real for n in range(1, N + 1)] #Magnetization
         m = sp.sum(m_n)
 
         row.append("%.9g" % m)
@@ -197,7 +196,7 @@ if __name__ == '__main__':
             M = Mre
             i = 0
             t = 0
-            print 'Starting real time evolution!'
+            print('Starting real time evolution!')
 
         """
         Carry out next step!
@@ -227,7 +226,7 @@ if __name__ == '__main__':
         row.append("%.6g" % eta)
         row.append("%.6g" % err)
 
-        print "\t".join(row)
+        print("\t".join(row))
 
         i += 1
         if real_time and i > real_steps:

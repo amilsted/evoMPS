@@ -9,18 +9,21 @@ TODO:
     - Split out excitations stuff?
 
 """
+from __future__ import absolute_import, division, print_function
+
 import copy as cp
 import numpy as np
 import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
 import scipy.optimize as opti
-import tdvp_common as tm
-import matmul as m
-from mps_uniform import EvoMPS_MPS_Uniform, EvoMPSNoConvergence, EvoMPSNormError
-from mps_uniform_pinv import pinv_1mE
-from mps_uniform_excite import Excite_H_Op, Excite_H_Op_tp
+from . import tdvp_common as tm
+from . import matmul as m
+from .mps_uniform import EvoMPS_MPS_Uniform, EvoMPSNoConvergence, EvoMPSNormError
+from .mps_uniform_pinv import pinv_1mE
+from .mps_uniform_excite import Excite_H_Op, Excite_H_Op_tp
 import logging
+from functools import reduce
 
 log = logging.getLogger(__name__)
         
@@ -100,7 +103,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def set_ham(self, ham, ham_sites=None):
         if ham_sites is None:
             try:
-                self.ham_sites = len(ham.shape) / 2
+                self.ham_sites = len(ham.shape) // 2
             except AttributeError: #TODO: Try to count arguments using inspect module
                 self.ham_sites = 2
         else:
@@ -112,13 +115,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             raise ValueError("Only 2 or 3 site Hamiltonian terms supported!")
         
         ham_shape = []
-        for i in xrange(self.ham_sites):
+        for i in range(self.ham_sites):
             ham_shape.append(self.q)
         C_shape = tuple(ham_shape + [self.D, self.D])        
         
         self.C = []
         self.K = []
-        for k in xrange(self.L):
+        for k in range(self.L):
             self.C.append(np.zeros(C_shape, dtype=self.typ, order=self.odr))
             self.K.append(np.ones_like(self.A[k][0]))
             
@@ -136,7 +139,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         newham = sp.zeros((newq**2, newq**2), dtype=self.typ)
         oldham = self.ham.reshape((q**self.ham_sites, q**self.ham_sites))
         
-        for k in xrange(L):
+        for k in range(L):
             newham += sp.kron(sp.kron(sp.eye(q**k), oldham), sp.eye(q**(2 * L - k - self.ham_sites)))
             
         newham = newham.reshape((newq, newq, newq, newq))
@@ -188,7 +191,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.ham_tp is None:
             self.calc_AA()
         
-        for k in xrange(self.L):
+        for k in range(self.L):
             if self.ham_sites == 2:
                 if not self.ham_tp is None:
                     #self.C[k][:] = tm.calc_C_mat_op_tp(self.ham_tp, self.A[k], self.A[(k + 1) % self.L])
@@ -268,23 +271,23 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if self.ham_sites == 2:
             if not self.ham_tp is None:
                 Hr = tm.eps_r_op_2s_C12_tp(self.r[1 % L], self.C[0], self.A[0], self.A[1 % L])
-                for k in xrange(1, L):
+                for k in range(1, L):
                     Hrk = tm.eps_r_op_2s_C12_tp(self.r[(k + 1) % L], self.C[k], self.A[k], self.A[(k + 1) % L])
-                    for j in xrange(k - 1, -1, -1):
+                    for j in range(k - 1, -1, -1):
                         Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
                     Hr += Hrk
             else:
                 Hr = tm.eps_r_op_2s_C12_AA34(self.r[1 % L], self.C[0], self.AA[0])
-                for k in xrange(1, L):
+                for k in range(1, L):
                     Hrk = tm.eps_r_op_2s_C12_AA34(self.r[(k + 1) % L], self.C[k], self.AA[k])
-                    for j in xrange(k - 1, -1, -1):
+                    for j in range(k - 1, -1, -1):
                         Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
                     Hr += Hrk
         else:
             Hr = tm.eps_r_op_3s_C123_AAA456(self.r[2 % L], self.C[0], self.AAA[0])
-            for k in xrange(1, L):
+            for k in range(1, L):
                 Hrk = tm.eps_r_op_3s_C123_AAA456(self.r[(k + 2) % L], self.C[k], self.AAA[k])
-                for j in xrange(k - 1, -1, -1):
+                for j in range(k - 1, -1, -1):
                     Hrk = tm.eps_r_noop(Hrk, self.A[j], self.A[j])
                 Hr += Hrk
         
@@ -352,21 +355,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 lH = tm.eps_l_op_2s_C34_tp(self.l[(L - 3) % L], self.A[(L - 2) % L], self.A[(L - 1) % L], self.C[(L - 2) % L])
                 for k in sp.arange(-1, L - 2) % L:
                     lHk = tm.eps_l_op_2s_C34_tp(self.l[(k - 1) % L], self.A[k], self.A[(k + 1) % L], self.C[k])
-                    for j in xrange((k + 2) % L, L):
+                    for j in range((k + 2) % L, L):
                         lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
                     lH += lHk
             else:
                 lH = tm.eps_l_op_2s_AA12_C34(self.l[(L - 3) % L], self.AA[(L - 2) % L], self.C[(L - 2) % L])
                 for k in sp.arange(-1, L - 2) % L:
                     lHk = tm.eps_l_op_2s_AA12_C34(self.l[(k - 1) % L], self.AA[k], self.C[k])
-                    for j in xrange((k + 2) % L, L):
+                    for j in range((k + 2) % L, L):
                         lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
                     lH += lHk
         else:
             lH = tm.eps_l_op_3s_AAA123_C456(self.l[(L - 4) % L], self.AAA[(L - 3) % L], self.C[(L - 3) % L])
             for k in sp.arange(-2, L - 3) % L:
                 lHk = tm.eps_l_op_3s_AAA123_C456(self.l[(k - 1) % L], self.AAA[k], self.C[k])
-                for j in xrange((k + 3) % L, L):
+                for j in range((k + 3) % L, L):
                     lHk = tm.eps_l_noop(lHk, self.A[j], self.A[j])
                 lH += lHk
         
@@ -433,7 +436,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if out is None:
             out = np.zeros_like(self.A[0])
             
-        for s in xrange(self.q):
+        for s in range(self.q):
             out[s] = lkm1_sqrt_i.dot(xk).dot(rk_sqrt_i.dot(Vshk[s]).conj().T)
             
         return out
@@ -445,7 +448,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.l_sqrt_i = [None] * self.L
         self.r_sqrt = [None] * self.L
         self.r_sqrt_i = [None] * self.L
-        for k in xrange(self.L):
+        for k in range(self.L):
             self.l_sqrt[k], self.l_sqrt_i[k], self.r_sqrt[k], self.r_sqrt_i[k] = tm.calc_l_r_roots(self.l[k], self.r[k], zero_tol=self.zero_tol, sanity_checks=self.sanity_checks)
         
     def calc_B(self, set_eta=True, return_x=False):
@@ -465,7 +468,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         B = []
         Vsh = []
         x = []
-        for k in xrange(L):
+        for k in range(L):
             Vshk = tm.calc_Vsh(self.A[k], self.r_sqrt[k], sanity_checks=self.sanity_checks)
             Vsh.append(Vshk)
             
@@ -516,15 +519,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         Y = sp.empty((L), dtype=sp.ndarray)
         if self.ham_sites == 2:
             if not self.ham_tp is None:
-                for k in xrange(L):
+                for k in range(L):
                     Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s_tp(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
                                                        self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
             else:
-                for k in xrange(L):
+                for k in range(L):
                     Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s(self.C[k], Vlh[k], self.Vsh[(k + 1) % L],
                                                        self.l_sqrt[k - 1], self.r_sqrt[(k + 1) % L])
         else:
-            for k in xrange(L):
+            for k in range(L):
                 Y[k], self.etaBB_sq[k] = tm.calc_BB_Y_2s_ham_3s(self.A[k - 1], self.A[(k + 2) % L], 
                                        self.C[k], self.C[k - 1], Vlh[k], self.Vsh[(k + 1) % L],
                                        self.l[(k - 2) % L], self.r[(k + 2) % L],
@@ -539,14 +542,14 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         Vrh = self.Vsh
         Vlh = []
         L = self.L
-        for k in xrange(L):
+        for k in range(L):
             Vlh.append(tm.calc_Vsh_l(self.A[k], self.l_sqrt[k - 1], sanity_checks=self.sanity_checks))
         
         Y, etaBB_sq = self.calc_BB_Y_2s(Vlh)
         
         BB1 = [None] * L
         BB2 = [None] * L
-        for k in xrange(L):
+        for k in range(L):
             BB1[k], BB2[(k + 1) % L], dD = tm.calc_BB_2s(Y[k], Vlh[k], Vrh[(k + 1) % L], 
                                               self.l_sqrt_i[k - 1], self.r_sqrt_i[(k + 1) % L],
                                               dD_max=dD_max, sv_tol=0) #FIXME: Make D variable...
@@ -605,17 +608,17 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 dD = BB1[0].shape[2]
                 self.expand_D(self.D + dD, refac=0, imfac=0) #FIXME: Currently expands all D
                 #print BB1.shape, la.norm(BB1.ravel()), BB2.shape, la.norm(BB2.ravel())
-                for k in xrange(self.L):
+                for k in range(self.L):
                     self.A[k][:, :oldD, :oldD] += -dtau * B[k]
                     self.A[k][:, :oldD, oldD:] = -1.j * sp.sqrt(dtau) * BB1[k]
                     self.A[k][:, oldD:, :oldD] = -1.j * sp.sqrt(dtau) * BB2[k]
                     self.A[k][:, oldD:, oldD:].fill(0)
                 log.info("Dynamically expanded! New D: %d", self.D)
             else:
-                for k in xrange(self.L):
+                for k in range(self.L):
                     self.A[k] += -dtau * B[k]
         else:
-            for k in xrange(self.L):
+            for k in range(self.L):
                 self.A[k] += -dtau * B[k]
             
     def take_step_RK4(self, dtau, B_i=None, dynexp=False, maxD=128, dD_max=16, 
@@ -657,21 +660,21 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         update()
         
         B = self.calc_B(set_eta=False) #k2                
-        for k in xrange(self.L):
+        for k in range(self.L):
             self.A[k] = A0[k] - dtau/2 * B[k]
             B_fin[k] += 2 * B[k]
             
         update()
             
         B = self.calc_B(set_eta=False) #k3                
-        for k in xrange(self.L):
+        for k in range(self.L):
             self.A[k] = A0[k] - dtau * B[k]
             B_fin += 2 * B[k]
 
         update()
         
         B = self.calc_B(set_eta=False) #k4
-        for k in xrange(self.L):
+        for k in range(self.L):
             B_fin[k] += B[k]
             self.A[k] = A0[k] - dtau/6 * B_fin[k]
              
@@ -754,7 +757,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
         
-        for i in xrange(max_retries):
+        for i in range(max_retries):
             try:
                 res = las.eigsh(op, which=which, k=nev, v0=v0, ncv=ncv,
                                  return_eigenvectors=return_eigenvectors, 
@@ -776,7 +779,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         H = np.zeros((x.shape[0], x.shape[0]), dtype=self.typ)
         
-        for i in xrange(x.shape[0]):
+        for i in range(x.shape[0]):
             x.fill(0)
             x[i] = 1
             H[:, i] = op.matvec(x)
@@ -882,7 +885,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
         
-        for i in xrange(max_retries):
+        for i in range(max_retries):
             try:
                 res = las.eigsh(op, sigma=sigma, which=which, k=nev, v0=v0,
                                     return_eigenvectors=return_eigenvectors, 
@@ -905,7 +908,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         H = np.zeros((x.shape[0], x.shape[0]), dtype=self.typ)
         
-        for i in xrange(x.shape[0]):
+        for i in range(x.shape[0]):
             x.fill(0)
             x[i] = 1
             H[:, i] = op.matvec(x)
@@ -937,11 +940,11 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         As = [None] * L
         A2s = [None] * L
-        for k in xrange(L):
+        for k in range(L):
             As[k] = Ae[k:k + M]
             A2s[k] = A2e[k:k + M]
         Bs = [None] * L
-        for k in xrange(L):
+        for k in range(L):
             Bs[k] = [B[k]]
         
         if conj:
@@ -952,7 +955,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             X2 = A2s
 
         BRblock = 0
-        for k in xrange(L - 1, -1, -1):
+        for k in range(L - 1, -1, -1):
             BRr[k] = tm.eps_r_noop_multi(r[(k + M - 1) % L], X1[k], X2[k])
             #BRr[k] = tm.eps_r_noop(self.r[k], X1[k][0], X2[k][0])
             if k < L - 1:
@@ -970,7 +973,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             BR[0] = self.calc_PPinv(QBRblock, p=(L * p_), solver=las.lgmres, 
                                     tol=con_tol, out=BR[0])
                                                          
-            for k in xrange(L - 1, 0, -1):
+            for k in range(L - 1, 0, -1):
                 BR[k] = BRr[k] + sp.exp(1.j * p_) * tm.eps_r_noop(BR[(k + 1) % L], Ae[k], A2e[k])
                 #BR[k] -= self.r[k - 1] *  m.adot(self.l[k - 1], BR[k]) NO
                 
@@ -994,12 +997,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         x = [None] * L
         newB = [None] * L
-        for k in xrange(L):
+        for k in range(L):
             #VR = sp.transpose(self.Vsh[(k + M - 1) % L].conj(), axes=(0, 2, 1))
             r_si = self.r_sqrt_i[(k + M - 1) % L]
             VRh = self.Vsh[(k + M - 1) % L]
             VRr_si = sp.empty((VRh.shape[0], VRh.shape[2], VRh.shape[1]), dtype=VRh.dtype)
-            for s in xrange(len(VRr_si)):
+            for s in range(len(VRr_si)):
                 VRr_si[s] = r_si.dot(VRh[s]).conj().T
             #VRr_si = sp.array([r_si.dot(VRhs).conj().T for VRhs in self.Vsh[(k + M - 1) % L]])
             
@@ -1011,18 +1014,18 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 BR_ = 0
                 
             #Loops over overlapping terms (right overlap)
-            for j in xrange(0, M):
+            for j in range(0, M):
                 Bkj = B[(k + j) % L].reshape((q**(M - 1 - j), q**(j + 1), D, D))
                 
                 bra = [VRr_si] + A[k + M:k + M + j]
-                for s in xrange(q**(M - 1)):
+                for s in range(q**(M - 1)):
                     ket = [ Bkj[s % q**(M - 1 - j)] ]
                     
                     if j == 0:
                         As = m.eyemat(D, dtype=self.typ)
                     else:
                         #TODO: Use pre-calculated A products here
-                        As = [A[k + l][(s / q**(M - 1 - l - 1)) % q] for l in xrange(j)]
+                        As = [A[k + l][(s // q**(M - 1 - l - 1)) % q] for l in range(j)]
                         As = reduce(sp.dot, As)
                     
                     Rs = sp.exp(j * p * 1.j) \
@@ -1037,15 +1040,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             x[k] = sp.array(x[k])
 
             newB[k] = sp.zeros((q**M, D, D), dtype=self.typ)
-            for s in xrange(q**(M)):
-                newB[k][s] = self.l_sqrt_i[k - 1].dot(x[k][s / q]).dot(VRr_si[s % q])
+            for s in range(q**(M)):
+                newB[k][s] = self.l_sqrt_i[k - 1].dot(x[k][s // q]).dot(VRr_si[s % q])
             newB[k] = newB[k].reshape(tuple([q] * M + [D, D]))
             
         return newB, x
     
     def _B_random(self, M=1):
         sha = tuple([self.q] * M + [self.D, self.D])
-        B = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in xrange(self.L)]
+        B = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in range(self.L)]
         return B
     
     def _B_to_B_GF_test(self, ps=[0], M=1):
@@ -1056,7 +1059,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         ol = sp.sum([m.adot(x1k, x2k) for x1k, x2k in zip(B2GFx, B1GFx)])
         ol2 = self._B_overlap(B1GF, B2GF, B1_is_GF=True, B2_is_GF=True)
-        print "GF overlap:", ol, ol2
+        print("GF overlap:", ol, ol2)
         
         y1 = self._B_random_GT_par(M=M)
         y2 = self._B_random_GT_par(M=M)
@@ -1065,20 +1068,20 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B1 = self._B_rand_GT(B1GF, p=p, x=y1)
             B2 = self._B_rand_GT(B2GF, p=p, x=y2)
             
-            print "p=", p
-            print "--------------"
+            print("p=", p)
+            print("--------------")
             ol_ = self._B_overlap(B1, B2, p=p)
-            print "B1,B2", ol_, abs(ol - ol_)
+            print("B1,B2", ol_, abs(ol - ol_))
             B1GF_, B1GF_x = self._B_to_B_GF(B1, p=p)
             B2GF_, B2GF_x = self._B_to_B_GF(B2, p=p)
             ol_ = self._B_overlap(B1GF_, B2GF_, B1_is_GF=True, B2_is_GF=True)
-            print "B1GF_,B2GF_", ol_, abs(ol - ol_)
+            print("B1GF_,B2GF_", ol_, abs(ol - ol_))
             ol_ = self._B_overlap(B1GF_, B2GF, p=p, B1_is_GF=True, B2_is_GF=True)
-            print "B1GF_,B2GF", ol_, abs(ol - ol_)
+            print("B1GF_,B2GF", ol_, abs(ol - ol_))
             ol_ = self._B_overlap(B1GF, B2GF_, p=p, B1_is_GF=True, B2_is_GF=True)
-            print "B1GF,B2GF_", ol_, abs(ol - ol_)
+            print("B1GF,B2GF_", ol_, abs(ol - ol_))
             
-            print 
+            print() 
             
     def _B_overlap_onsite(self, B1, B2, p=0, B1_is_GF=False, B2_is_GF=False, 
                           A2=None, l=None, r=None):
@@ -1102,12 +1105,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         res = 0
         res12 = 0
         res21 = 0
-        for k in xrange(L):
+        for k in range(L):
             res += m.adot(l[k - 1], tm.eps_r_noop_multi(r[(k + M - 1) % L], [B1[k]], [B2[k]]))
             
             #B1 right of B2
             if not B1_is_GF:
-                for j in xrange(1, M):
+                for j in range(1, M):
                     #print k, j, ter[k:k + j], ter[k + M:k + M + j]
                     ket = Ae[k:k + j] + [B1[(k + j) % L]]
                     bra = [B2[k]] + A2e[k + M:k + M + j]
@@ -1117,7 +1120,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
             #B2 right of B1
             if not B2_is_GF:
-                for j in xrange(1, M):
+                for j in range(1, M):
                     ket = [B1[k]] + Ae[k + M:k + M + j]
                     bra = A2e[k:k + j] + [B2[(k + j) % L]]
                     R = tm.eps_r_noop_multi(r[(k + M + j - 1) % L], ket, bra)
@@ -1158,10 +1161,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             l[-1] = lL.reshape(self.l[-1].shape)
             r[-1] = rL.reshape(self.r[-1].shape)
 
-            for k in xrange(len(self.A) - 1, 0, -1):
+            for k in range(len(self.A) - 1, 0, -1):
                 r[k - 1] = tm.eps_r_noop(r[k], self.A[k], A2[k])
                 
-            for k in xrange(0, len(self.A) - 1):
+            for k in range(0, len(self.A) - 1):
                 l[k] = tm.eps_l_noop(l[k - 1], self.A[k], A2[k])
         
         res, res12, res21 = self._B_overlap_onsite(B1, B2, p=p, B1_is_GF=B1_is_GF, B2_is_GF=B2_is_GF, 
@@ -1186,7 +1189,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                 As = [None] * L
                 A2s = [None] * L
                 BGFs = [None] * L
-                for k in xrange(L):
+                for k in range(L):
                     As[k] = Ae[k:k + M]
                     A2s[k] = A2e[k:k + M]
                     BGFs[k] = [BGF[k]]
@@ -1198,7 +1201,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                     Y1 = As
                     Y2 = BGFs
                 #rescon_1 = 0
-                for k in xrange(L):
+                for k in range(L):
                     #print "sum BR", sp.sum(BR[k].ravel()), len(Y1[k]), len(Y2[k])
                     if True or M == 1:
                         R = tm.eps_r_noop_multi(BR[(k + M) % L], Y1[k], Y2[k])
@@ -1243,15 +1246,15 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
     def _B_random_GF(self, M=1):
         sha = (self.q**(M - 1), self.D, (self.q - 1) * self.D)
-        x1 = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in xrange(self.L)]
+        x1 = [sp.rand(*sha) + 1.j * sp.rand(*sha) for k in range(self.L)]
         
         B1 = [None] * self.L
-        for k in xrange(self.L):
+        for k in range(self.L):
             VR = sp.transpose(self.Vsh[(k + M - 1) % self.L].conj(), axes=(0, 2, 1))
             VRr_si = sp.array([VRs.dot(self.r_sqrt_i[(k + M - 1) % self.L].A) for VRs in VR])
             B1[k] = sp.zeros((self.q**M, self.D, self.D), dtype=self.typ)
-            for s in xrange(self.q**(M)):
-                B1[k][s] = self.l_sqrt_i[k - 1].dot(x1[k][s / self.q]).dot(VRr_si[s % self.q])
+            for s in range(self.q**(M)):
+                B1[k][s] = self.l_sqrt_i[k - 1].dot(x1[k][s // self.q]).dot(VRr_si[s % self.q])
             B1[k] = B1[k].reshape(tuple([self.q] * M + [self.D, self.D]))
             
         etasq1 = sp.sum([m.adot(x1k, x1k) for x1k in x1])
@@ -1260,7 +1263,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
     def _B_random_GT_par(self, M=1, fac=1.):
         sha = (self.q**(M - 1), self.D, self.D * (self.q - 1))
-        x = [fac * (sp.rand(*sha) + 1.j * sp.rand(*sha)) for k in xrange(self.L)]
+        x = [fac * (sp.rand(*sha) + 1.j * sp.rand(*sha)) for k in range(self.L)]
         
         return x
         
@@ -1272,13 +1275,13 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             x = self._B_random_GT_par(M=M, fac=fac)
             
         B2 = [Bk.copy() for Bk in B]
-        for k in xrange(L):
+        for k in range(L):
             sha = (q**M, self.D, self.D)
             B2k = B2[k].reshape(*sha)
-            for s in xrange(q**M):
-                B2k[s] += (self.A[k][s / q**(M - 1)].dot(x[(k + 1) % L][s % q**(M - 1)]) 
+            for s in range(q**M):
+                B2k[s] += (self.A[k][s // q**(M - 1)].dot(x[(k + 1) % L][s % q**(M - 1)]) 
                            - sp.exp(-1.j * p) 
-                             * x[k][s / q].dot(self.A[(k + M - 1) % L][s % q]))
+                             * x[k][s // q].dot(self.A[(k + M - 1) % L][s % q]))
                                              
         return B2
     
@@ -1291,7 +1294,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         B1B1nGF = self._B_overlap(B1, B1, p=0)
         B1_, x1_ = self._B_to_B_GF(B1, p=0)
         B1B1_ = self._B_overlap(B1, B1_, p=0, B1_is_GF=True, B2_is_GF=True)
-        print "Initial check:", etasq1, B1B1, B1B1nGF, B1B1_
+        print("Initial check:", etasq1, B1B1, B1B1nGF, B1B1_)
         
         y1 = self._B_random_GT_par(M=M, fac=etasq1)
         y2 = self._B_random_GT_par(M=M, fac=etasq1)
@@ -1300,22 +1303,22 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             B2 = self._B_rand_GT(B1, p=p, x=y1)
             B3 = self._B_rand_GT(B1, p=p, x=y2)
             
-            print "p=", p
-            print "------------"
+            print("p=", p)
+            print("------------")
             overlap = self._B_overlap(B3, B3, p)
-            print "B3,B3", overlap, abs(overlap - etasq1)
+            print("B3,B3", overlap, abs(overlap - etasq1))
             overlap = self._B_overlap(B2, B3, p)
-            print "B2,B3", overlap, abs(overlap - etasq1)
+            print("B2,B3", overlap, abs(overlap - etasq1))
             overlap = self._B_overlap(B1, B2, p, B1_is_GF=True)
-            print "B1,B2", overlap, abs(overlap - etasq1)
+            print("B1,B2", overlap, abs(overlap - etasq1))
             overlap = self._B_overlap(B2, B1, p, B2_is_GF=True)
-            print "B2,B1", overlap, abs(overlap - etasq1)
+            print("B2,B1", overlap, abs(overlap - etasq1))
             
             B2_, x2_ = self._B_to_B_GF(B2, p=p)
             overlap = self._B_overlap(B1, B2_, p, B1_is_GF=True, B2_is_GF=True)
-            print "B1,B2_proj", overlap, abs(overlap - etasq1)
-            print "------------"
-            print 
+            print("B1,B2_proj", overlap, abs(overlap - etasq1))
+            print("------------")
+            print() 
         
     def _B_overlap_GF(self, B1, B2):
         """Note: Both Bs must satisfy the GFC!
@@ -1367,7 +1370,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             else:
                 BCG0, BCG0x = self._B_to_B_GF(BCG0)
                 BCG = [None] * self.L 
-                for k in xrange(self.L):
+                for k in range(self.L):
                     BCG[k] = BG[k] + beta * BCG0[k]
         
         ls = EvoMPS_line_search(self, BCG, BG, B_overlap_tol=B_overlap_tol)
@@ -1536,7 +1539,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         oldK = self.K        
         super(EvoMPS_TDVP_Uniform, self).set_q(newq, offset=offset)        
         self.K = oldK
-        print "New Hamiltonian required! Use set_ham(...)."
+        print("New Hamiltonian required! Use set_ham(...).")
                     
     def expand_D(self, newD, refac=100, imfac=0):
         oldK0 = self.K[0]
@@ -1585,12 +1588,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             ls[1] = tm.eps_l_op_1s(ls[0], As[1], As[1], op1)
             
-        for n in xrange(2, 2 * d + 1):
+        for n in range(2, 2 * d + 1):
             ls[n] = tm.eps_l_noop(ls[n - 1], As[n], As[n])
             
         rs = [None] * (2*d + 2)
         rs[-1] = r[0]
-        for n in xrange(2*d + 1, 0, -1):
+        for n in range(2*d + 1, 0, -1):
             rs[n - 1] = tm.eps_r_noop(rs[n], As[n], As[n])
             
         return ls, rs
@@ -1610,7 +1613,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         As = [self.A[0]] * nb + [B] + [A2] * (2*d + 1 - nb)
             
         exs = [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op)) 
-               for n in xrange(1, 2*d + 2)]
+               for n in range(1, 2*d + 2)]
                    
         return sp.array(exs)
         
@@ -1634,7 +1637,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         Cs[nb] = CopBA
             
         exs = [m.adot(ls[n - 1], tm.eps_r_op_2s_AA12_C34(rs[n + 1], Cs[n], AAs[n])) 
-               for n in xrange(1, 2*d + 1)]
+               for n in range(1, 2*d + 1)]
                    
         return sp.array(exs)
         
@@ -1655,7 +1658,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         ls, rs = self._get_tangent_lr(B, d, op1=op1, nb=nb, s2=s2)
         g = [m.adot(ls[0], tm.eps_r_op_1s(rs[1], As[1], As[1], op1.dot(op2)))]
         g += [m.adot(ls[n - 1], tm.eps_r_op_1s(rs[n], As[n], As[n], op2)) 
-              for n in xrange(2, 2*d + 2)]
+              for n in range(2, 2*d + 2)]
         
         g = sp.array(g)
         
@@ -1682,7 +1685,7 @@ class EvoMPS_line_search():
         self.tdvp_tau = 0
         
         #Bring all l and r into dense form
-        for k in xrange(tdvp.L):
+        for k in range(tdvp.L):
             try:
                 tdvp.l[k] = tdvp.l[k].A
             except AttributeError:
@@ -1740,7 +1743,7 @@ class EvoMPS_line_search():
             log.debug((tau, self.gs[i], "from stored"))
             return self.gs[i].real
         except ValueError:
-            for k in xrange(self.tdvp.L):
+            for k in range(self.tdvp.L):
                 self.tdvp.A[k] = self.tdvp0.A[k] - tau * self.B[k]
             
             #Use iterative results from nearest tau as starting points
@@ -1815,7 +1818,7 @@ class EvoMPS_line_search():
                     taus = [0, tau_init]
 
                 if taus is None:
-                    for i in xrange(3):
+                    for i in range(3):
                         taus = self.bracket_extrap(tau_init / (i + 1.))
                     
                         if not taus is None:

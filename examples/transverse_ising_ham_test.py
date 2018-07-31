@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 """
 A demonstration of evoMPS by simulation of quench dynamics
 for the transverse Ising model.
 
 @author: Ashley Milsted
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import scipy.linalg as la
@@ -76,9 +76,9 @@ J = 1.0
 
 if h == -J:
     E = 0
-    for n in xrange(N):
+    for n in range(N):
         E += 2 * abs(sp.sin(sp.pi * (2 * n + 1) / (2 * (2 * N + 1))))
-    print "Exact energy = %.15g" % E
+    print("Exact energy = %.15g" % E)
 
 #ham = [get_ham(J, h)] * (N - 1) + [get_ham_end(J, h)]
 ham = [get_ham_3s(J, h)] * (N - 2) + [get_ham_end_3s(J, h)]
@@ -109,9 +109,9 @@ if False:
         s.load_state(a_file)
         a_file.close
         loaded = True
-        print 'Using saved ground state: ' + grnd_fname
+        print('Using saved ground state: ' + grnd_fname)
     except IOError as e:
-        print 'No existing ground state could be opened.'
+        print('No existing ground state could be opened.')
 
 
 """
@@ -124,13 +124,13 @@ reCF = []
 reNorm = []
 
 
-print "Bond dimensions: " + str(s.D)
-print
+print("Bond dimensions: " + str(s.D))
+print()
 col_heads = ["t", "eta", "H", "dH", 
              "sig_x_3", "sig_y_3", "sig_z_3",
              "M_x", "Next step"]
-print "\t".join(col_heads)
-print
+print("\t".join(col_heads))
+print()
 
 eta = 10000
 prevH = 0
@@ -139,7 +139,7 @@ while (eta > tol):
     
     trunc = s.update(restore_CF_after_trunc=False)
     if trunc:
-        print "Truncated: ", s.D        
+        print("Truncated: ", s.D)        
     
     row.append("%.8g" % eta)
         
@@ -162,14 +162,14 @@ while (eta > tol):
     
     
     m = 0   #x-Magnetization
-    for n in xrange(1, N + 1):
+    for n in range(1, N + 1):
         m += s.expect_1s(x_ss, n) 
         
     row.append("%.9g" % m.real)    
     
     row.append(str(1.j * sp.conj(step)))
     
-    print "\t".join(row)
+    print("\t".join(row))
     s.take_step(step)
     
     eta = s.eta.real.sum()

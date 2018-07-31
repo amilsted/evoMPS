@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function
+
 from numpy.distutils.core import setup, Extension
 from evoMPS.version import __version__
 import numpy as np
@@ -5,10 +9,7 @@ import numpy as np
 ext_modules = [Extension("evoMPS.matmul", ["evoMPS/matmul.c"]),
                Extension("evoMPS.core_common", ["evoMPS/core_common.c"]),
                Extension("evoMPS.allclose", ["evoMPS/allclose.c"]),
-               Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.c"]),
-               Extension("evoMPS.expokit", ["evoMPS/expokit/expokit.f", 
-                                            "evoMPS/expokit/expokit.pyf"],
-                         libraries = ['blas', 'lapack'])
+               Extension("evoMPS.tdvp_calc_C", ["evoMPS/tdvp_calc_C.c"])
               ]
 
 setup(name='evoMPS-ext',

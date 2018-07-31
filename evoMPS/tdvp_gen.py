@@ -8,14 +8,16 @@ TODO:
     - Adaptive step size.
 
 """
+from __future__ import absolute_import, division, print_function
+
 import copy as cp
 import scipy as sp
 import scipy.linalg as la
 import scipy.optimize as opti
 import scipy.sparse.linalg as las
-import matmul as m
-import tdvp_common as tm
-from mps_gen import EvoMPS_MPS_Generic
+from . import matmul as m
+from . import tdvp_common as tm
+from .mps_gen import EvoMPS_MPS_Generic
 import logging
 
 log = logging.getLogger(__name__)
@@ -62,12 +64,12 @@ class Vari_Opt_Single_Site_Op:
                 AAnm1 = tm.calc_AA(t.A[n - 1], An)
                 Cnm1 = tm.calc_C_mat_op_AA(t.ham[n - 1], AAnm1)
                 Cnm1 = sp.transpose(Cnm1, axes=(1, 0, 2, 3)).copy()
-                for s in xrange(t.q[n]):
+                for s in range(t.q[n]):
                     res[s] += tm.eps_l_noop(t.l[n - 2], t.A[n - 1], Cnm1[s, :])
             if n < t.N:
                 AAn = tm.calc_AA(An, t.A[n + 1])
                 Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
-                for s in xrange(t.q[n]):
+                for s in range(t.q[n]):
                     res[s] += tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
                 
         if t.ham_sites == 3:
@@ -75,15 +77,15 @@ class Vari_Opt_Single_Site_Op:
                 AAAnm2 = tm.calc_AAA_AA(t.AA[n - 2], An)
                 Cnm2 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 2], AAAnm2)
                 Cnm2 = sp.transpose(Cnm2, axes=(2, 0, 1, 3, 4)).copy()
-                for s in xrange(t.q[n]):
+                for s in range(t.q[n]):
                     res[s] += tm.eps_l_op_2s_AA12_C34(t.l[n - 3], t.AA[n - 2], Cnm2[s, :, :])
                     
             if n > 1 and n < t.N:
                 AAnm1 = tm.calc_AA(t.A[n - 1], An)  
                 AAAnm1 = tm.calc_AAA_AA(AAnm1, t.A[n + 1])
                 Cnm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAnm1)
-                for s in xrange(t.q[n]):
-                    for u in xrange(t.q[n - 1]):
+                for s in range(t.q[n]):
+                    for u in range(t.q[n - 1]):
                         res[s] += t.A[n - 1][u].conj().T.dot(t.l[n - 2].dot(
                                   tm.eps_r_noop(t.r[n + 1], Cnm1[u, s, :], t.A[n + 1])))
                                   
@@ -91,15 +93,15 @@ class Vari_Opt_Single_Site_Op:
                 AAn = tm.calc_AA(An, t.A[n + 1])
                 AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
                 Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
-                for s in xrange(t.q[n]):
+                for s in range(t.q[n]):
                     res[s] += tm.eps_r_op_2s_AA12_C34(t.r[n + 2], Cn[s, :, :], t.AA[n + 1])
             
         if n > 1:
-            for s in xrange(t.q[n]):
+            for s in range(t.q[n]):
                 res[s] += self.KLnm1.dot(An[s])
                 
         if n < t.N:
-            for s in xrange(t.q[n]):
+            for s in range(t.q[n]):
                 res[s] += An[s].dot(t.K[n + 1])
                 
     def apply_ham_MPO(self, An, res):
@@ -108,7 +110,7 @@ class Vari_Opt_Single_Site_Op:
         
         HMAn = tm.apply_MPO_local(self.HMn, An)
         #print self.HML.shape, HMAn[0].shape, self.HMR.shape, An[0].shape
-        for s in xrange(t.q[n]):
+        for s in range(t.q[n]):
             res[s] += self.HML.conj().T.dot(HMAn[s]).dot(self.HMR)
         
     def matvec(self, x):
@@ -117,6 +119,7 @@ class Vari_Opt_Single_Site_Op:
         
         n = self.n
         
+        #x = sp.asarray(x, dtype=self.dtype) #ensure the type is right!
         An = x.reshape((self.q[n], self.D[n - 1], self.D[n]))
         
         res = sp.zeros_like(An)
@@ -163,7 +166,7 @@ class Vari_Opt_SC_op:
         self.ham_MPO = not HML is None
         
     def apply_ham_MPO(self, Gn, res):
-        HMGn = sp.kron(Gn, sp.eye(self.HMR.shape[0] / self.D[self.n]))
+        HMGn = sp.kron(Gn, sp.eye(self.HMR.shape[0] // self.D[self.n]))
         res += self.HML.conj().T.dot(HMGn).dot(self.HMR)
         
     def apply_ham_local(self, Gn, res):
@@ -177,7 +180,7 @@ class Vari_Opt_SC_op:
         if t.ham_sites == 2:
             AAn = tm.calc_AA(t.A[n], Ap1)
             Cn = tm.calc_C_mat_op_AA(t.ham[n], AAn)
-            for s in xrange(t.q[n]):
+            for s in range(t.q[n]):
                 sres = tm.eps_r_noop(t.r[n + 1], Cn[s, :], t.A[n + 1])
                 res += t.A[n][s].conj().T.dot(t.l[n - 1].dot(sres))
         elif t.ham_sites == 3:
@@ -185,14 +188,14 @@ class Vari_Opt_SC_op:
                 AAn = tm.calc_AA(t.A[n], Ap1)
                 AAAn = tm.calc_AAA_AA(AAn, t.A[n + 2])
                 Cn = tm.calc_C_3s_mat_op_AAA(t.ham[n], AAAn)
-                for s in xrange(t.q[n]):
+                for s in range(t.q[n]):
                     res += t.A[n][s].conj().T.dot(
                              tm.eps_r_op_2s_AA12_C34(t.r[n + 2], Cn[s, :, :], t.AA[n + 1]))
             if n > 1:
                 AAAm1 = tm.calc_AAA_AA(t.AA[n - 1], Ap1)
                 Cm1 = tm.calc_C_3s_mat_op_AAA(t.ham[n - 1], AAAm1)
                 Cm1 = sp.transpose(Cm1, axes=(2, 0, 1, 3, 4)).copy()
-                for s in xrange(t.q[n + 1]):
+                for s in range(t.q[n + 1]):
                     res += tm.eps_l_op_2s_AA12_C34(t.l[n - 2], t.AA[n - 1], Cm1[s, :, :]).dot(t.A[n + 1][s].conj().T)
             
     def matvec(self, x):
@@ -256,7 +259,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         if ham_sites is None:
             if not callable(ham):
-                self.ham_sites = len(ham[1].shape) / 2
+                self.ham_sites = len(ham[1].shape) // 2
             else:
                 self.ham_sites = 2
         else:
@@ -280,11 +283,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         self.K = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
         self.C = sp.empty((self.N), dtype=sp.ndarray) #Elements 1..N-1 
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)    
             if n <= self.N - self.ham_sites + 1:
                 ham_shape = []
-                for i in xrange(self.ham_sites):
+                for i in range(self.ham_sites):
                     ham_shape.append(self.q[n + i])
                 C_shape = tuple(ham_shape + [self.D[n - 1], self.D[n - 1 + self.ham_sites]])
                 self.C[n] = sp.empty(C_shape, dtype=self.typ, order=self.odr)
@@ -348,16 +351,16 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             n_high = self.N - self.ham_sites + 1
             
         if calc_AA:
-            for n in xrange(1, self.N):
+            for n in range(1, self.N):
                 self.AA[n] = tm.calc_AA(self.A[n], self.A[n + 1])
             
             if self.ham_sites == 3:
-                for n in xrange(1, self.N - 1):
+                for n in range(1, self.N - 1):
                     self.AAA[n] = tm.calc_AAA_AA(self.AA[n], self.A[n + 2])
             else:
                 self.AAA.fill(None)
         
-        for n in xrange(n_low, n_high + 1):
+        for n in range(n_low, n_high + 1):
             if callable(self.ham):
                 ham_n = lambda *args: self.ham(n, *args)
                 ham_n = sp.vectorize(ham_n, otypes=[sp.complex128])
@@ -394,7 +397,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if n_high < 1:
             n_high = self.N
             
-        for n in reversed(xrange(n_low, n_high + 1)):
+        for n in reversed(range(n_low, n_high + 1)):
             if n <= self.N - self.ham_sites + 1:
                 if self.C[n] is None:
                     self.K[n], ex = (tm.eps_r_noop(self.K[n + 1], self.A[n], self.A[n]), 0)
@@ -425,7 +428,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
         self.K[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
             
-        for n in xrange(n_low, n_high + 1):
+        for n in range(n_low, n_high + 1):
             #if n <= self.N - self.ham_sites + 1:
             if self.ham_sites == 2:
                 self.K[n], ex = tm.calc_K_l(self.K[n - 1], self.C[n - 1], self.l[n - 2], 
@@ -587,7 +590,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
     def calc_BB_Y_2s(self, l_s, l_si, r_s, r_si, Vrh, Vlh):
         Y = sp.empty((self.N + 1), dtype=sp.ndarray)
         etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
-        for n in xrange(1, self.N):
+        for n in range(1, self.N):
             if (not Vrh[n + 1] is None and not Vlh[n] is None):
                 if self.ham_sites == 2:
                     Y[n], etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], 
@@ -613,7 +616,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if D_max > 0:
             dD_maxes[self.D + dD_maxes > D_max] = 0
         
-        for n in xrange(1, self.N):
+        for n in range(1, self.N):
             if not Y[n] is None and dD_maxes[n] > 0:
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
                                                             Vrh[n + 1], 
@@ -660,7 +663,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         eta_sq_tot = 0
         if set_eta:
             self.eta_sq.fill(0)
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             Bn = self.calc_B_n(n, set_eta=set_eta, l_s_m1=l_s[n-1], 
                              l_si_m1=l_si[n-1], r_s=r_s[n], r_si=r_si[n], 
                              Vlh=Vlh[n], Vrh=Vrh[n])
@@ -703,7 +706,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.eta_sq[n] = m.adot(x, x)
     
             B = sp.empty_like(self.A[n])
-            for s in xrange(self.q[n]):
+            for s in range(self.q[n]):
                 B[s] = l_si_m1.dot(x).dot(r_si.dot(Vrh[s]).conj().T)
             return B
         else:
@@ -726,7 +729,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.eta_sq[n] = m.adot(x, x)
     
             B = sp.empty_like(self.A[n])
-            for s in xrange(self.q[n]):
+            for s in range(self.q[n]):
                 B[s] = m.mmul(l_si_m1, m.H(Vlh[s]), x, r_si)
             return B
         else:
@@ -748,15 +751,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         A = self.A
         q = self.q
         AH = [None] * (self.N + 1)
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             AH[n] = tm.apply_MPO_local(H[n], A[n])
             
         HR = [None] * self.N + [sp.array([[1. + 0.j]])]
-        for n in xrange(self.N, 0, -1):
+        for n in range(self.N, 0, -1):
             HR[n - 1] = self.calc_MPO_rm1(AH[n], n, HR[n])
             
         HL = [sp.array([[1. + 0.j]])]  + [None] * self.N
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             HL[n] = self.calc_MPO_l(AH[n], n, HL[n - 1])
             
         #print m.adot(HL[self.N], HR[self.N])
@@ -766,7 +769,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         r = self.r
         x = [None] * (self.N + 1)
         B = [None] * (self.N + 1)
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             ls, lsi, rs, rsi = tm.calc_l_r_roots(l[n - 1], r[n], 
                                                            zero_tol=self.zero_tol,
                                                            sanity_checks=self.sanity_checks,
@@ -777,7 +780,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 x[n] =  lsi.dot(HL[n - 1].conj().T).dot(tm.eps_r_noop(HR[n], AH[n], Vrsi))
                 self.eta_sq[n] = m.adot(x[n], x[n]).real
                 Bn = sp.empty_like(A[n])
-                for s in xrange(q[n]):
+                for s in range(q[n]):
                     Bn[s] = lsi.dot(x[n]).dot(Vrsi[s])
                 B[n] = Bn
         
@@ -828,7 +831,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         if (self.gauge_fixing == 'right' and save_memory and not calc_Y_2s and not dynexp
             and B is None):
             B = [None] * (self.N + 1)
-            for n in xrange(1, self.N + self.ham_sites):
+            for n in range(1, self.N + self.ham_sites):
                 #V is not always defined (e.g. at the right boundary vector, and possibly before)
                 if n <= self.N:
                     B[n] = self.calc_B_n(n)
@@ -849,17 +852,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
                 Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
                 Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
                                                                    zero_tol=self.zero_tol,
                                                                    sanity_checks=self.sanity_checks,
                                                                    sc_data=('site', n))
                 
                 if dynexp or calc_Y_2s or self.gauge_fixing == 'left':
-                    for n in xrange(1, self.N + 1):
+                    for n in range(1, self.N + 1):
                         Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
                 if dynexp or calc_Y_2s or self.gauge_fixing == 'right':
-                    for n in xrange(1, self.N + 1):
+                    for n in range(1, self.N + 1):
                         Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
     
                 if B is None:
@@ -874,7 +877,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                                                  dD_max=dD_max, sv_tol=sv_tol,
                                                  D_max=D_max)
                                                  
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
                         
@@ -887,7 +890,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     self.D += dD
                     self._init_arrays()
         
-                    for n in xrange(1, self.N + 1):
+                    for n in range(1, self.N + 1):
                         self.A[n][:, :oldD[n - 1], :oldD[n]] = oldA[n]
                         
                         if not BB12[n] is None:
@@ -900,7 +903,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     self.etaBB_sq = oldetaBB
                     self.eta = sp.sqrt(self.eta_sq.sum())
             else:
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     if not B[n] is None:
                         self.A[n] += -dtau * B[n]
                        
@@ -926,31 +929,31 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         B_fin = self.calc_B()
         
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] += -dtau/2 * B_fin[n]
         self.update(restore_CF=False, normalize=False)
         B = self.calc_B(set_eta=False) #k2
         
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
                 B_fin[n] += 2 * B[n]
         self.update(restore_CF=False, normalize=False)
         B = self.calc_B(set_eta=False) #k3
             
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau * B[n]
                 B_fin[n] += 2 * B[n]
         self.update(restore_CF=False, normalize=False)
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             B = self.calc_B_n(n, set_eta=False) #k4
             if not B is None:
                 B_fin[n] += B
 
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] = A0[n] - dtau / 6 * B_fin[n]
         
@@ -988,7 +991,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 log.debug((tau, ress[i], "from stored"))
                 return ress[i]
             except ValueError:
-                for n in xrange(1, self.N + 1):
+                for n in range(1, self.N + 1):
                     if not Bs[n] is None:
                         self.A[n] = As0[n] - tau * Bs[n]
                     
@@ -996,7 +999,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     self.update(restore_CF=False)
                     Bsg = self.calc_B(set_eta=False)
                     res = 0
-                    for n in xrange(1, self.N + 1):
+                    for n in range(1, self.N + 1):
                         if not Bs[n] is None:
                             res += abs(m.adot(self.l[n - 1], tm.eps_r_noop(self.r[n], Bsg[n], Bs[n])))
                     h_exp = self.H_expect.real
@@ -1008,10 +1011,10 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                     
                     h_exp = 0
                     if self.ham_sites == 2:
-                        for n in xrange(1, self.N):
+                        for n in range(1, self.N):
                             h_exp += self.expect_2s(self.ham[n], n).real
                     else:
-                        for n in xrange(1, self.N - 1):
+                        for n in range(1, self.N - 1):
                             h_exp += self.expect_3s(self.ham[n], n).real
                     res = h_exp
                 
@@ -1111,7 +1114,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             beta = max(0, beta.real)
             
             Bs_CG = [None] * len(Bs)
-            for n in xrange(1, self.N + 1):
+            for n in range(1, self.N + 1):
                 if not Bs[n] is None:
                     Bs_CG[n] = Bs[n] + beta * Bs_CG_0[n]
         
@@ -1151,8 +1154,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
                 
     def take_step_split(self, dtau, ham_is_Herm=True, HMPO=None, 
-                        use_local_ham=True, ncv=10, tol=1E-14, DMRG=False,
-                        print_progress=True):
+                        use_local_ham=True, ncv=20, tol=1E-14, DMRG=False,
+                        print_progress=True, norm_est=1.0):
         """Take a time-step dtau using the split-step integrator.
         
         This is the one-site version of a DMRG-like time integrator described
@@ -1163,10 +1166,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         iteratively computing two matrix exponentials per site, and thus
         has less predictable CPU time requirements than the Euler or RK4 
         methods.
-        
-        NOTE:
-        This requires the expokit extension, which is included in evoMPS but 
-        must be compiled, for example using setup.py to build all extensions.
         
         Parameters
         ----------
@@ -1181,7 +1180,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         
         if not DMRG:
             dtau *= -1
-            from expokit_expmv import zexpmv
+            from .sexpmv import gexpmv
     
             if sp.iscomplex(dtau):
                 op_is_herm = False
@@ -1209,29 +1208,45 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             HM = [None] * (self.N + 1)
         else:
             HM = HMPO
-            for n in xrange(self.N, 0, -1):
+            for n in range(self.N, 0, -1):
                 HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
                 HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
                 
-        def evolve_A(n):
+        def evolve_A(n, norm_est, calc_norm_est=False):
             lop = Vari_Opt_Single_Site_Op(self, n, KL[n - 1], tau=fac, 
                                           HML=HML[n - 1], HMR=HMR[n], HMn=HM[n],
                                           use_local_ham=use_local_ham,
                                           sanity_checks=self.sanity_checks)
             An_old = self.A[n].ravel()
-            An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
-                        A_is_Herm=op_is_herm)
+
+            if calc_norm_est: #simple attempt at approximating the norm
+                nres = lop.matvec(sp.asarray(sp.randn(len(An_old)), dtype=An_old.dtype))
+                norm_est = max(norm_est, la.norm(nres, ord=sp.inf))
+                #print("norm_est=", norm_est)
+            
+            #An = zexpmv(lop, An_old, dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+            #            A_is_Herm=op_is_herm)
+            #FIXME: Currently we don't take advantage of Hermiticity.
+            ncv_An = min(ncv, len(An_old)-1)
+            An, conv, nstep, brkdown, mb = gexpmv(lop, An_old, dtau/2., norm_est, m=ncv_An, tol=tol)
+            if not conv:
+                log.warn("Krylov exp(M)*v solver for An did not converge in %u steps for site %u.", nstep, n)
             self.A[n] = An.reshape((self.q[n], self.D[n - 1], self.D[n]))
             self.A[n] /= sp.sqrt(m.adot(self.A[n], self.A[n]))
+            return norm_est
             
-        def evolve_G(n, G):
+        def evolve_G(n, G, norm_est):
             lop2 = Vari_Opt_SC_op(self, n, KL[n], tau=fac,
                                   HML=HML[n], HMR=HMR[n],
                                   use_local_ham=use_local_ham,
                                   sanity_checks=self.sanity_checks)
             Gold = G.ravel()
-            G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
-                       A_is_Herm=op_is_herm)
+            #G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
+            #           A_is_Herm=op_is_herm)
+            ncv_G = min(ncv, len(Gold)-1)
+            G, conv, nstep, brkdown, mb = gexpmv(lop2, Gold, -dtau/2., norm_est, m=ncv_G, tol=tol)
+            if not conv:
+                log.warn("Krylov exp(M)*v solver for G did not converge in %u steps for site %u.", nstep, n)
             G = G.reshape((self.D[n], self.D[n]))
             G /= sp.sqrt(m.adot(G, G))
             return G
@@ -1286,19 +1301,17 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             if not HMPO is None:
                 HMA[n] = tm.apply_MPO_local(HM[n], self.A[n])
                 HMR[n - 1] = self.calc_MPO_rm1(HMA[n], n, HMR[n])
-            
-        norm_est = abs(self.H_expect.real)
         
 #        A_old = [An.copy() for An in self.A[1:self.N + 1]]
     
-        for n in xrange(1, self.N + 1):
+        for n in range(1, self.N + 1):
             if print_progress:
-                print '{0}\r'.format("Sweep LR:" + str(n) + '        '),
+                print('{0}\r'.format("Sweep LR:" + str(n) + '        '), end=' ')
             sys.stdout.flush()
             if DMRG:
                 opt_A(n)
             else:
-                evolve_A(n)
+                norm_est = evolve_A(n, norm_est, calc_norm_est=True)
             
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             G = tm.restore_LCF_l_seq(self.A[n - 1:n + 1], self.l[n - 1:n + 1],
@@ -1308,21 +1321,21 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 
             if n < self.N:
                 if not DMRG:
-                    G = evolve_G(n, G)
+                    G = evolve_G(n, G, norm_est)
                 
-                for s in xrange(self.q[n + 1]):
+                for s in range(self.q[n + 1]):
                     self.A[n + 1][s] = G.dot(self.A[n + 1][s])                
         if print_progress:
-            print
+            print()
         
-        for n in xrange(self.N, 0, -1):
+        for n in range(self.N, 0, -1):
             if print_progress:
-                print '{0}\r'.format("Sweep RL:" + str(n) + '        '),
+                print('{0}\r'.format("Sweep RL:" + str(n) + '        '), end=' ')
             sys.stdout.flush()
             if DMRG:
                 opt_A(n)
             else:
-                evolve_A(n)
+                evolve_A(n, norm_est)
             
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             Gi = tm.restore_RCF_r_seq(self.A[n - 1:n + 1], self.r[n - 1:n + 1],
@@ -1332,12 +1345,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             
             if n > 1:
                 if not DMRG:
-                    Gi = evolve_G(n - 1, Gi)
+                    Gi = evolve_G(n - 1, Gi, norm_est)
 
-                for s in xrange(self.q[n - 1]):
+                for s in range(self.q[n - 1]):
                     self.A[n - 1][s] = self.A[n - 1][s].dot(Gi)
         if print_progress:
-            print
+            print()
 
 #        #NON-WORKING estimate of eta
 #        tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
@@ -1380,7 +1393,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             AA = self.AA[n]
         
         if not op is None and op is self.ham[n] and self.ham_sites == 2:
-            res = tm.eps_r_op_2s_C12_AAA45(self.r[n + 1], self.C[n], AA)
+            res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], self.C[n], AA)
             return m.adot(self.l[n - 1], res)
         else:
             return super(EvoMPS_TDVP_Generic, self).expect_2s(op, n, AA=AA)

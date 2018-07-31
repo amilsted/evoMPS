@@ -4,6 +4,7 @@ Created on Fri Jan 11 18:11:02 2013
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import scipy as sp
 import evoMPS.matmul as mm
@@ -12,23 +13,23 @@ import unittest
 
 def make_E_noop(A, B):
     res = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
-    for s in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
         res += sp.kron(A[s], B[s].conj())
     return res
     
 def make_E_1s(A, B, op):
     res = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
-    for s in xrange(A.shape[0]):
-        for t in xrange(A.shape[0]):
+    for s in range(A.shape[0]):
+        for t in range(A.shape[0]):
             res += sp.kron(A[s], B[t].conj()) * op[t, s]
     return res
 
 def make_E_2s(A1, A2, B1, B2, op):
     res = sp.zeros((A1.shape[1]**2, A2.shape[2]**2), dtype=A1.dtype)
-    for s in xrange(A1.shape[0]):
-        for t in xrange(A2.shape[0]):
-            for u in xrange(A1.shape[0]):
-                for v in xrange(A2.shape[0]):
+    for s in range(A1.shape[0]):
+        for t in range(A2.shape[0]):
+            for u in range(A1.shape[0]):
+                for v in range(A2.shape[0]):
                     res += sp.kron(A1[s].dot(A2[t]), B1[u].dot(B2[v]).conj()) * op[u, v, s, t]
     return res
 

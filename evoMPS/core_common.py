@@ -4,10 +4,11 @@ Created on Tue Jan 20 17:43:17 2015
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.linalg as la
-import matmul as mm
+from . import matmul as mm
 
 def calc_AA(A, Ap1):
     Dp1 = Ap1.shape[2]
@@ -16,8 +17,8 @@ def calc_AA(A, Ap1):
     qp1 = Ap1.shape[0]
     
     AA = np.zeros((q, qp1, Dm1, Dp1), dtype=A.dtype)
-    for u in xrange(q):
-        for v in xrange(qp1):
+    for u in range(q):
+        for v in range(qp1):
             np.dot(A[u], Ap1[v], out=AA[u, v])
     
     return AA
@@ -36,9 +37,9 @@ def calc_AAA(A, Ap1, Ap2):
     
     AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=A.dtype)
     tmp = np.zeros((Dm1, Dp1), dtype=A.dtype)
-    for u in xrange(q):
-        for v in xrange(qp1):
-            for w in xrange(qp2):
+    for u in range(q):
+        for v in range(qp1):
+            for w in range(qp2):
                 np.dot(A[u], Ap1[v], out=tmp)
                 np.dot(tmp, Ap2[w], out=AAA[u, v, w])
                 #AAA[u, v, w] = A[u].dot(Ap1[v]).dot(Ap2[w])
@@ -53,9 +54,9 @@ def calc_AAA_AA(AAp1, Ap2):
     qp2 = Ap2.shape[0]
     
     AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AAp1.dtype)
-    for u in xrange(q):
-        for v in xrange(qp1):
-            for w in xrange(qp2):
+    for u in range(q):
+        for v in range(qp1):
+            for w in range(qp2):
                 np.dot(AAp1[u, v], Ap2[w], out=AAA[u, v, w])
     
     return AAA
@@ -118,7 +119,7 @@ def eps_l_noop_inplace(x, A1, A2, out):
     tmp_xA2s = np.empty((x.shape[0], A2[0].shape[1]), dtype=np.promote_types(x.dtype, A2[0].dtype))
     out_s = np.empty_like(out, order='C')
     
-    for s in xrange(A1.shape[0]):
+    for s in range(A1.shape[0]):
         tmp_A1sh[:] = A1[s].T
         np.conjugate(tmp_A1sh, out=tmp_A1sh)
         tmp_xA2s = mm.dot_inplace(x, A2[s], tmp_xA2s)
@@ -178,7 +179,7 @@ def eps_r_noop_inplace(x, A1, A2, out):
     tmp_A2sh = np.empty((A2[0].shape[1], A2[0].shape[0]), dtype=A2[0].dtype, order='F')
     out_s = np.empty_like(out, order='C')
     
-    for s in xrange(A1.shape[0]):
+    for s in range(A1.shape[0]):
         tmp_A1xs = mm.dot_inplace(A1[s], x, tmp_A1xs)
         tmp_A2sh[:] = A2[s].T
         np.conjugate(tmp_A2sh, out=tmp_A2sh)
@@ -218,8 +219,8 @@ def eps_l_op_1s(x, A1, A2, op):
     """
     op = op.conj()
     out = np.zeros((A1.shape[2], A2.shape[2]), dtype=A1.dtype)
-    for s in xrange(A1.shape[0]):
-        for t in xrange(A1.shape[0]):
+    for s in range(A1.shape[0]):
+        for t in range(A1.shape[0]):
             o_st = op[t, s]
             if o_st != 0:
                 out += o_st * A1[s].conj().T.dot(x.dot(A2[t]))
@@ -268,22 +269,22 @@ def eps_r_noop_multi(x, A1, A2):
     
     out = np.zeros((A1[0].shape[1], A2[0].shape[1]), dtype=A1[0].dtype)
     
-    for s in xrange(S):
+    for s in range(S):
         A1s_prod = A1[nA1 - 1][s % A1dims[1]]
-        for t in xrange(1, nA1):
-            ind = (s / A1dims_prod[t]) % A1dims[t + 1]
+        for t in range(1, nA1):
+            ind = (s // A1dims_prod[t]) % A1dims[t + 1]
             A1s_prod = np.dot(A1[nA1 - t - 1][ind], A1s_prod)
             
-#        A1ind = [(s / A1dims_prod[t]) % A1dims[t + 1] for t in xrange(len(A1))]
+#        A1ind = [(s // A1dims_prod[t]) % A1dims[t + 1] for t in xrange(len(A1))]
 #        A1s = [A1[t][A1ind[-(t + 1)]] for t in xrange(len(A1))]
 #        A1s_prod = reduce(np.dot, A1s)
 
         A2s_prod = A2[nA2 - 1][s % A2dims[1]]
-        for t in xrange(1, nA2):
-            ind = (s / A2dims_prod[t]) % A2dims[t + 1]
+        for t in range(1, nA2):
+            ind = (s // A2dims_prod[t]) % A2dims[t + 1]
             A2s_prod = np.dot(A2[nA2 - t - 1][ind], A2s_prod)
         
-#        A2ind = [(s / A2dims_prod[t]) % A2dims[t + 1] for t in xrange(len(A2))]
+#        A2ind = [(s // A2dims_prod[t]) % A2dims[t + 1] for t in xrange(len(A2))]
 #        A2s = [A2[t][A2ind[-(t + 1)]] for t in xrange(len(A2))]
 #        A2s_prod = reduce(np.dot, A2s)
         
@@ -318,9 +319,9 @@ def eps_r_op_1s(x, A1, A2, op):
         The resulting matrix.
     """
     out = np.zeros((A1.shape[1], A2.shape[1]), dtype=A1.dtype)
-    for s in xrange(A1.shape[0]):
+    for s in range(A1.shape[0]):
         xA2s = x.dot(A2[s].conj().T)
-        for t in xrange(A1.shape[0]):
+        for t in range(A1.shape[0]):
             o_st = op[s, t]
             if o_st != 0:
                 out += o_st * A1[t].dot(xA2s)
@@ -354,11 +355,11 @@ def eps_r_op_2s_A(x, A1, A2, A3, A4, op):
     """
     res = np.zeros((A1.shape[1], A3.shape[1]), dtype=A1.dtype)
     zeros = np.zeros
-    for u in xrange(A3.shape[0]):
-        for v in xrange(A4.shape[0]):
+    for u in range(A3.shape[0]):
+        for v in range(A4.shape[0]):
             subres = zeros((A1.shape[1], A2.shape[2]), dtype=A1.dtype)
-            for s in xrange(A1.shape[0]):
-                for t in xrange(A2.shape[0]):
+            for s in range(A1.shape[0]):
+                for t in range(A2.shape[0]):
                     opval = op[u, v, s, t]
                     if opval != 0:
                         subres += opval * A1[s].dot(A2[t])
@@ -392,11 +393,11 @@ def eps_r_op_2s_AA12(x, AA12, A3, A4, op):
     """
     res = np.zeros((AA12.shape[2], A3.shape[1]), dtype=A3.dtype)
     zeros_like = np.zeros_like
-    for u in xrange(A3.shape[0]):
-        for v in xrange(A4.shape[0]):
+    for u in range(A3.shape[0]):
+        for v in range(A4.shape[0]):
             subres = zeros_like(AA12[0, 0])
-            for s in xrange(AA12.shape[0]):
-                for t in xrange(AA12.shape[1]):
+            for s in range(AA12.shape[0]):
+                for t in range(AA12.shape[1]):
                     opval = op[u, v, s, t]
                     if opval != 0:
                         subres += opval * AA12[s, t]
@@ -429,11 +430,11 @@ def eps_r_op_2s_AA_func_op(x, AA12, AA34, op):
     """
     res = np.zeros((AA12.shape[2], AA34.shape[2]), dtype=AA12.dtype)
     zeros_like = np.zeros_like
-    for u in xrange(AA34.shape[0]):
-        for v in xrange(AA34.shape[1]):
+    for u in range(AA34.shape[0]):
+        for v in range(AA34.shape[1]):
             subres = zeros_like(AA12[0, 0])
-            for s in xrange(AA12.shape[0]):
-                for t in xrange(AA12.shape[1]):
+            for s in range(AA12.shape[0]):
+                for t in range(AA12.shape[1]):
                     opval = op(u, v, s, t)
                     if opval != 0:
                         subres += opval * AA12[s, t]
@@ -465,15 +466,15 @@ def eps_r_op_2s_C12(x, C12, A3, A4):
         The resulting matrix.
     """
     res = np.zeros((C12.shape[2], A3.shape[1]), dtype=A3.dtype)
-    for u in xrange(A3.shape[0]):
-        for v in xrange(A4.shape[0]):
+    for u in range(A3.shape[0]):
+        for v in range(A4.shape[0]):
             res += C12[u, v].dot(x.dot((A3[u].dot(A4[v])).conj().T))
     return res
     
 def eps_r_op_2s_C34(x, A1, A2, C34):
     res = np.zeros((A1.shape[1], C34.shape[2]), dtype=A1.dtype)
-    for u in xrange(C34.shape[0]):
-        for v in xrange(C34.shape[1]):
+    for u in range(C34.shape[0]):
+        for v in range(C34.shape[1]):
             res += A1[u].dot(A2[v]).dot(x.dot(C34[u, v].conj().T))
     return res
     
@@ -481,11 +482,11 @@ def calc_C_func_op(op, A, Ap1):
     q = A.shape[0]
     qp1 = Ap1.shape[0]
     C = np.zeros((A.shape[0], Ap1.shape[0], A.shape[1], Ap1.shape[2]), dtype=A.dtype)
-    for u in xrange(q):
-        for v in xrange(qp1):
+    for u in range(q):
+        for v in range(qp1):
             AAuv = A[u].dot(Ap1[v])
-            for s in xrange(q):
-                for t in xrange(qp1):
+            for s in range(q):
+                for t in range(qp1):
                     h_nn_stuv = op(s, t, u, v)
                     if h_nn_stuv != 0:
                         C[s, t] += h_nn_stuv * AAuv
@@ -495,11 +496,11 @@ def calc_C_func_op_AA(op, AA):
     q = AA.shape[0]
     qp1 = AA.shape[1]
     C = np.zeros_like(AA)
-    for u in xrange(q):
-        for v in xrange(qp1):
+    for u in range(q):
+        for v in range(qp1):
             AAuv = AA[u, v]
-            for s in xrange(q):
-                for t in xrange(qp1):
+            for s in range(q):
+                for t in range(qp1):
                     h_nn_stuv = op(s, t, u, v)
                     if h_nn_stuv != 0:
                         C[s, t] += h_nn_stuv * AAuv

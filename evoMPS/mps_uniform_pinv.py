@@ -4,13 +4,14 @@ Created on Sun Feb 17 15:18:25 2013
 
 @author: ash
 """
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy as sp
 import scipy.linalg as la
 import scipy.sparse.linalg as las
-import tdvp_common as tm
-import matmul as m
+from . import tdvp_common as tm
+from . import matmul as m
 import logging
 
 log = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class PinvOp:
         res[:] = x
         
         if self.left: #Multiplying from the left, but x is a col. vector, so use mat_dagger
-            for k in xrange(len(self.A1)):
+            for k in range(len(self.A1)):
                 out = tm.eps_l_noop_inplace(res, self.A1[k], self.A2[k], out)
                 tmp = res
                 res = out
@@ -60,7 +61,7 @@ class PinvOp:
                 res *= -sp.exp(-1.j * self.p)
                 res += x
         else:
-            for k in xrange(len(self.A1) - 1, -1, -1):
+            for k in range(len(self.A1) - 1, -1, -1):
                 out = tm.eps_r_noop_inplace(res, self.A1[k], self.A2[k], out)
                 tmp = res
                 res = out
@@ -82,12 +83,12 @@ def pinv_1mE_brute(A1, A2, lL, rL, p=0, pseudo=True):
     D = A1[0].shape[1]
     E = np.zeros((len(A1), D**2, D**2), dtype=A1[0].dtype, order='C')
     
-    for k in xrange(len(A1)):
-        for s in xrange(A1[0].shape[0]):
+    for k in range(len(A1)):
+        for s in range(A1[0].shape[0]):
             E[k] += sp.kron(A1[k][s], A2[k][s].conj())
             
     Eblock = E[0]
-    for k in xrange(1, len(A1)):
+    for k in range(1, len(A1)):
         Eblock = Eblock.dot(E[k])
     
     lL = np.asarray(lL)
@@ -106,7 +107,7 @@ def pinv_1mE_brute_LOP(A1, A2, lL, rL, p=0, pseudo=True, left=False):
     op = PinvOp(p, A1, A2, lL, rL, left=left, pseudo=pseudo)
     
     bop = sp.zeros(op.shape, dtype=op.dtype)
-    for i in xrange(op.shape[1]):
+    for i in range(op.shape[1]):
         x = sp.zeros((op.shape[1]), dtype=op.dtype)
         x[i] = 1
         bop[:, i] = op.matvec(x)
@@ -131,7 +132,7 @@ def pinv_1mE(x, A1, A2, lL, rL, p=0, left=False, pseudo=True, tol=1E-6, maxiter=
         out = np.ones_like(A1[0][0])
     
     if use_CUDA:
-        import cuda_alternatives as tcu
+        from . import cuda_alternatives as tcu
         op = tcu.PinvOp_CUDA(p, A1, A2, lL, rL, left=left, pseudo=pseudo, 
                              use_batch=CUDA_use_batch)
     else:
