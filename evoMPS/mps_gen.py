@@ -915,6 +915,39 @@ class EvoMPS_MPS_Generic(object):
         
         return res
 
+    def expect_MPO(self, MPO, n1):
+        """Calculates the expectation value of a Matrix Product Operator.
+
+        The MPO must be supplied as a list of ndarrays, one entry for each 
+        physical site on which the MPO acts.
+        
+        Each ndarray must have shape 
+        [mL,mR,pbra,pket], where mL, mR are the left and right MPO indices
+        and pbra and pket are the physical indices such that, for example, 
+        MPO[n][0,0,:,:]|psi> is a physical operator acting on a state.
+
+        NOTE: All entries of the MPO list are used, so for n1 = 1, MPO[0]
+              is applied to site 1 of the MPS.
+
+        Parameters
+        ----------
+        MPO : list of ndarrays
+            The MPO.
+        n1 : integer
+            The first site on which the MPO is to act.
+        """
+        nsites = len(MPO)
+        n_end = n1 + nsites - 1
+
+        #reshape to MPO vector
+        x = sp.reshape(self.r[n_end], (1,self.D[n_end],self.D[n_end]))
+        for j in range(n_end,n1-1,-1):
+            x = tm.eps_r_op_MPO(x, self.A[j], self.A[j], MPO[j-n1])
+
+        x = sp.reshape(x, (self.D[n1-1], self.D[n1-1]))
+
+        return  m.adot(self.l[n1 - 1], x)
+
     def density_1s(self, n):
         """Returns a reduced density matrix for a single site.
         
