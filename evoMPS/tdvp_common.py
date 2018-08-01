@@ -28,6 +28,7 @@ except ImportError:
                                    
 from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, \
                                eps_l_op_1s, eps_r_op_1s, eps_r_noop_multi, \
+                               eps_l_op_MPO, eps_r_op_MPO, \
                                eps_r_op_2s_A, eps_r_op_2s_AA12, \
                                eps_r_op_2s_AA_func_op, \
                                eps_r_op_2s_C12, eps_r_op_2s_C34, \
