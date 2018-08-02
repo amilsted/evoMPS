@@ -343,12 +343,12 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
 
     return Vsh
 
-def apply_MPO_local(Mn, An):
+def apply_MPO_local(Mn, An): #Mn: [M1,M2,pbra,pket]
     q = An.shape[0]
     Dm1 = An.shape[1]
     D = An.shape[2]
-    MAn = sp.tensordot(An, Mn, axes=[[0], [2]])
-    MAn = sp.transpose(MAn, axes=(4, 0, 2, 1, 3)).copy()
+    MAn = sp.tensordot(Mn, An, axes=[[3], [0]]) #[M1,M2,pbra, D1,D2]
+    MAn = sp.transpose(MAn, axes=(2, 3,0, 4,1)).copy() #[pbra, D1,M1, D2,M2]
     MAn = MAn.reshape((q, Dm1 * len(Mn), D * len(Mn[0])))
     
     return MAn
@@ -734,12 +734,18 @@ def restore_RCF_r_seq(A, r, GN=None, sanity_checks=False, sc_data=''):
         Gh = GN.conj().T
     for n in range(len(A) - 1, 0, -1):
         q, Dm1, D = A[n].shape
-        AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * D, Dm1))
+
+        Dnew = Gh.shape[0]
+        
+        AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * Dnew, Dm1))
         Q, R = la.qr(AG, mode='economic')
-        A[n] = sp.transpose(Q.conj().reshape((q, D, Dm1)), axes=(0, 2, 1))
+        
+        Dm1_new = Q.shape[1]
+        
+        A[n] = sp.transpose(Q.conj().reshape((q, Dnew, Dm1_new)), axes=(0, 2, 1))
         Gh = R
         
-        r[n - 1] = mm.eyemat(Dm1, dtype=A[n].dtype)
+        r[n - 1] = mm.eyemat(Dm1_new, dtype=A[n].dtype)
         
         if sanity_checks:
             r_nm1_ = eps_r_noop(r[n], A[n], A[n])
@@ -966,10 +972,16 @@ def restore_LCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
 
     for n in range(1, len(A)):
         q, Dm1, D = A[n].shape
+
+        Dm1_new = G.shape[0]
+
         GA = sp.array([G.dot(As) for As in A[n]])
-        GA = GA.reshape((q * Dm1, D))
+        GA = GA.reshape((q * Dm1_new, D))
         Q, G = la.qr(GA, mode='economic')
-        A[n] = Q.reshape((q, Dm1, D))
+
+        D_new = Q.shape[1]
+
+        A[n] = Q.reshape((q, Dm1_new, D_new))
         
         l[n] = mm.eyemat(D, dtype=A[n].dtype)
         

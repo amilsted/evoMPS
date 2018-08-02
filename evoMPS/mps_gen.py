@@ -65,7 +65,7 @@ class EvoMPS_MPS_Generic(object):
         This class implements basic operations on a generic MPS with
         open boundary conditions on a finite chain.
         
-        Performs self.correct_bond_dimension().
+        Performs self._correct_bond_dimension().
         
         Sites are numbered 1 to N.
         self.A[n] is the parameter tensor for site n
@@ -118,7 +118,7 @@ class EvoMPS_MPS_Generic(object):
         if (self.D.shape[0] != N + 1) or (self.q.shape[0] != N + 1):
             raise ValueError('D and q must have length N + 1')
 
-        self.correct_bond_dimension()
+        self._correct_bond_dimension()
         
         self._init_arrays()
         
@@ -256,7 +256,7 @@ class EvoMPS_MPS_Generic(object):
         if do_update:
             self.update()
         
-    def correct_bond_dimension(self):
+    def _correct_bond_dimension(self):
         """Reduces bond dimensions to the maximum physically useful values.
         
         Bond dimensions will be adjusted where they are too high to be useful
@@ -370,7 +370,16 @@ class EvoMPS_MPS_Generic(object):
             self.restore_RCF(use_QR=use_QR)
         else:
             self.restore_LCF(use_QR=use_QR)
-        
+
+    def _are_bond_dims_synced(self):
+        Dcorrect = self.D[0] == self.A[1].shape[1]
+        if Dcorrect:
+            for n in range(1,self.N+1):
+                if self.D[n] != self.A[n].shape[2]:
+                    Dcorrect = False
+                    break
+        return Dcorrect
+
     def restore_RCF(self, use_QR=True, update_l=True, diag_l=True):
         """Use a gauge-transformation to restore right canonical form.
         
@@ -392,6 +401,12 @@ class EvoMPS_MPS_Generic(object):
         if use_QR:
             tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
                                      sc_data="restore_RCF_r")
+            if not self._are_bond_dims_synced():
+                log.info("Bond dimension changed during restore_RCF.")
+                A = copy.copy(self.A)
+                r = copy.copy(self.r)
+                self.set_state_from_tensors(A, do_update=False)
+                self.r = r
         else:
             G_n_i = sp.eye(self.D[self.N], dtype=self.typ) #This is actually just the number 1
             for n in range(self.N, 0, -1):
@@ -429,6 +444,12 @@ class EvoMPS_MPS_Generic(object):
         if use_QR:
             tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                      sc_data="restore_LCF_l")
+            if not self._are_bond_dims_synced():
+                log.info("Bond dimension changed during restore_LCF.")
+                A = copy.copy(self.A)
+                l = copy.copy(self.l)
+                self.set_state_from_tensors(A, do_update=False)
+                self.l = l
         else:
             G = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
             for n in range(1, self.N + 1):
@@ -677,7 +698,8 @@ class EvoMPS_MPS_Generic(object):
             The squared Schmidt coefficients.
         """
         lam = self.schmidt_sq(n)
-        S = -sp.sum(lam * sp.log2(lam)).real
+        flt = lam.nonzero()
+        S = -sp.sum(lam[flt] * sp.log2(lam[flt])).real
             
         if ret_schmidt_sq:
             return S, lam
@@ -935,6 +957,10 @@ class EvoMPS_MPS_Generic(object):
             The MPO.
         n1 : integer
             The first site on which the MPO is to act.
+        Returns
+        -------
+        exval : scalar
+            The expectation value.
         """
         nsites = len(MPO)
         n_end = n1 + nsites - 1
@@ -946,7 +972,8 @@ class EvoMPS_MPS_Generic(object):
 
         x = sp.reshape(x, (self.D[n1-1], self.D[n1-1]))
 
-        return  m.adot(self.l[n1 - 1], x)
+        exval = m.adot(self.l[n1 - 1], x)
+        return exval
 
     def density_1s(self, n):
         """Returns a reduced density matrix for a single site.
@@ -1042,6 +1069,32 @@ class EvoMPS_MPS_Generic(object):
         
         if do_update:
             self.update()
+
+    def apply_op_MPO(self, MPO, n1, do_update=True):
+        """Applies a Matrix Product Operator to the state.
+        
+        Note that this will increase the bond dimension where the MPO
+        is applied.
+
+        By default, this performs self.update(), which also restores
+        state normalization.        
+        
+        Parameters
+        ----------
+        op : list of ndarray
+            The MPO. See self.expect_MPO().
+        n1: int
+            The first site to apply the operator to.
+        do_update : bool
+            Whether to update after applying the operator.
+        """
+        A = copy.copy(self.A)
+        n = n1
+        for j in range(len(MPO)):
+            A[n] = tm.apply_MPO_local(MPO[j], self.A[n])
+            n += 1
+        
+        self.set_state_from_tensors(A, do_update=do_update)
     
     def save_state(self, file):
         """Saves the parameter tensors self.A to a file. 
