@@ -335,6 +335,16 @@ class EvoMPS_MPS_Generic(object):
         for n in range(n_high, n_low - 1, -1):
             self.r[n] = tm.eps_r_noop(self.r[n + 1], self.A[n + 1], self.A[n + 1])
     
+    def inner(self, other_mps):
+        """Computes the inner product between the present MPS and another.
+        """
+        if self.N != other_mps.N:
+            raise ValueError('Number of sites must match!')
+        r = self.r[self.N]
+        for n in range(self.N, 0, -1):
+            r = tm.eps_r_noop(r, self.A[n], self.A[n])
+        return r.ravel()[0]
+
     def simple_renorm(self, update_r=True):
         """Renormalize the state by altering A[N] by a factor.
         
