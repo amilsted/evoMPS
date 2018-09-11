@@ -185,7 +185,7 @@ class Excite_H_Op:
             C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3))).copy(order='C')
             
             C_Vri_A_r_Ah_ = np.empty((self.q, self.q, self.q,
-                                      A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
+                                      Vri_.shape[1], A_.shape[1]), dtype=tdvp.typ)
             for u in range(self.q):
                 for k in range(self.q):
                     for j in range(self.q):
