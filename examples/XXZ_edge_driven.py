@@ -123,7 +123,7 @@ def get_full_op(op):
         if op[n] is None:
             continue
             
-        n_sites = len(op[n].shape) / 2
+        n_sites = len(op[n].shape) // 2
         opn = op[n].reshape(2**n_sites, 2**n_sites)
         fop_n = sp.kron(sp.eye(2**(n - 1)), sp.kron(opn, sp.eye(2**(N - n - n_sites + 1))))
 
@@ -182,7 +182,7 @@ def fullrho(qu, squ):
     Hfull = get_full_op(get_ham(N, lam))
 
     linds = get_linds(N, eps)
-    linds = [(n, L.reshape(tuple([sp.prod(L.shape[:sp.ndim(L)/2])]*2))) for (n, L) in linds]
+    linds = [(n, L.reshape(tuple([sp.prod(L.shape[:sp.ndim(L) // 2])]*2))) for (n, L) in linds]
     linds_full = [sp.kron(sp.eye(2**(n-1)), sp.kron(L, sp.eye(2**(N - n + 1) / L.shape[0]))) for (n, L) in linds]
     for L in linds_full:
         assert L.shape == Hfull.shape
@@ -245,7 +245,7 @@ def plotter(q):
         i = data[1]
         ys = data[2]
         
-        i_off = (i - i_buf) / res_every
+        i_off = (i - i_buf) // res_every
         if i_off >= len(data_buf):
             for j in range(len(data_buf), i_off + 1):
                 data_buf.append([None] * (N_samp + 2))
@@ -291,7 +291,7 @@ def get_filename():
                                                                               bond_dim)
                        
 def writer(q):
-    df = sp.memmap(get_filename(), dtype=sp.float64, mode='w+', shape=(N_samp + 2, N_steps / res_every + 1, N))
+    df = sp.memmap(get_filename(), dtype=sp.float64, mode='w+', shape=(N_samp + 2, N_steps // res_every + 1, N))
     while True:
         data = q.get()
         if data is None:
@@ -300,7 +300,7 @@ def writer(q):
         i = data[1]
         ys = data[2]
 
-        df[num, i / res_every, :] = ys
+        df[num, i // res_every, :] = ys
 
         if i == N_steps:
             df.flush()
@@ -312,7 +312,7 @@ def plot_saved():
     import matplotlib
     import matplotlib.pyplot as plt
 
-    data = sp.memmap(get_filename(), dtype=sp.float64, mode='r', shape=(N_samp + 2, N_steps / res_every + 1, N))
+    data = sp.memmap(get_filename(), dtype=sp.float64, mode='r', shape=(N_samp + 2, N_steps // res_every + 1, N))
     
     exa = data[-1]
     
