@@ -790,26 +790,16 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
-                                       pinv_solver=None):
+                                       pinv_solver=None, phase_align=True):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
             donor.set_ham_array_from_function(donor.ham)
-            
-#        self.calc_lr()
-#        self.restore_CF()
-#        donor.calc_lr()
-#        donor.restore_CF()
-        
-        self.phase_align(donor)
-        
-        #htp = self.ham_tp
-        #self.ham_tp = None
-        self.update()
-        #donor.update()
-        
+
+        if phase_align:
+            self.phase_align(donor)
+
         self.calc_K_l()
-        #self.ham_tp = htp
         self.calc_l_r_roots()
         donor.calc_l_r_roots()
         donor.Vsh[0] = tm.calc_Vsh(donor.A[0], donor.r_sqrt[0], sanity_checks=self.sanity_checks)
@@ -828,7 +818,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
                            ncv=None, max_retries=3, pinv_tol=1E-12,
-                           pinv_solver=None):
+                           pinv_solver=None, phase_align=True):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -871,6 +861,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Maximum number of retries (with growing ncv), in case of no convergence.
         pinv_tol : float
             Tolerance for pseudo-inverse operations.
+        phase_align : bool
+            If False, do not adjust the global phase of the "donor" state. This
+            may lead to an effective non-physical momentum offset.
             
         Returns
         -------
@@ -880,7 +873,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
         op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
-                                                 pinv_solver=pinv_solver)
+                                                 pinv_solver=pinv_solver,
+                                                 phase_align=phase_align)
         
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
@@ -901,8 +895,10 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res
         
     def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
-                                 pinv_tol=1E-12):
-        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
+                                 pinv_tol=1E-12, phase_align=True):
+        op = self._prepare_excite_op_top_nontriv(donor, p,
+                                                 pinv_tol=pinv_tol,
+                                                 phase_align=phase_align)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
