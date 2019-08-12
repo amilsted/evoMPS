@@ -642,7 +642,7 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         if calc_inv:
             #Replace almost-zero values with zero and perform a pseudo-inverse
             ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
-            ev_sq_i[-nonzeros:] = 1. / ev_sq[-nonzeros:]
+            ev_sq_i[-nonzeros:] = 1. / ev_sq.diag[-nonzeros:]
             
             ev_sq_i = mm.simple_diag_matrix(ev_sq_i, dtype=A.dtype)        
                    
