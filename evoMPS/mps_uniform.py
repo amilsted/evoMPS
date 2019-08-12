@@ -1121,8 +1121,6 @@ class EvoMPS_MPS_Uniform(object):
         This ensures that the largest eigenvalue of the overlap transfer operator
         is real.
         
-        An update() is needed after doing this!
-        
         Parameters
         ----------
         other : EvoMPS_MPS_Uniform
@@ -1135,7 +1133,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         d, phi = self.fidelity_per_site(other, full_output=False, left=False)
         
-        self.A[0] *= phi.conj()
+        self.A[0] *= phi.conj() / abs(phi)
         
         return phi
 
