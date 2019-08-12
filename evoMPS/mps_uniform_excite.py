@@ -258,7 +258,7 @@ class Excite_H_Op:
         
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
-            if not la.norm(tst) > self.sanity_tol:
+            if la.norm(tst) > self.sanity_tol:
                 log.warning("Sanity check failed: Gauge-fixing violation! " 
                             + str(la.norm(tst)))
 
@@ -386,7 +386,7 @@ class Excite_H_Op:
             if expval < -self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
             if abs(expval.imag) > self.sanity_tol:
-                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
+                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval.imag)
         
         return res, M, y_pi   
     
@@ -587,7 +587,7 @@ class Excite_H_Op_tp:
         
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
-            if not la.norm(tst) > self.sanity_tol:
+            if la.norm(tst) > self.sanity_tol:
                 log.warning("Sanity check failed: Gauge-fixing violation! " 
                             + str(la.norm(tst)))
 
@@ -699,7 +699,7 @@ class Excite_H_Op_tp:
             if expval < -self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
             if abs(expval.imag) > self.sanity_tol:
-                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
+                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval.imag)
         
         return res, M, y_pi  
     
