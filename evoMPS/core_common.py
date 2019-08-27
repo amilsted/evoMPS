@@ -49,18 +49,33 @@ def calc_AAA(A, Ap1, Ap2):
     
     return AAA
     
-def calc_AAA_AA(AAp1, Ap2):
+def calc_AAA_AA(AA, Ap2):
     Dp2 = Ap2.shape[2]
-    Dm1 = AAp1.shape[2]
-    q = AAp1.shape[0]
-    qp1 = AAp1.shape[1]
+    Dm1 = AA.shape[2]
+    q = AA.shape[0]
+    qp1 = AA.shape[1]
     qp2 = Ap2.shape[0]
     
-    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AAp1.dtype)
+    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AA.dtype)
     for u in range(q):
         for v in range(qp1):
             for w in range(qp2):
-                np.dot(AAp1[u, v], Ap2[w], out=AAA[u, v, w])
+                np.dot(AA[u, v], Ap2[w], out=AAA[u, v, w])
+    
+    return AAA
+
+def calc_AAA_AAr(A, AAp1):
+    Dp2 = AAp1.shape[3]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    qp1 = AAp1.shape[0]
+    qp2 = AAp1.shape[1]
+    
+    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=A.dtype)
+    for u in range(q):
+        for v in range(qp1):
+            for w in range(qp2):
+                np.dot(A[u], AAp1[v, w], out=AAA[u, v, w])
     
     return AAA
     
