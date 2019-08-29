@@ -12,6 +12,7 @@ import scipy.linalg as la
 from . import matmul as mm
 from . import tdvp_common as tm
 from .mps_gen import EvoMPS_MPS_Generic
+from .mps_uniform_pinv import pinv_1mE
 import copy
 
 
@@ -709,9 +710,54 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         return mm.adot(self.uni_l.l[-1], r)
 
+    def overlap_tangent(self, B, p, top_triv=True):
+        """Inner product of the state with an MPS tangent vector.
+        Assumes the uniform left and right parts of the tangent vector terms
+        are defined by the *same tensors* that define the left and right bulk
+        parts of the sandwich state.
+        This will generically require computing excitations anew using the left
+        and right bulk tensors.
+
+        It is also assumed that `B` is "right gauge-fixing" with respect to
+        its bulk tensors.
+        """
+        if not (self.uni_l.L == 1 and self.uni_r.L == 1):
+            raise ValueError("Bulk unit cell size must currently be 1.")
+        rR = self.uni_r.r[0]
+        AR = self.uni_r.A[0]
+        check_gf = tm.eps_r_noop(rR, AR, B)
+        print("check GF:", la.norm(check_gf))
+
+        lL = self.uni_l.l[0]
+        AL = self.uni_l.A[0]
+
+        pseudo = top_triv
+
+        # FIXME: rR is not correct here since, even if top_triv is true,
+        #        AL and AR need not be equal.
+        vBL = pinv_1mE(
+            tm.eps_l_noop(lL, AL, B), [AL], [AR], lL, rR, p=p, 
+            left=True, pseudo=pseudo)
+
+        rs = [rR]
+        for j in range(self.N, 0, -1):
+            rs.insert(0, tm.eps_r_noop(rs[0], self.A[j], AR))
+
+        res = mm.adot(vBL, rs[0]) * sp.exp(-1.j * p)
+        print(res)
+
+        l = lL
+        for j in range(1, self.N + 1):
+            res_j = sp.exp(1.j * p * j) * mm.adot(
+                l, tm.eps_r_noop(rs[j], self.A[j], B))
+            print(res_j)
+            res += res_j
+            l = tm.eps_l_noop(l, self.A[j], AL)
+
+        return res
+
     def save_state(self, file):
         raise NotImplementedError("save_state not implemented in sandwich case")
-
 
     def load_state(self, file):
         raise NotImplementedError("load_state not implemented in sandwich case")
