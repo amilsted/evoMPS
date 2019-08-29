@@ -396,7 +396,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             for n in range(n_low, n_high):                   
                 self.AA[n] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
                 
-                self.C[n][:] = tm.calc_C_mat_op_AA(self.h_nn[n], self.AA[n])
+                self.C[n] = tm.calc_C_mat_op_AA(self.h_nn[n], self.AA[n])
 
     def calc_K(self):
         """Generates the right K matrices used to calculate the B's
@@ -508,13 +508,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         except AttributeError:
             lcm1_i = mm.invmh(self.l[Nc - 1])
         
-        Acm1 = self.A[Nc - 1]
+        Acm1 = self.get_A(Nc - 1)
         Ac = self.A[Nc]
-        Acp1 = self.A[Nc + 1]
+        Acp1 = self.get_A(Nc + 1)
         rc = self.r[Nc]
-        rcp1 = self.r[Nc + 1]
-        lcm1 = self.l[Nc - 1]
-        lcm2 = self.l[Nc - 2]
+        rcp1 = self.get_r(Nc + 1)
+        lcm1 = self.get_l(Nc - 1)
+        lcm2 = self.get_l(Nc - 2)
         
         #Note: this is a 'bra-vector'
         K_l_cm1 = self.K_l[Nc - 1] - lcm1 * mm.adot_noconj(self.K_l[Nc - 1], self.r[Nc - 1])
@@ -548,7 +548,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 
         return Bc, eta_sq
 
-    def calc_B(self, n, set_eta=True):
+    def calc_B_n(self, n, set_eta=True):
         """Generates the B[n] tangent vector corresponding to physical evolution of the state.
 
         In other words, this returns B[n][x*] (equiv. eqn. (47) of
@@ -567,6 +567,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             
             if n > self.N_centre:
                 Vsh = tm.calc_Vsh(self.A[n], r_sqrt, sanity_checks=self.sanity_checks)
+                if Vsh is None:
+                    return None
                 x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=True)
                 
                 B = sp.empty_like(self.A[n])
@@ -579,6 +581,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                         print("Sanity Fail in calc_B!: B_%u does not satisfy GFC!" % n)
             else:
                 Vsh = tm.calc_Vsh_l(self.A[n], l_sqrt, sanity_checks=self.sanity_checks)
+                if Vsh is None:
+                    return None
                 x = self.calc_x(n, Vsh, l_sqrt, r_sqrt, l_sqrt_inv, r_sqrt_inv, right=False)
                 
                 B = sp.empty_like(self.A[n])
@@ -593,6 +597,17 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             if set_eta:
                 self.eta_sq[n] = mm.adot(x, x)
 
+        return B
+
+    def calc_B(self):
+        eta_tot = 0
+        self.eta_sq.fill(0)
+        
+        B = [None]
+        for n in range(1, self.N + 1):
+            B.append(self.calc_B_n(n))
+            eta_tot += self.eta_sq[n]
+        self.eta = sp.sqrt(self.eta_sq.sum())
 
         return B
 
@@ -625,9 +640,8 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.calc_C()
         self.calc_K()
-        
 
-    def take_step(self, dtau): #simple, forward Euler integration
+    def take_step(self, dtau, B=None): #simple, forward Euler integration
         """Performs a complete forward-Euler step of imaginary time dtau.
 
         If dtau is itself imaginary, real-time evolution results.
@@ -644,30 +658,29 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
+        B : optional list of tensors
+            The current evolution vector, to avoid duplicating computations.
         """
-
-        eta_tot = 0
-        self.eta_sq.fill(0)
-        
-        B = [None]
-        for n in range(1, self.N + 1):
-            B.append(self.calc_B(n))
-            eta_tot += self.eta_sq[n]
-            
+        if B is None:
+            B = self.calc_B()
         for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] += -dtau * B[n]
                 B[n] = None
-                
-        self.eta = sp.sqrt(self.eta_sq.sum())
 
-
-    def take_step_RK4(self, dtau):
+    def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
 
         This requires more memory than a simple forward Euler step, and also
         more than a backward Euler step. It is, however, far more accurate
         and stable than forward Euler.
+
+        Parameters
+        ----------
+        dtau : complex
+            The (imaginary or real) amount of imaginary time (tau) to step.
+        B_i : optional list of tensors
+            The current evolution vector, to avoid duplicating computations.
         """        
         eta_tot = 0
         self.eta_sq.fill(0)
@@ -677,16 +690,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         for n in range(1, self.N + 1):
             A0[n] = self.A[n].copy()
 
-        B_fin = [None]
+        B = self.calc_B() if B_i is None else B_i[:]
+        B_fin = B[:]
 
-        B = [None]
-        for n in range(1, self.N + 1):
-            B.append(self.calc_B(n)) #k1
-            eta_tot += self.eta_sq[n]
-            B_fin.append(B[-1])
-            
-        self.eta = sp.sqrt(eta_tot)
-        
         for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
@@ -696,7 +702,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         B = [None]
         for n in range(1, self.N + 1):
-            B.append(self.calc_B(n, set_eta=False)) #k2
+            B.append(self.calc_B_n(n, set_eta=False)) #k2
 
         for n in range(1, self.N + 1):
             if not B[n] is None:
@@ -708,7 +714,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         B = [None]
         for n in range(1, self.N + 1):
-            B.append(self.calc_B(n, set_eta=False)) #k3
+            B.append(self.calc_B_n(n, set_eta=False)) #k3
             
         for n in range(1, self.N + 1):
             if not B[n] is None:
@@ -719,7 +725,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.update(restore_CF=False, normalize=False)
 
         for n in range(1, self.N + 1):
-            B = self.calc_B(n, set_eta=False) #k4
+            B = self.calc_B_n(n, set_eta=False) #k4
             if not B is None:
                 B_fin[n] += B
 
