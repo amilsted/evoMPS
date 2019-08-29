@@ -830,3 +830,28 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         except AttributeError:
             print("Error loading state: Bad data!")
             return
+
+    def compute_projection_error(self):
+        """Quick copy-paste job to get the projection error for a 2-site Ham.
+        """
+        l_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+        l_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+        r_s = sp.empty((self.N + 1), dtype=sp.ndarray)
+        r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
+        Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
+        Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
+        for n in range(1, self.N + 1):
+            l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
+                                                            zero_tol=self.zero_tol,
+                                                            sanity_checks=self.sanity_checks,
+                                                            sc_data=('site', n))
+            Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
+            Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
+
+        #Y = sp.empty((self.N + 1), dtype=sp.ndarray)
+        etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
+        for n in range(1, self.N):
+            if (not Vrh[n + 1] is None and not Vlh[n] is None):
+                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], 
+                                           Vrh[n + 1], l_s[n - 1], r_s[n + 1])
+        return etaBB_sq
