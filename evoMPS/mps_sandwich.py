@@ -124,6 +124,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if n_high < 0:
             n_high = self.N
 
+        self.l[0] = self.uni_l.l[-1]
         super(EvoMPS_MPS_Sandwich, self).calc_l(n_low=n_low, n_high=n_high)
         
         self.l[self.N + 1] = tm.eps_l_noop(self.l[self.N], self.uni_r.A[0], self.uni_r.A[0])
@@ -138,6 +139,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if n_high < 0:
             n_high = self.N - 1
 
+        self.r[self.N] = self.uni_r.r[-1]
         super(EvoMPS_MPS_Sandwich, self).calc_r(n_low=n_low, n_high=n_high)
 
     def simple_renorm(self, update_lr=True):
@@ -151,7 +153,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         if update_lr:
             self.calc_l(n_low=self.N_centre)
-            self.calc_r(n_high=self.N_centre)
+            self.calc_r(n_high=self.N_centre-1)
 
     def restore_CF_dbg(self):
         for n in range(self.N + 2):
