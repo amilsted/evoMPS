@@ -7,6 +7,7 @@ from __future__ import absolute_import, division, print_function
 import scipy as sp
 import scipy.optimize as opti
 import scipy.linalg as la
+import scipy.integrate as intg
 
 def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None):
     num_steps = int(t / dt)
@@ -255,4 +256,114 @@ def opt_conj_grad2(sys, tol=1E-6):
     sys.update()
     sys.calc_B()
     print(sys.h_expect.real, sys.eta)
+
+def evolve_scipy_ode(s, Tmax, max_steps, rtol=1e-6, atol=1e-8, callback=None, integrator=intg.RK45):
+    def state_to_vec(s):
+        return sp.hstack([s.A[n].ravel() for n in range(1, s.N+1)])
+
+    def tensors_to_vec(A):
+        return sp.hstack([A[n].ravel() for n in range(1, len(A))])
+
+    def update_state_from_vec(s, y):
+        ist = 0
+        for n in range(1,s.N+1):
+            iend = ist + s.A[n].size
+            s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
+            ist = iend
+
+    is_first_call_in_step = True
+    def ifunc(t, y):
+        nonlocal is_first_call_in_step
+        update_state_from_vec(s, y)
+        if is_first_call_in_step:
+            s.update()
+            B = s.calc_B(set_eta=True)
+            is_first_call_in_step = False
+        else:
+            s.update(restore_CF=False, normalize=False)
+            B = s.calc_B(set_eta=False)
+
+        for n in range(len(B)):
+            if n > 0 and B[n] is None:
+                B[n] = sp.zeros_like(s.A[n])
+
+        Bvec = tensors_to_vec(B)
+        Bvec = 1.j * Bvec #real time evolution!
+        return Bvec
+
+    print("Init:")
+    igrtr = integrator(ifunc, 0.0, state_to_vec(s), Tmax, rtol=rtol, atol=atol)
+    print("Init done: h_abs = %g" % igrtr.h_abs)
     
+    for i in range(max_steps):
+        s.update() #Note: This changes the variables (without changing the physical state).
+                   #      Should be ok as along as the integrator does not share variable info between steps.
+                   #      The integrator does store y_old, but only uses it for dense_output.
+
+        if callback is not None:
+            callback(s, igrtr, i)
+
+        if igrtr.status != "running":
+            print("Stopping with status:", igrtr.status)
+            break
+
+        is_first_call_in_step = True
+        igrtr.step()
+
+def evolve_scipy_ode_old(s, dt, steps, rtol=1e-6, atol=1e-8,
+        callback=None, integrator="RK45", wrap_to_real=False, **kwargs):
+    def state_to_vec(s):
+        return sp.hstack([s.A[n].ravel() for n in range(1, s.N+1)])
+
+    def tensors_to_vec(A):
+        return sp.hstack([A[n].ravel() for n in range(1, len(A))])
+
+    def update_state_from_vec(s, y):
+        ist = 0
+        for n in range(1,s.N+1):
+            iend = ist + s.A[n].size
+            s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
+            ist = iend
+
+    is_first_call_in_step = True
+    def ifunc(t, y):
+        nonlocal is_first_call_in_step
+        update_state_from_vec(s, y)
+        if is_first_call_in_step:
+            s.update()
+            B = s.calc_B(set_eta=True)
+            is_first_call_in_step = False
+        else:
+            s.update(restore_CF=False, normalize=False)
+            B = s.calc_B(set_eta=False)
+
+        for n in range(len(B)):
+            if n > 0 and B[n] is None:
+                B[n] = sp.zeros_like(s.A[n])
+
+        Bvec = tensors_to_vec(B)
+        Bvec = 1.j * Bvec #real time evolution!
+        return Bvec
+
+    print("Init:")
+    if wrap_to_real:
+        igrtr = intg.complex_ode(ifunc)
+    else:
+        igrtr = intg.ode(ifunc)
+    igrtr.set_integrator(integrator, **kwargs)
+    igrtr.set_initial_value(state_to_vec(s))
+    
+    for i in range(steps):
+        s.update() #Note: This changes the variables (without changing the physical state).
+                   #      Should be ok as along as the integrator does not share variable info between steps.
+                   #      The integrator does store y_old, but only uses it for dense_output.
+
+        if callback is not None:
+            callback(s, igrtr, i)
+
+        if not igrtr.successful():
+            print("Stopping with status:", igrtr.get_return_code())
+            break
+
+        is_first_call_in_step = True
+        igrtr.integrate(igrtr.t + dt)
