@@ -909,7 +909,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                        
         self.etaBB = sp.sqrt(self.etaBB_sq.sum())
         
-    def take_step_RK4(self, dtau):
+    def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
         This requires more memory than a simple forward Euler step. 
@@ -920,6 +920,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
+        B_i : optional list of tensors
+            The current evolution vector, to avoid duplicating computations.
         """
         self.eta_sq.fill(0)
         self.etaBB_sq.fill(0)
@@ -927,14 +929,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         #Take a copy of the current state
         A0 = [An.copy() if not An is None else None for An in self.A]
         
-        B_fin = self.calc_B()
-        
+        B_fin = self.calc_B() if B_i is None else B_i[:]
+
         for n in range(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] += -dtau/2 * B_fin[n]
         self.update(restore_CF=False, normalize=False)
         B = self.calc_B(set_eta=False) #k2
-        
+
         for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]
