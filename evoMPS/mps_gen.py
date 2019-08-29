@@ -138,7 +138,22 @@ class EvoMPS_MPS_Generic(object):
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             self.A[n] = sp.zeros((self.q[n], self.D[n - 1], self.D[n]), dtype=self.typ, order=self.odr)
             
-        sp.fill_diagonal(self.r[self.N], 1.)        
+        sp.fill_diagonal(self.r[self.N], 1.)
+
+    def get_A(self, n):
+        if 1 <= n <= self.N:
+            return self.A[n]
+        return None
+
+    def get_l(self, n):
+        if 0 <= n <= self.N:
+            return self.l[n]
+        return None
+
+    def get_r(self, n):
+        if 0 <= n <= self.N:
+            return self.r[n]
+        return None
     
     def initialize_state(self):
         """Initializes the state to a hard-coded full rank state with norm 1.
