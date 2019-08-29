@@ -25,8 +25,8 @@ except ImportError:
     print("INFO: No c versions of epsilon maps. Compile extension modules for a boost at low bond-dimensions.")
     from evoMPS.core_common import eps_l_noop, eps_r_noop, \
                                    eps_l_noop_inplace, eps_r_noop_inplace
-                                   
-from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, \
+
+from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, calc_AAA_AAr, \
                                eps_l_op_1s, eps_r_op_1s, eps_r_noop_multi, \
                                eps_l_op_MPO, eps_r_op_MPO, \
                                eps_r_op_2s_A, eps_r_op_2s_AA12, \
@@ -136,7 +136,7 @@ def calc_K_tp(Kp1, lm1, rp1, A, Ap1, C_tp):
     
     Hr = eps_r_op_2s_C12_tp(rp1, C_tp, A, Ap1)
 
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -147,7 +147,7 @@ def calc_K(Kp1, C, lm1, rp1, A, AAp1):
     
     Hr = eps_r_op_2s_C12_AA34(rp1, C, AAp1)
 
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -158,7 +158,7 @@ def calc_K_l_tp(Km1, lm2, r, Am1, A, Cm1_tp):
     
     Hl = eps_l_op_2s_C34_tp(lm2, Am1, A, Cm1_tp)
 
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
@@ -174,7 +174,7 @@ def calc_K_l(Km1, Cm1, lm2, r, A, Am1A):
     
     Hl = eps_l_op_2s_AA12_C34(lm2, Am1A, Cm1)
 
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
