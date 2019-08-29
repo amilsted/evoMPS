@@ -212,8 +212,8 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
                   print('integration ', nstep, ' ---------------------------------')
                   #print('scale-square = ', nscale)
                   print('step_size = ', t_step)
-                  print('err_loc   = ',err_loc)
-                  print('next_step = ',t_new)
+                  print('err_loc   = ', err_loc)
+                  print('next_step = ', t_new)
 
             step_min = min( step_min, t_step )
             step_max = max( step_max, t_step )
@@ -225,4 +225,4 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
             iflag = 1
             break
 
-      return w, nstep < mxstep, nstep, ibrkflag==1, mbrkdwn
+      return w, nstep < mxstep, nstep, ibrkflag==1, mbrkdwn, (x_error, s_error)
