@@ -480,6 +480,64 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
                 m = n % self.uni_l.L
                 return tm.eps_r_noop(r_np1, self.uni_l.A[m], self.uni_l.A[m])
 
+    def schmidt_sq(self, n):
+        """Returns the squared Schmidt coefficients for a left-right parition.
+        
+        The chain can be split into two parts between any two sites.
+        This returns the squared coefficients of the corresponding Schmidt
+        decomposition, which are equal to the (non-zero) 
+        eigenvalues of the corresponding reduced density matrix.
+        
+        Parameters
+        ----------
+        n : int
+            Site for split.
+            
+        Returns
+        -------
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lr = self.get_l(n).dot(self.get_r(n))
+        try: 
+            lam = lr.diag
+        except AttributeError: #Assume we are not in canonical form.
+            lam = la.eigvals(lr)
+        return lam
+                        
+    def entropy(self, n, ret_schmidt_sq=False):
+        """Returns the von Neumann entropy of part of the system under a left-right split.
+        
+        The chain can be split into two parts between any two sites.
+        This function returns the corresponding von Neumann entropy, which
+        is a measure of the entanglement between the two parts.
+        
+        The parameter n specifies that the splitting should be done between 
+        sites n and n + 1.
+        
+        Parameters
+        ----------
+        k : int
+            Site offset for split.
+        ret_schmidt_sq : bool
+            Whether to also return the squared Schmidt coefficients.
+            
+        Returns
+        -------
+        S : float
+            The half-chain entropy.
+        lam : sequence of float (if ret_schmidt_sq==True)
+            The squared Schmidt coefficients.
+        """
+        lam = self.schmidt_sq(n)
+        flt = lam.nonzero()
+        S = -sp.sum(lam[flt] * sp.log2(lam[flt])).real
+            
+        if ret_schmidt_sq:
+            return S, lam
+        else:
+            return S
+
     def expect_1s(self, op, n):
         """Computes the expectation value of a single-site operator.
 
