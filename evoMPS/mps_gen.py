@@ -678,7 +678,7 @@ class EvoMPS_MPS_Generic(object):
         """Returns the squared Schmidt coefficients for a left-right parition.
         
         The chain can be split into two parts between any two sites.
-        This returns the sqaured coefficients of the corresponding Schmidt
+        This returns the squared coefficients of the corresponding Schmidt
         decomposition, which are equal to the (non-zero) 
         eigenvalues of the corresponding reduced density matrix.
         
@@ -692,7 +692,7 @@ class EvoMPS_MPS_Generic(object):
         lam : sequence of float (if ret_schmidt_sq==True)
             The squared Schmidt coefficients.
         """
-        lr = self.l[n].dot(self.r[n])
+        lr = m.mmul(self.get_l(n), self.get_r(n))
         try: 
             lam = lr.diag
         except AttributeError: #Assume we are not in canonical form.
@@ -752,12 +752,14 @@ class EvoMPS_MPS_Generic(object):
         expval : floating point number
             The expectation value (data type may be complex)
         """        
+        A = self.get_A(n)
+
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (self.q[n], self.q[n]))
-            
-        res = tm.eps_r_op_1s(self.r[n], self.A[n], self.A[n], op)
-        return  m.adot(self.l[n - 1], res)
+            op = sp.fromfunction(op, (A.shape[0], A.shape[0]))
+
+        res = tm.eps_r_op_1s(self.get_r(n), A, A, op)
+        return m.adot(self.get_l(n - 1), res)
         
     def expect_2s(self, op, n, AA=None):
         """Computes the expectation value of a nearest-neighbour two-site operator.
@@ -780,8 +782,8 @@ class EvoMPS_MPS_Generic(object):
         expval : floating point number
             The expectation value (data type may be complex)
         """
-        A = self.A[n]
-        Ap1 = self.A[n + 1]
+        A = self.get_A(n)
+        Ap1 = self.get_A(n + 1)
         if AA is None:
             AA = tm.calc_AA(A, Ap1)
         
@@ -790,8 +792,8 @@ class EvoMPS_MPS_Generic(object):
             op = sp.fromfunction(op, (A.shape[0], Ap1.shape[0], A.shape[0], Ap1.shape[0]))
             
         C = tm.calc_C_mat_op_AA(op, AA)
-        res = tm.eps_r_op_2s_C12_AA34(self.r[n + 1], C, AA)
-        return m.adot(self.l[n - 1], res)
+        res = tm.eps_r_op_2s_C12_AA34(self.get_r(n + 1), C, AA)
+        return m.adot(self.get_l(n - 1), res)
 
     def expect_3s(self, op, n, AAA=None):
         """Computes the expectation value of a nearest-neighbour three-site operator.
@@ -815,9 +817,9 @@ class EvoMPS_MPS_Generic(object):
         expval : floating point number
             The expectation value (data type may be complex)
         """
-        A = self.A[n]
-        Ap1 = self.A[n + 1]
-        Ap2 = self.A[n + 2]
+        A = self.get_A(n)
+        Ap1 = self.get_A(n + 1)
+        Ap2 = self.get_A(n + 2)
         if AAA is None:
             AAA = tm.calc_AAA(A, Ap1, Ap2)
 
@@ -827,8 +829,8 @@ class EvoMPS_MPS_Generic(object):
                                       A.shape[0], Ap1.shape[0], Ap2.shape[0]))
 
         C = tm.calc_C_3s_mat_op_AAA(op, AAA)
-        res = tm.eps_r_op_3s_C123_AAA456(self.r[n + 2], C, AAA)
-        return m.adot(self.l[n - 1], res)
+        res = tm.eps_r_op_3s_C123_AAA456(self.get_r(n + 2), C, AAA)
+        return m.adot(self.get_l(n - 1), res)
 
     def expect_1s_1s(self, op1, op2, n1, n2, return_intermediates=False):
         """Computes the expectation value of two single site operators acting 
@@ -861,29 +863,32 @@ class EvoMPS_MPS_Generic(object):
             The expectation value (data type may be complex), or values if
             return_intermediates == True.
         """        
+        A1 = self.get_A(n1)
+        A2 = self.get_A(n2)
+
         if callable(op1):
             op1 = sp.vectorize(op1, otypes=[sp.complex128])
-            op1 = sp.fromfunction(op1, (self.q[n1], self.q[n1]))
-        
+            op1 = sp.fromfunction(op1, (A1.shape[0], A1.shape[0]))
+
         if callable(op2):
             op2 = sp.vectorize(op2, otypes=[sp.complex128])
-            op2 = sp.fromfunction(op2, (self.q[n2], self.q[n2])) 
+            op2 = sp.fromfunction(op2, (A2.shape[0], A2.shape[0]))
         
         d = n2 - n1
         
         res = sp.zeros((d + 1), dtype=sp.complex128)
-        lj = tm.eps_l_op_1s(self.l[n1 - 1], self.A[n1], self.A[n1], op1)
+        lj = tm.eps_l_op_1s(self.get_l(n1 - 1), self.get_A(n1), self.get_A(n1), op1)
         
         if return_intermediates:
             res[0] = self.expect_1s(op1.dot(op1), n1)
 
         for j in range(1, d + 1):
             if return_intermediates or j == d:
-                lj_op = tm.eps_l_op_1s(lj, self.A[n1 + j], self.A[n1 + j], op2)
-                res[j] = m.adot(lj_op, self.r[n1 + j])
+                lj_op = tm.eps_l_op_1s(lj, self.get_A(n1 + j), self.get_A(n1 + j), op2)
+                res[j] = m.adot(lj_op, self.get_r(n1 + j))
                 
             if j < d:
-                lj = tm.eps_l_noop(lj, self.A[n1 + j], self.A[n1 + j])
+                lj = tm.eps_l_noop(lj, self.get_A(n1 + j), self.get_A(n1 + j))
                 
         if return_intermediates:
             return res
@@ -954,12 +959,12 @@ class EvoMPS_MPS_Generic(object):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (self.q, self.q))
         
-        res = sp.zeros((d), dtype=self.A[1].dtype)
-        x = self.l[n - 1]
+        res = sp.zeros((d), dtype=self.get_A(1).dtype)
+        x = self.get_l(n - 1)
         for j in range(n, n + d + 1):
-            Aop = sp.tensordot(op, self.A[j], axes=([1],[0]))
-            x = tm.eps_l_noop(x, self.A[j], Aop)
-            res[j - n - 1] = m.adot(x, self.r[j])
+            Aop = sp.tensordot(op, self.get_A(j), axes=([1],[0]))
+            x = tm.eps_l_noop(x, self.get_A(j), Aop)
+            res[j - n - 1] = m.adot(x, self.get_r(j))
         
         return res
 
@@ -992,13 +997,14 @@ class EvoMPS_MPS_Generic(object):
         n_end = n1 + nsites - 1
 
         #reshape to MPO vector
-        x = sp.reshape(self.r[n_end], (1,self.D[n_end],self.D[n_end]))
+        r = self.get_r(n_end)
+        x = sp.reshape(r, (1, r.shape[0], r.shape[1]))
         for j in range(n_end,n1-1,-1):
-            x = tm.eps_r_op_MPO(x, self.A[j], self.A[j], MPO[j-n1])
+            x = tm.eps_r_op_MPO(x, self.get_A(j), self.get_A(j), MPO[j-n1])
 
-        x = sp.reshape(x, (self.D[n1-1], self.D[n1-1]))
+        x = sp.reshape(x, (x.shape[1], x.shape[2]))
 
-        exval = m.adot(self.l[n1 - 1], x)
+        exval = m.adot(self.get_l(n1 - 1), x)
         return exval
 
     def density_1s(self, n):
@@ -1081,6 +1087,9 @@ class EvoMPS_MPS_Generic(object):
         do_update : bool
             Whether to update after applying the operator.
         """
+        if not (0 < n <= self.N):
+            raise ValueError("Operators can only be applied to sites 1 to N!")
+
         if callable(op):
             op = sp.vectorize(op, otypes=[sp.complex128])
             op = sp.fromfunction(op, (self.q[n], self.q[n]))
