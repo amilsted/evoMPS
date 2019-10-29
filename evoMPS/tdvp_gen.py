@@ -611,11 +611,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         dD = sp.zeros((self.N + 1), dtype=int)
         BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
         BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
-        
+
         dD_maxes = sp.repeat([dD_max], len(self.D))
         if D_max > 0:
-            dD_maxes[self.D + dD_maxes > D_max] = 0
-        
+            dD_maxes = sp.minimum(D_max - self.D, dD_max)
+
         for n in range(1, self.N):
             if not Y[n] is None and dD_maxes[n] > 0:
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
@@ -625,7 +625,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 if BB12[n] is None:
                     log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
 
-                
         return BB12, BB21, dD
     
     def calc_B(self, set_eta=True, l_s=None, l_si=None, r_s=None, r_si=None, 
