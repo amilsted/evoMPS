@@ -641,18 +641,68 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         self.calc_C()
         self.calc_K()
 
-    def take_step(self, dtau, B=None): #simple, forward Euler integration
+    def compute_projection_error(self):
+        """Quick copy-paste job to get the projection error for a 2-site Ham.
+        """
+        #Y = sp.empty((self.N + 1), dtype=sp.ndarray)
+        etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
+        for n in range(1, self.N):
+            l_s_nm1, l_si_nm1, r_s_np1, r_si_np1 = tm.calc_l_r_roots(
+                self.get_l(n - 1),
+                self.get_r(n + 1),
+                zero_tol=self.zero_tol,
+                sanity_checks=self.sanity_checks,
+                sc_data=('site', n))
+            Vlh_n = tm.calc_Vsh_l(
+                self.get_A(n), l_s_nm1, sanity_checks=self.sanity_checks)
+            Vrh_np1 = tm.calc_Vsh(
+                self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
+
+            if (not Vrh_np1 is None and not Vlh_n is None):
+                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh_n, 
+                                           Vrh_np1, l_s_nm1, r_s_np1)
+        return etaBB_sq
+
+    def calc_BB(self, sv_tol=1E-10, dD_max=16, D_max=0):
+        dD_maxes = sp.minimum(D_max - self.D, dD_max)
+
+        BB12 = [None] * (self.N + 1)
+        BB21 = [None] * (self.N + 1)
+        dD = [0] * (self.N + 1)
+        etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
+        for n in range(1, self.N):
+            l_s_nm1, l_si_nm1, r_s_np1, r_si_np1 = tm.calc_l_r_roots(
+                self.get_l(n - 1),
+                self.get_r(n + 1),
+                zero_tol=self.zero_tol,
+                sanity_checks=self.sanity_checks,
+                sc_data=('site', n))
+            Vlh_n = tm.calc_Vsh_l(
+                self.get_A(n), l_s_nm1, sanity_checks=self.sanity_checks)
+            Vrh_np1 = tm.calc_Vsh(
+                self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
+
+            if (not Vrh_np1 is None and not Vlh_n is None):
+                Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh_n, 
+                                           Vrh_np1, l_s_nm1, r_s_np1)
+
+                BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(
+                    Y_n,
+                    Vlh_n,
+                    Vrh_np1,
+                    l_si_nm1,
+                    r_si_np1,
+                    dD_max=dD_maxes[n],
+                    sv_tol=sv_tol)
+
+                #if BB12[n] is None:
+                #    log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
+        return BB12, BB21, dD
+
+    def take_step(self, dtau, B=None, dynexp=False, dD_max=16, D_max=0, sv_tol=1E-14):
         """Performs a complete forward-Euler step of imaginary time dtau.
 
         If dtau is itself imaginary, real-time evolution results.
-
-        Here, the A's are updated as the sites are visited. Since we want all
-        tangent vectors to be generated using the old state, we must delay
-        updating each A[n] until we are *two* steps away (due to the direct
-        dependency on A[n - 1] in CalcOpt_x).
-
-        The dependencies on l, r, C and K are not a problem because we store
-        all these matrices separately and do not update them at all during TakeStep().
 
         Parameters
         ----------
@@ -663,10 +713,29 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
         if B is None:
             B = self.calc_B()
+        if dynexp:
+            BB12, BB21, dD = self.calc_BB(sv_tol, dD_max, D_max)
+
         for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] += -dtau * B[n]
                 B[n] = None
+
+            if dynexp and (BB12[n] is not None or BB21[n] is not None):
+                self.D[n] += dD[n]
+                newAn = sp.zeros((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
+                oldDnm1, oldDn = self.A[n].shape[1:]
+                newAn[:, :oldDnm1, :oldDn] = self.A[n]
+
+                if not BB12[n] is None:
+                    newAn[:, :oldDnm1, oldDn:] = -1.j * sp.sqrt(dtau) * BB12[n]
+                if not BB21[n] is None:
+                    newAn[:, oldDnm1:, :oldDn] = -1.j * sp.sqrt(dtau) * BB21[n]
+
+                self.A[n] = newAn
+
+        if dynexp:
+            return dD
 
     def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
@@ -830,28 +899,3 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         except AttributeError:
             print("Error loading state: Bad data!")
             return
-
-    def compute_projection_error(self):
-        """Quick copy-paste job to get the projection error for a 2-site Ham.
-        """
-        l_s = sp.empty((self.N + 1), dtype=sp.ndarray)
-        l_si = sp.empty((self.N + 1), dtype=sp.ndarray)
-        r_s = sp.empty((self.N + 1), dtype=sp.ndarray)
-        r_si = sp.empty((self.N + 1), dtype=sp.ndarray)
-        Vrh = sp.empty((self.N + 1), dtype=sp.ndarray)
-        Vlh = sp.empty((self.N + 1), dtype=sp.ndarray)
-        for n in range(1, self.N + 1):
-            l_s[n-1], l_si[n-1], r_s[n], r_si[n] = tm.calc_l_r_roots(self.l[n - 1], self.r[n], 
-                                                            zero_tol=self.zero_tol,
-                                                            sanity_checks=self.sanity_checks,
-                                                            sc_data=('site', n))
-            Vlh[n] = tm.calc_Vsh_l(self.A[n], l_s[n-1], sanity_checks=self.sanity_checks)
-            Vrh[n] = tm.calc_Vsh(self.A[n], r_s[n], sanity_checks=self.sanity_checks)
-
-        #Y = sp.empty((self.N + 1), dtype=sp.ndarray)
-        etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
-        for n in range(1, self.N):
-            if (not Vrh[n + 1] is None and not Vlh[n] is None):
-                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh[n], 
-                                           Vrh[n + 1], l_s[n - 1], r_s[n + 1])
-        return etaBB_sq
