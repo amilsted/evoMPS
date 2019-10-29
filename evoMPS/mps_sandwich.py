@@ -12,8 +12,45 @@ import scipy.linalg as la
 from . import matmul as mm
 from . import tdvp_common as tm
 from .mps_gen import EvoMPS_MPS_Generic
+from .mps_uniform import EvoMPS_MPS_Uniform
 from .mps_uniform_pinv import pinv_1mE
 import copy
+
+def sandwich_from_tensors(As_L, As_C, As_R):
+    """Creates a sandwich state from a collection of MPS tensors.
+    `As_L` is the left uniform bulk unit cell.
+    `As_C` is the central nonuniform window.
+    `As_R` is the right uniform bulk unit cell.
+    """
+    N = len(As_C)
+
+    qL = As_L[0].shape[0]
+    DL = As_L[0].shape[1]
+    dtype = As_L[0].dtype
+    sw = EvoMPS_MPS_Sandwich(
+        N,
+        EvoMPS_MPS_Uniform(
+            DL, qL, L=len(As_L), dtype=dtype, do_update=False)
+    )
+
+    for n in range(1, N + 1):
+        sw.A[n] = As_C[n - 1]
+
+    Ds = sp.array(
+        [DL] +
+        [sw.A[n].shape[2] for n in range(1, N + 1)] +
+        [As_R[0].shape[1]]
+    )
+    sw.D = Ds
+
+    sw.uni_l.A = As_L
+    sw.uni_r.A = As_R
+    sw.uni_l.update(restore_CF=False)
+    sw.uni_r.update(restore_CF=False)
+
+    sw.update(restore_CF=False, normalize=False)
+
+    return sw
 
 
 class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
@@ -84,6 +121,43 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             self.l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
             if 0 < n <= self.N:
                 self.A[n] = sp.zeros((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
+
+    @classmethod
+    def from_tensors(cls, As_L, As_C, As_R):
+        """Creates a sandwich state from a collection of MPS tensors.
+        `As_L` is the left uniform bulk unit cell.
+        `As_C` is the central nonuniform window.
+        `As_R` is the right uniform bulk unit cell.
+        """
+        N = len(As_C)
+
+        qL = As_L[0].shape[0]
+        DL = As_L[0].shape[1]
+        dtype = As_L[0].dtype
+        sw = cls(
+            N,
+            EvoMPS_MPS_Uniform(
+                DL, qL, L=len(As_L), dtype=dtype, do_update=False)
+        )
+
+        for n in range(1, N + 1):
+            sw.A[n] = As_C[n - 1]
+
+        Ds = sp.array(
+            [DL] +
+            [sw.A[n].shape[2] for n in range(1, N + 1)] +
+            [As_R[0].shape[1]]
+        )
+        sw.D = Ds
+
+        sw.uni_l.A = As_L
+        sw.uni_r.A = As_R
+        sw.uni_l.update(restore_CF=False)
+        sw.uni_r.update(restore_CF=False)
+
+        sw.update(restore_CF=False, normalize=False)
+
+        return sw
 
     @property
     def sanity_checks(self):
@@ -480,221 +554,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
                 m = n % self.uni_l.L
                 return tm.eps_r_noop(r_np1, self.uni_l.A[m], self.uni_l.A[m])
 
-    def schmidt_sq(self, n):
-        """Returns the squared Schmidt coefficients for a left-right partition.
-        
-        The chain can be split into two parts between any two sites.
-        This returns the squared coefficients of the corresponding Schmidt
-        decomposition, which are equal to the (non-zero) 
-        eigenvalues of the corresponding reduced density matrix.
-        
-        Parameters
-        ----------
-        n : int
-            Site for split.
-            
-        Returns
-        -------
-        lam : sequence of float (if ret_schmidt_sq==True)
-            The squared Schmidt coefficients.
-        """
-        l = self.get_l(n)
-        r = self.get_r(n)
-        try:
-            lr = r.dot_left(l)
-        except AttributeError:
-            lr = l.dot(r)
-        try: 
-            lam = lr.diag
-        except AttributeError: #Assume we are not in canonical form.
-            lam = la.eigvals(lr)
-        return lam
-                        
-    def entropy(self, n, ret_schmidt_sq=False):
-        """Returns the von Neumann entropy of part of the system under a left-right split.
-        
-        The chain can be split into two parts between any two sites.
-        This function returns the corresponding von Neumann entropy, which
-        is a measure of the entanglement between the two parts.
-        
-        The parameter n specifies that the splitting should be done between 
-        sites n and n + 1.
-        
-        Parameters
-        ----------
-        k : int
-            Site offset for split.
-        ret_schmidt_sq : bool
-            Whether to also return the squared Schmidt coefficients.
-            
-        Returns
-        -------
-        S : float
-            The half-chain entropy.
-        lam : sequence of float (if ret_schmidt_sq==True)
-            The squared Schmidt coefficients.
-        """
-        lam = self.schmidt_sq(n)
-        flt = lam.nonzero()
-        S = -sp.sum(lam[flt] * sp.log2(lam[flt])).real
-            
-        if ret_schmidt_sq:
-            return S, lam
-        else:
-            return S
-
-    def expect_1s(self, op, n):
-        """Computes the expectation value of a single-site operator.
-
-        A single-site operator is represented as a function taking three
-        integer arguments (n, s, t) where n is the site number and s, t
-        range from 0 to q[n] - 1 and define the requested matrix element <s|o|t>.
-
-        Assumes that the state is normalized.
-
-        Parameters
-        ----------
-        o : ndarray or callable
-            The operator.
-        n : int
-            The site number.
-        """
-        A = self.get_A(n)
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (A.shape[0], A.shape[0]))
-
-        res = tm.eps_r_op_1s(self.get_r(n), A, A, op)
-        return mm.adot(self.get_l(n - 1), res)
-
-    def expect_2s(self, op, n):
-        """Computes the expectation value of a nearest-neighbour two-site operator.
-
-        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array
-        such that op[s, t, u, v] = <st|op|uv> or a function of the form
-        op(s, t, u, v) = <st|op|uv>.
-
-        Parameters
-        ----------
-        o : ndarray or callable
-            The operator array or function.
-        n : int
-            The leftmost site number (operator acts on n, n + 1).
-        """
-        A = self.get_A(n)
-        Ap1 = self.get_A(n + 1)
-        AA = tm.calc_AA(A, Ap1)
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (A.shape[0], Ap1.shape[0], A.shape[0], Ap1.shape[0]))
-
-        C = tm.calc_C_mat_op_AA(op, AA)
-        res = tm.eps_r_op_2s_C12_AA34(self.get_r(n + 1), C, AA)
-        return mm.adot(self.get_l(n - 1), res)
-
-    def expect_1s_cor(self, op1, op2, n1, n2):
-        """Computes the correlation of two single site operators acting on two different sites.
-
-        See expect_1S().
-
-        n1 must be smaller than n2.
-
-        Assumes that the state is normalized.
-
-        Parameters
-        ----------
-        op1 : function
-            The first operator, acting on the first site.
-        op2 : function
-            The second operator, acting on the second site.
-        n1 : int
-            The site number of the first site.
-        n2 : int
-            The site number of the second site (must be > n1).
-        """
-        A1 = self.get_A(n1)
-        A2 = self.get_A(n2)
-
-        if callable(op1):
-            op1 = sp.vectorize(op1, otypes=[sp.complex128])
-            op1 = sp.fromfunction(op1, (A1.shape[0], A1.shape[0]))
-
-        if callable(op2):
-            op2 = sp.vectorize(op2, otypes=[sp.complex128])
-            op2 = sp.fromfunction(op2, (A2.shape[0], A2.shape[0]))
-
-        r_n = tm.eps_r_op_1s(self.get_r(n2), A2, A2, op2)
-
-        for n in reversed(range(n1 + 1, n2)):
-            r_n = tm.eps_r_noop(r_n, self.get_A(n), self.get_A(n))
-
-        r_n = tm.eps_r_op_1s(r_n, A1, A1, op1)
-
-        return mm.adot(self.get_l(n1 - 1), r_n)
-
-    def density_2s(self, n1, n2):
-        """Returns a reduced density matrix for a pair of sites.
-        
-        Currently only supports sites in the nonuniform window.
-
-        Parameters
-        ----------
-        n1 : int
-            The site number of the first site.
-        n2 : int
-            The site number of the second site (must be > n1).
-        """
-        rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
-        r_n2 = sp.empty_like(self.r[n2 - 1])
-        r_n1 = sp.empty_like(self.r[n1 - 1])
-        ln1m1 = self.get_l(n1 - 1)
-
-        for s2 in range(self.q[n2]):
-            for t2 in range(self.q[n2]):
-                r_n2 = mm.mmul(self.A[n2][t2], self.r[n2], mm.H(self.A[n2][s2]))
-
-                r_n = r_n2
-                for n in reversed(range(n1 + 1, n2)):
-                    r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
-
-                for s1 in range(self.q[n1]):
-                    for t1 in range(self.q[n1]):
-                        r_n1 = mm.mmul(self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
-                        tmp = mm.adot(ln1m1, r_n1)
-                        rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
-        return rho
-
-    def apply_op_1s(self, op, n):
-        """Applies a one-site operator op to site n.
-
-        Can be used to create excitations.
-        """
-
-        if not (0 < n <= self.N):
-            raise ValueError("Operators can only be applied to sites 1 to N!")
-
-        newA = sp.zeros_like(self.A[n])
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (self.q[n], self.q[n]))
-
-        for s in range(self.q[n]):
-            for t in range(self.q[n]):
-                newA[s] += self.A[n][t] * op[s, t]
-
-        self.A[n] = newA
-
     def overlap(self, other, sanity_checks=False):
         if not self.N == other.N:
             print("States must have same number of non-uniform sites!")
             return
 
-        if not sp.all(self.D == other.D):
-            print("States must have same bond-dimensions!")
-            return
+        #if not sp.all(self.D == other.D):
+        #    print("States must have same bond-dimensions!")
+        #    return
 
         if not sp.all(self.q == other.q):
             print("States must have same Hilbert-space dimensions!")
@@ -717,8 +584,8 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 #
 #            print la.norm(AR - self.uni_r.A)
 
-        r = gr.dot(sp.asarray(other.uni_r.r)).dot(mm.H(gr))
-        fac = la.norm(sp.asarray(self.uni_r.r)) / la.norm(r)
+        r = mm.mmul(gr, other.uni_r.r[-1], mm.H(gr))
+        fac = la.norm(sp.asarray(self.uni_r.r[-1])) / la.norm(r)
         gr *= sp.sqrt(fac)
         gri /= sp.sqrt(fac)
 
