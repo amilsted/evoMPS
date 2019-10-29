@@ -114,6 +114,8 @@ class EvoMPS_MPS_Uniform(object):
         
         if dtype is None:
             self.typ = np.complex128
+        else:
+            self.typ = dtype
         
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
