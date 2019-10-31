@@ -9,7 +9,9 @@ import scipy.optimize as opti
 import scipy.linalg as la
 import scipy.integrate as intg
 
-def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None):
+def evolve(sys, t, dt=0.01, integ="euler",
+    dynexp=True, D_max=128, dD_max=128, sv_tol=1e-14, cb_func=None,
+    auto_truncate=True):
     num_steps = int(t / dt)
     for i in range(num_steps + 1):
         sys.update()
@@ -24,11 +26,11 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
         if integ.lower() == "euler":
             sys.take_step(dt * 1.j, B=B)
         elif integ.lower() == "rk4":
-            if dynexp and sys.D < maxD:
-                dt_e = dt**(5. / 2.) #Do a small Euler step with an error of the same order as the RK4 step
+            if dynexp and not sp.all(sys.D >= D_max):  # FIXME: D comparison not very useful for finite open chains...
+                dt_e = dt**(5. / 2.)  # Do a small Euler step with an error of the same order as the RK4 step
                 dt_r = dt - dt_e
-                sys.take_step(dt_e * 1.j, B=B, dynexp=dynexp, maxD=maxD)
-                sys.update(auto_truncate=True)
+                sys.take_step(dt_e * 1.j, B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
+                sys.update(auto_truncate=auto_truncate)
                 sys.take_step_RK4(dt_r * 1.j)
             else:
                 sys.take_step_RK4(dt * 1.j, B_i=B)
@@ -44,14 +46,14 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
             cb_func(sys, j + i, **kwargs)
     else:
         cb_wrap = None
-        
+
     if expand_to_D is None:
         expand_to_D = sys.D
-        
+
     #Converging a low D state first means there is less noise after expansion
     if expand_tol is None:
         expand_tol = tol
-        
+
     #Do a little imaginary time evolution to condition the state
     sys, dj, tau, dtau = opt_im_time(sys, tol=CG_start_tol, dtau_base=h_init, 
                                      max_itr=max_itr, cb_func=cb_wrap)
@@ -69,7 +71,7 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
                                          expand_to_D=min(sys.D + expand_step, expand_to_D), 
                                          expand_step=expand_step,
                                          expand_tol=100)
-                                         
+
         j += dj        
         
     sys, dj, h0 = opt_conj_grad(sys, tol=tol, h_init=h_init, max_itr=max_itr, 
@@ -148,7 +150,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
         dynexp = sys.D < expand_to_D and eta.real < expand_tol and expand_wait == 0
         
         sys.take_step(dtau, B=B, dynexp=dynexp, dD_max=expand_step, 
-                      maxD=expand_to_D)
+                      D_max=expand_to_D)
                       
         expand_wait = max(expand_wait - 1, 0)
         if dynexp:
