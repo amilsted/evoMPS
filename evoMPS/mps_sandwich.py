@@ -173,10 +173,13 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not currently implemented in sandwich case")
 
-    def update(self, restore_CF=True, normalize=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         """
+        if auto_truncate:
+            raise NotImplementedError()
+
         if restore_CF:
             self.restore_CF()
         else:

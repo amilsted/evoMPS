@@ -630,13 +630,14 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
         return l_sqrt, r_sqrt, l_sqrt_i, r_sqrt_i
 
-    def update(self, restore_CF=True, normalize=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         
         Return the excess energy.
         """
-        super(EvoMPS_TDVP_Sandwich, self).update(restore_CF=restore_CF, normalize=normalize)
+        super(EvoMPS_TDVP_Sandwich, self).update(
+            restore_CF=restore_CF, normalize=normalize, auto_truncate=auto_truncate)
         
         self.calc_C()
         self.calc_K()
