@@ -581,7 +581,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.calc_C()
         self.calc_K()
         
-    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, 
+    def take_step(self, dtau, B=None, dynexp=False, D_max=128, dD_max=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -599,9 +599,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if B is None:
             B = self.calc_B()
         
-        if dynexp and self.D < maxD:
+        if dynexp and self.D < D_max:
             if BB is None:
-                BB = self.calc_B_2s(dD_max=min(dD_max, maxD - self.D), sv_tol=sv_tol)
+                BB = self.calc_B_2s(dD_max=min(dD_max, D_max - self.D), sv_tol=sv_tol)
             if not BB is None:
                 BB1, BB2, etaBB_sq = BB
                 oldD = self.D
@@ -621,7 +621,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for k in range(self.L):
                 self.A[k] += -dtau * B[k]
             
-    def take_step_RK4(self, dtau, B_i=None, dynexp=False, maxD=128, dD_max=16, 
+    def take_step_RK4(self, dtau, B_i=None, dynexp=False, D_max=128, dD_max=16, 
                       sv_tol=1E-14, BB=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
@@ -649,7 +649,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             B = self.calc_B() #k1
         B_fin = B
-        self.take_step(dtau / 2., B=B, dynexp=dynexp, maxD=maxD, dD_max=dD_max, sv_tol=sv_tol, BB=BB)
+        self.take_step(dtau / 2., B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol, BB=BB)
 
         dD = self.A[0].shape[1] - A0[0].shape[1]
         if dD > 0:
