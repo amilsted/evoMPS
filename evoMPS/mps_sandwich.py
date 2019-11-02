@@ -139,13 +139,16 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         """
         N = len(As_C)
 
-        qL = As_L[0].shape[0]
-        DL = As_L[0].shape[1]
+        qL, DL = As_L[0].shape[0:2]
+        qR, DR = As_R[0].shape[0:2]
         dtype = As_L[0].dtype
         sw = cls(
             N,
             EvoMPS_MPS_Uniform(
-                DL, qL, L=len(As_L), dtype=dtype, do_update=False)
+                DL, qL, L=len(As_L), dtype=dtype, do_update=False),
+            uni_right=EvoMPS_MPS_Uniform(
+                DR, qR, L=len(As_R), dtype=dtype, do_update=False),
+            update_bulks=False
         )
 
         for n in range(1, N + 1):
