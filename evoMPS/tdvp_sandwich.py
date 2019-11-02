@@ -292,9 +292,10 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
 
 class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
 
-    def __init__(self, N, uni_ground):        
+    def __init__(self, N, uni_ground, uni_right=None, update_bulks=True):
         
-        super(EvoMPS_TDVP_Sandwich, self).__init__(N, uni_ground)
+        super(EvoMPS_TDVP_Sandwich, self).__init__(
+            N, uni_ground, uni_right, update_bulks=update_bulks)
         
         assert uni_ground.ham_sites == 2, 'Sandwiches only supported for \
                                            nearest-neighbour Hamiltonians at present!'
