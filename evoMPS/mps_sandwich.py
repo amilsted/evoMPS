@@ -55,7 +55,7 @@ def sandwich_from_tensors(As_L, As_C, As_R):
 
 class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
-    def __init__(self, N, uni_ground):
+    def __init__(self, N, uni_ground, uni_right=None, update_bulks=True):
         self.odr = 'C'
         self.typ = sp.complex128
 
@@ -82,14 +82,22 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
            q[n] x D[n - 1] x D[n] tensor."""
           
         self.uni_l = copy.deepcopy(uni_ground)
-        self.uni_l.symm_gauge = True
         self.uni_l.sanity_checks = self.sanity_checks
-        self.uni_l.update()
+        if update_bulks:
+            self.uni_l.symm_gauge = True
+            self.uni_l.update()
         
         if not N % self.uni_l.L == 0:
             print("Warning: Length of nonuniform window is not a multiple of the uniform block size.")
 
-        self.uni_r = copy.deepcopy(self.uni_l)
+        if uni_right is not None:
+            self.uni_r = copy.deepcopy(uni_right)
+            self.uni_r.sanity_checks = self.sanity_checks
+            if update_bulks:
+                self.uni_r.symm_gauge = True
+                self.uni_r.update()
+        else:
+            self.uni_r = copy.deepcopy(self.uni_l)
 
         self.grown_left = 0
         self.grown_right = 0
@@ -100,7 +108,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         for n in range(1, self.N + 1):
             self.A[n][:] = self.uni_l.A[(n - 1) % self.uni_l.L]
-        
+
         for n in range(self.N + 2):
             self.r[n][:] = sp.asarray(self.uni_l.r[(n - 1) % self.uni_l.L])
             self.l[n][:] = sp.asarray(self.uni_l.l[(n - 1) % self.uni_l.L])
