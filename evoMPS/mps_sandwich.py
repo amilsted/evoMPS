@@ -170,6 +170,30 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         return sw
 
+    @classmethod
+    def from_file(cls, file_name):
+        toload = sp.load(file_name, allow_pickle=True)
+        tensors = toload[0]
+
+        return cls.from_tensors(tensors[0], tensors[1:-2], tensors[-2])
+
+        # self.uni_l.A = tensors[0]
+        # self.uni_l.l[-1] = toload[1]
+        # self.uni_l.r[-1] = toload[2]
+        # self.uni_l.l_before_CF = self.uni_l.l[-1]
+        # self.uni_l.r_before_CF = self.uni_l.r[-1]
+
+        # self.uni_r.A = tensors[-2]
+        # self.uni_r.l[-1] = toload[5]
+        # self.uni_r.r[-1] = toload[4]
+        # self.uni_r.l_before_CF = self.uni_r.l[-1]
+        # self.uni_r.r_before_CF = self.uni_r.r[-1]
+
+        # self.grown_left = toload[7][0, 0]
+        # self.grown_right = toload[7][0, 1]
+        # self.shrunk_left = toload[7][1, 0]
+        # self.shrunk_right = toload[7][1, 1]
+
     @property
     def sanity_checks(self):
         """Whether to perform additional (potentially costly) sanity checks."""
