@@ -359,6 +359,24 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
            expectation value, available after calling update()
            or calc_K()."""
 
+    @classmethod
+    def from_mps(cls, mps, ham_L, ham_C, ham_R, ham_sites=None):
+        if len(ham_C) != mps.N + 1:
+            raise ValueError(
+                "Central window hamiltonian has {} terms. {} required!".format(
+                    len(ham_C), mps.N + 1))
+        uni_l = EvoMPS_TDVP_Uniform.from_mps(mps.uni_l, ham_L, ham_sites=ham_sites)
+        uni_r = EvoMPS_TDVP_Uniform.from_mps(mps.uni_r, ham_R, ham_sites=ham_sites)
+        tdvp = cls(mps.N, uni_l, uni_r, update_bulks=False)
+        tdvp.A = cp.deepcopy(mps.A)
+        tdvp.l = cp.deepcopy(mps.l)
+        tdvp.r = cp.deepcopy(mps.r)
+        tdvp.D = cp.deepcopy(mps.D)
+        tdvp.h_nn = ham_C
+        # TODO: Instead of updating, copy more stuff?
+        tdvp.update(restore_CF=False, normalize=True)
+        return tdvp
+
     def get_AA(self, n):
         if n < 0:
             return self.uni_l.AA[(n - 1) % self.uni_l.L]
