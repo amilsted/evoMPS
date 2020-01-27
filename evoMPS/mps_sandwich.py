@@ -678,7 +678,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         return mm.adot(self.uni_l.l[-1], r)
 
-    def overlap_tangent(self, B, p, top_triv=True):
+    def overlap_tangent(self, B, p, top_triv=True, return_contributions=False):
         """Inner product of the state with an MPS tangent vector.
         Assumes the uniform left and right parts of the tangent vector terms
         are defined by the *same tensors* that define the left and right bulk
@@ -710,19 +710,22 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         rs = [rR]
         for j in range(self.N, 0, -1):
             rs.insert(0, tm.eps_r_noop(rs[0], self.A[j], AR))
+        # rs[0] is now the right half including site 1, so the r matrix needed
+        # for computations involving site 0.
 
-        res = mm.adot(vBL, rs[0]) * sp.exp(-1.j * p)
-        print(res)
+        ol_left_bulk = mm.adot(vBL, rs[0]) * sp.exp(-1.j * p)
 
         l = lL
+        ols_window = []
         for j in range(1, self.N + 1):
             res_j = sp.exp(1.j * p * j) * mm.adot(
                 l, tm.eps_r_noop(rs[j], self.A[j], B))
-            print(res_j)
-            res += res_j
+            ols_window.append(res_j)
             l = tm.eps_l_noop(l, self.A[j], AL)
 
-        return res
+        if return_contributions:
+            return ol_left_bulk, sp.array(ols_window)
+        return ol_left_bulk + sum(ols_window)
 
     def save_state(self, file):
         raise NotImplementedError("save_state not implemented in sandwich case")
