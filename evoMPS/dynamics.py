@@ -273,14 +273,14 @@ def evolve_scipy_ode(s, Tmax, max_steps, rtol=1e-6, atol=1e-8, callback=None, in
             s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
             ist = iend
 
-    is_first_call_in_step = True
+    is_first_call_in_step = [True]
     def ifunc(t, y):
-        nonlocal is_first_call_in_step
+        #nonlocal is_first_call_in_step
         update_state_from_vec(s, y)
-        if is_first_call_in_step:
+        if is_first_call_in_step[0]:
             s.update()
             B = s.calc_B(set_eta=True)
-            is_first_call_in_step = False
+            is_first_call_in_step[0] = False
         else:
             s.update(restore_CF=False, normalize=False)
             B = s.calc_B(set_eta=False)
@@ -327,14 +327,14 @@ def evolve_scipy_ode_old(s, dt, steps, rtol=1e-6, atol=1e-8,
             s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
             ist = iend
 
-    is_first_call_in_step = True
+    is_first_call_in_step = [True]
     def ifunc(t, y):
-        nonlocal is_first_call_in_step
+        #nonlocal is_first_call_in_step
         update_state_from_vec(s, y)
-        if is_first_call_in_step:
+        if is_first_call_in_step[0]:
             s.update()
             B = s.calc_B(set_eta=True)
-            is_first_call_in_step = False
+            is_first_call_in_step[0] = False
         else:
             s.update(restore_CF=False, normalize=False)
             B = s.calc_B(set_eta=False)
