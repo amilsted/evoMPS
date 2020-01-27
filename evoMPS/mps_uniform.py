@@ -1587,9 +1587,9 @@ class EvoMPS_MPS_Uniform(object):
         The state must be up-to-date and in canonical form -- see self.update()!
         
         The results only make sense if the string is a symmetry of the state,
-        such that it consitutes and MPS gauge transformation. In this case,
-        the fidelity per site will be equal to 1.
-        
+        such that it consitutes an MPS gauge transformation. In this case,
+        the overlap per site will be equal to 1.
+
         Parameters
         ----------
         op : ndarray or callable
@@ -1605,8 +1605,11 @@ class EvoMPS_MPS_Uniform(object):
         -------
         expval : ndarray
             The expectation values for each Schmidt vector (data type may be complex).
-        fid_per_site : float
-            Fidelity per site of state with transformed state.
+        ol_per_site : float
+            Overlap per site of state with transformed state.
+        virtop : ndarray (if return_g==True)
+            Matrix representing the action of the string operator within the
+            space of Schmidt vectors.
         """
         if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
@@ -1628,21 +1631,121 @@ class EvoMPS_MPS_Uniform(object):
             opE = self._get_EOP(Aop, Ashift, False)
             ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
             ev = ev[0]
-            #Note: eigs normalizes the eigenvector so that norm(eV) = 1.
-            
-        r = eV.reshape((self.D, self.D))
-        
+            # NOTE: eigs normalizes the eigenvector so that norm(eV) = 1.
+            # NOTE: There will also be an arbitrary global phase on eV.
+
+        virtop = eV.reshape((self.D, self.D))
+
+        # Restore normalization
         if self.symm_gauge:
-            g = self.r[(k - 1) % self.L].inv().dot(r) #r = self.r[k] * g
+            # For symmetric gauge, norm(eV) = 1 corresponds to the same
+            # normalization as the vector of Schmidt values (self.r).
+            virtop = self.r[(k - 1) % self.L].inv().dot(virtop) #r = self.r[k] * g
         else:
-            g = r * sp.sqrt(self.D) #Must restore normalization.
-            
-        Or = r.diagonal().copy()
-        
+            # RCF: norm(eV) = 1 means an overall factor of 1/sqrt(D). Undo!
+            virtop = virtop * sp.sqrt(self.D)
+
+        expvals = virtop.diagonal().copy()
+
+        # Assuming the operator is a symmetry of the state, we can fix the
+        # global phase by requiring the most-significant Schmidt vector (unique
+        # since the operator is a symmetry) has zero phase:
+        ssq = self.schmidt_sq((k - 1) % self.L)
+        ind = ssq.real.argmax()
+        phase = sp.conj(expvals[ind]) / abs(expvals[ind])
+        expvals *= phase
+        virtop *= phase
+
         if return_g:
-            return Or, abs(ev)**(1./self.L), g
+            return expvals, ev**(1./self.L), virtop
         else:
-            return Or, abs(ev)**(1./self.L)
+            return expvals, ev**(1./self.L)
+
+    def expect_sum_1s_density_hc(self, op, k=0, tol=1E-6, maxiter=1000, return_g=False):
+        """Returns the expectation values of a sum of 1-site operators acting
+           on the Schmidt vectors for the half-chain decomposition.
+
+        This computes, for example, the magnetization of each Schmidt vector.
+
+        For block lengths other than 1, the cut is *before* the kth site in a 
+        block (counting from zero).
+
+        The operator should be a self.q x self.q matrix.
+
+        The state must be up-to-date and in canonical form -- see self.update()!
+
+        The results only make sense if the operator annihilates the state!
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator.
+        k : int
+            Site offset within block.
+        tol : float
+            Tolerance for the implicit pseudo-inverse computation.
+        maxiter : int
+            Number of iterations for the implicit pseudo-inverse computation.
+            
+        Returns
+        -------
+        expvals : ndarray
+            The expectation values for each Schmidt vector (data type may be complex).
+        fullstate_expval_per_site : number
+            The expectation value per site of the sum operator on the full state.
+        virtop : ndarray (if return_g==True)
+            Matrix representing the action of the string operator within the
+            space of Schmidt vectors.
+        """
+        expval = 0
+        for j in range(self.L):
+            expval += self.expect_1s(op, j)
+        if abs(expval) > 1e-8:
+            log.warning("expect_sum_1s_density_hc: expectation value '{}' "
+                "of operator on whole state should be zero. "
+                "Result invalid.".format(expval))
+
+        rops = tm.eps_r_op_1s(self.r[k], self.A[k], self.A[k], op)
+        for j in range(1, self.L):
+            pos = (k + j) % self.L
+            rj = tm.eps_r_op_1s(self.r[pos], self.A[pos], self.A[pos], op)
+            for l in range(j):
+                pos = (k + j - l - 1) % self.L
+                rj = tm.eps_r_noop(rj, self.A[pos], self.A[pos])
+            assert pos == k
+            rops += rj
+        expval2 = m.adot(self.l[k - 1], rops)
+
+        if self.D == 1:
+            return sp.zeros((1), dtype=self.typ)
+
+        Ashift = self.A[k:] + self.A[:k]
+        virtop = pinv.pinv_1mE(
+            rops,
+            Ashift,
+            Ashift,
+            self.l[(k - 1) % self.L],
+            self.r[k],
+            left=False,
+            pseudo=True,
+            tol=tol,
+            maxiter=maxiter,
+            sanity_checks=self.sanity_checks,
+            sc_data="expect_sum_1s_density_hc()"
+        )
+        virtop = virtop.reshape((self.D, self.D))
+
+        # restore normalization
+        if self.symm_gauge:
+            virtop = self.r[(k - 1) % self.L].inv().dot(virtop)
+        # NOTE: In RCF, the Schmidt vectors are already normalized.
+
+        expvals = virtop.diagonal().copy()
+
+        if return_g:
+            return expvals, expval2/self.L, virtop
+        else:
+            return expvals, expval2/self.L
 
     def expect_string_per_site_1s(self, op, ncv=20):
         """Calculates the per-site factor of a string expectation value.
