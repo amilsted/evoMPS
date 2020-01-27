@@ -30,7 +30,7 @@ def evolve(sys, t, dt=0.01, integ="euler",
                 dt_e = dt**(5. / 2.)  # Do a small Euler step with an error of the same order as the RK4 step
                 dt_r = dt - dt_e
                 sys.take_step(dt_e * 1.j, B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
-                sys.update(auto_truncate=auto_truncate)
+                sys.update(restore_CF=auto_truncate, normalize=auto_truncate, auto_truncate=auto_truncate)
                 sys.take_step_RK4(dt_r * 1.j)
             else:
                 sys.take_step_RK4(dt * 1.j, B_i=B)
