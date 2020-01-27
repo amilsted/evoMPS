@@ -13,6 +13,7 @@ import scipy.linalg as la
 import scipy.sparse.linalg as las
 from . import tdvp_common as tm
 from . import matmul as m
+from . import mps_uniform_pinv as pinv
 import math as ma
 import logging
 
