@@ -856,7 +856,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         sp.save(file_name, tosave)
 
     def load_state(self, file_name, autogrow=False, do_update=True):
-        toload = sp.load(file_name)
+        toload = sp.load(file_name, allow_pickle=True)
         
         try:
             if toload.shape[0] != 9:
