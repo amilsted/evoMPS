@@ -7,10 +7,12 @@ Created on Thu Oct 13 17:29:27 2011
 """
 from __future__ import absolute_import, division, print_function
 
+import copy as cp
 import scipy as sp
 import scipy.linalg as la
 from . import matmul as mm
 from . import tdvp_common as tm
+from .tdvp_uniform import EvoMPS_TDVP_Uniform
 from .mps_sandwich import EvoMPS_MPS_Sandwich
 import time
 
