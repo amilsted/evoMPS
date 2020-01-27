@@ -99,7 +99,44 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.etaBB = sp.NaN
         """The norm of the TDVP evolution captured by the two-site tangent plane.
            Available after calling take_step() with dynexp=True."""
-           
+
+    @classmethod
+    def from_tensors(cls, As, ham, ham_sites=None, do_update=True):
+        """Creates a sandwich state from a collection of MPS tensors.
+        `As` is a list of the tensor in the unit cell.
+        """
+        q, D = As[0].shape[0:2]
+        dtype = As[0].dtype
+        mps = EvoMPS_MPS_Uniform.from_tensors(As, do_update=do_update)
+        return cls.from_mps(mps, ham, ham_sites)
+
+    @classmethod
+    def from_mps(cls, mps, ham, ham_sites=None):
+        tdvp = cls(mps.D, mps.q, ham, ham_sites, mps.L, mps.typ, False)
+        tdvp.A = cp.deepcopy(mps.A)
+        tdvp.AA = cp.deepcopy(mps.AA)
+        tdvp.l = cp.deepcopy(mps.l)
+        tdvp.r = cp.deepcopy(mps.r)
+        tdvp.lL_before_CF = tdvp.l[-1]
+        tdvp.lL_before_CF = tdvp.r[-1]
+        tdvp.odr = mps.odr
+        tdvp.itr_rtol = mps.itr_rtol
+        tdvp.itr_atol = mps.itr_atol
+        tdvp.zero_tol = mps.zero_tol
+        tdvp.pow_itr_max = mps.pow_itr_max
+        tdvp.ev_brute = mps.ev_brute
+        tdvp.ev_use_arpack = mps.ev_use_arpack
+        tdvp.ev_arpack_nev = mps.ev_arpack_nev
+        tdvp.ev_arpack_ncv = mps.ev_arpack_ncv
+        tdvp.ev_arpack_CUDA = mps.ev_arpack_CUDA
+        tdvp.CUDA_batch_maxD = mps.CUDA_batch_maxD
+        tdvp.symm_gauge = mps.symm_gauge
+        tdvp.sanity_checks = mps.sanity_checks
+        tdvp.check_fac = mps.check_fac
+        tdvp.eps = mps.eps
+        tdvp.userdata = mps.userdata
+        return tdvp
+
     def set_ham(self, ham, ham_sites=None):
         if ham_sites is None:
             try:
@@ -1526,11 +1563,26 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
     def load_state(self, file, expand=False, truncate=False, expand_q=False,
                    shrink_q=False, refac=0.1, imfac=0.1):
-        state = np.load(file)
+        state = np.load(file, allow_pickle=True)
         return self.import_state(state, expand=expand, truncate=truncate,
                                  expand_q=expand_q, shrink_q=shrink_q,
                                  refac=refac, imfac=imfac)
-            
+
+    @classmethod
+    def from_file(cls, file, ham, ham_sites=None):
+        state = np.load(file, allow_pickle=True)
+        newA = state[0]
+        if len(newA.shape) == 3:
+            newA = [newA]
+        elif len(newA.shape) == 4:
+            newA = list(newA)
+        dtype = newA[0].dtype
+        L = len(newA)
+        q, D, _ = newA[0].shape
+        tdvp = cls(D, q, ham, ham_sites, L, dtype, False)
+        tdvp.import_state(state)
+        return tdvp
+
     def set_q(self, newq, offset=0):
         oldK = self.K        
         super(EvoMPS_TDVP_Uniform, self).set_q(newq, offset=offset)        

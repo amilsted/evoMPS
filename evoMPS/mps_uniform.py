@@ -181,13 +181,18 @@ class EvoMPS_MPS_Uniform(object):
         self.randomize(do_update=do_update)
 
     @classmethod
-    def from_tensors(cls, As):
-        """Creates a sandwich state from a collection of MPS tensors.
+    def from_tensors(cls, As, do_update=True):
+        """Creates a uniform MPS from a collection of MPS tensors.
         `As` is a list of the tensor in the unit cell.
         """
         q, D = As[0].shape[0:2]
         dtype = As[0].dtype
-        return cls(D, q, L=len(As), dtype=dtype, do_update=False)
+        mps = cls(D, q, L=len(As), dtype=dtype, do_update=False)
+        for j in range(len(As)):
+            mps.A[j][:] = As[j]
+        if do_update:
+            mps.update(restore_CF=False)
+        return mps
 
     def randomize(self, do_update=True):
         """Randomizes the parameter tensors self.A.
