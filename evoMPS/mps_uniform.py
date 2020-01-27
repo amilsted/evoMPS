@@ -1188,7 +1188,7 @@ class EvoMPS_MPS_Uniform(object):
             return
             
         #Phase-align first
-        self.A[0] *= phi.conj()
+        self.A[0] *= phi.conj() / abs(phi)
             
         gRL = gRL.reshape(self.D, self.D)
         
@@ -1199,12 +1199,12 @@ class EvoMPS_MPS_Uniform(object):
             if k == self.L - 1:
                 gRk = gRL
             else:
-                gRk = tm.eps_r_noop(other.rs[k + 1], self.A[k + 1], other.As[k + 1])
+                gRk = tm.eps_r_noop(other.r[k + 1], self.A[k + 1], other.A[k + 1])
                 
             try:
-                g[k] = other.rs[k].inv().dotleft(gRk)
+                g[k] = other.r[k].inv().dotleft(gRk)
             except:
-                g[k] = gRk.dot(m.invmh(other.rs[k]))
+                g[k] = gRk.dot(m.invmh(other.r[k]))
                 
             gi[k] = la.inv(g[k])
             
