@@ -827,7 +827,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
-                                       pinv_solver=None, phase_align=True):
+                                       pinv_solver=None, phase_align=True,
+                                       force_pseudo=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
@@ -843,10 +844,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
         if not self.ham_tp is None:
             op = Excite_H_Op_tp(self, donor, p, pinv_tol=pinv_tol,
-                             sanity_checks=self.sanity_checks)
+                             sanity_checks=self.sanity_checks,
+                             force_pseudo=force_pseudo)
         else:
             op = Excite_H_Op(self, donor, p, pinv_tol=pinv_tol,
-                             sanity_checks=self.sanity_checks)
+                             sanity_checks=self.sanity_checks,
+                             force_pseudo=force_pseudo)
         op.pinv_CUDA = self.PPinv_use_CUDA
         op.pinv_solver = pinv_solver
 
@@ -855,7 +858,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
                            ncv=None, max_retries=3, pinv_tol=1E-12,
-                           pinv_solver=None, phase_align=True):
+                           pinv_solver=None, phase_align=True,
+                           force_pseudo=False):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -911,7 +915,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         """
         op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
                                                  pinv_solver=pinv_solver,
-                                                 phase_align=phase_align)
+                                                 phase_align=phase_align,
+                                                 force_pseudo=force_pseudo)
         
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
@@ -932,10 +937,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res
         
     def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
-                                 pinv_tol=1E-12, phase_align=True):
+                                 pinv_tol=1E-12, phase_align=True,
+                                 force_pseudo=False):
         op = self._prepare_excite_op_top_nontriv(donor, p,
                                                  pinv_tol=pinv_tol,
-                                                 phase_align=phase_align)
+                                                 phase_align=phase_align,
+                                                 force_pseudo=force_pseudo)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         

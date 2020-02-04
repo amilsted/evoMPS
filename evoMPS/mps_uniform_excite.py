@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
         
 class Excite_H_Op:
     def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
-                 sanity_checks=False, sanity_tol=1E-12):
+                 sanity_checks=False, sanity_tol=1E-12,
+                 force_pseudo=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -43,6 +44,21 @@ class Excite_H_Op:
         
         self.tdvp = tdvp
         self.tdvp2 = tdvp2
+        self.force_pseudo = force_pseudo
+        if force_pseudo and not tdvp is tdvp2:
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=True)
+            l_mix = eV.reshape((tdvp.D, tdvp2.D))
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=False)
+            r_mix = eV.reshape((tdvp.D, tdvp2.D))
+            inner = m.adot(l_mix, r_mix)
+            l_mix /= sp.sqrt(inner)
+            r_mix /= sp.sqrt(inner)
+            self.l_mix_1_2 = l_mix
+            self.r_mix_1_2 = r_mix
+        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_1_2 = tdvp.l[0]
+            self.r_mix_1_2 = tdvp2.r[0]
+
         self.p = p
         
         self.D = tdvp.D
@@ -248,7 +264,7 @@ class Excite_H_Op:
         K__r = tdvp2.K[0]
         K_l = tdvp.K_left[0]
         
-        pseudo = tdvp2 is tdvp
+        pseudo = tdvp2 is tdvp or self.force_pseudo
         
         B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
         
@@ -278,9 +294,8 @@ class Excite_H_Op:
 
         y = tm.eps_l_noop(l, B, A)
         
-#        if pseudo:
-#            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
+        M = pinv_1mE(y, [A_], [A], self.l_mix_1_2.conj().T, self.r_mix_1_2.conj().T,
+                     p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
                      use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
                      sanity_checks=self.sanity_checks, sc_data='M')
@@ -294,8 +309,7 @@ class Excite_H_Op:
             tst = la.norm(y - y2) / norm
             if tst > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", tst)
-#        if pseudo:
-#            M = M - l * m.adot(r_, M)
+
         Mh = M.conj().T.copy(order='C')
         
         if self.ham_sites == 3:
@@ -356,17 +370,16 @@ class Excite_H_Op:
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
         y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
-        
+
         if self.ham_sites == 3:
             tmp = sp.exp(+1.j * p) * BAA_ + sp.exp(+2.j * p) * ABA_ + sp.exp(+3.j * p) * AAB #9, #11, #11b
             y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_)
         elif self.ham_sites == 2:
             tmp = sp.exp(+1.j * p) * BA_ + sp.exp(+2.j * p) * AB #9, #11
             y = y1 + tm.eps_r_op_2s_AA12_C34(r_, tmp, C_conj)
-        
-        if pseudo:
-            y = y - m.adot(l, y) * r_
-        y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
+
+        y_pi = pinv_1mE(y, [A], [A_], self.l_mix_1_2, self.r_mix_1_2,
+                        p=p, left=False,
                         pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         CUDA_use_batch=self.pinv_CUDA_batch,
@@ -442,7 +455,8 @@ def get_A_ops(A0, A1, op_tp, conj=False):
 
 class Excite_H_Op_tp:
     def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
-                 sanity_checks=False, sanity_tol=1E-12):
+                 sanity_checks=False, sanity_tol=1E-12,
+                 force_pseudo=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -466,6 +480,7 @@ class Excite_H_Op_tp:
         
         self.tdvp = tdvp
         self.tdvp2 = tdvp2
+        self.force_pseudo = force_pseudo
         self.p = p
         
         self.D = tdvp.D
@@ -577,7 +592,7 @@ class Excite_H_Op_tp:
         K__r = tdvp2.K[0]
         K_l = tdvp.K_left[0]
         
-        pseudo = tdvp2 is tdvp
+        pseudo = tdvp2 is tdvp or self.force_pseudo
         
         B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
         
