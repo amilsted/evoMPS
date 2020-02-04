@@ -880,7 +880,7 @@ class EvoMPS_MPS_Generic(object):
         lj = tm.eps_l_op_1s(self.get_l(n1 - 1), self.get_A(n1), self.get_A(n1), op1)
         
         if return_intermediates:
-            res[0] = self.expect_1s(op1.dot(op1), n1)
+            res[0] = self.expect_1s(op1.dot(op2), n1)
 
         for j in range(1, d + 1):
             if return_intermediates or j == d:
