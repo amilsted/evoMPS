@@ -856,70 +856,17 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         sp.save(file_name, tosave)
 
     def load_state(self, file_name, autogrow=False, do_update=True):
+        userdata = super(EvoMPS_TDVP_Sandwich, self).load_state(
+            file_name, autogrow=autogrow, do_update=False)
+
         toload = sp.load(file_name, allow_pickle=True)
-        
-        try:
-            if toload.shape[0] != 9:
-                print("Error loading state: Bad data!")
-                return
-                
-            if autogrow and toload[0].shape[0] != self.A.shape[0]:
-                newN = toload[0].shape[0] - 3
-                print("Changing N to: %u" % newN)
-                self.grow_left(newN - self.N)
-                
-            if toload[0].shape != self.A.shape:
-                print("Cannot load state: Dimension mismatch!")
-                return
-            
-            self.A = toload[0]
-            self.l[0] = toload[1]
-            self.uni_l.r[-1] = toload[2]
-            if toload[3]:
-                self.uni_l.K_left[-1] = toload[3]
-            self.r[self.N] = toload[4]
-            self.r[self.N + 1] = self.r[self.N]
-            self.uni_r.l[-1] = toload[5]
-            if toload[6]:
-                self.uni_r.K[0] = toload[6]
-            
-            self.grown_left = toload[7][0, 0]
-            self.grown_right = toload[7][0, 1]
-            self.shrunk_left = toload[7][1, 0]
-            self.shrunk_right = toload[7][1, 1]
-            
-            self.uni_l.A = self.A[0]
-            self.uni_l.l[-1] = self.l[0]
-            self.uni_l.l_before_CF = self.uni_l.l[-1]
-            self.uni_l.r_before_CF = self.uni_l.r[-1]
-            
-            self.uni_r.A = self.A[self.N + 1]
-            self.uni_r.r[-1] = self.r[self.N]
-            self.uni_r.l_before_CF = self.uni_r.l[-1]
-            self.uni_r.r_before_CF = self.uni_r.r[-1]
-            
-            try:
-                if len(self.uni_l.A.shape) == 3:
-                    self.uni_l.A = [self.uni_l.A]
-            except AttributeError:
-                pass
-            
-            try:
-                if len(self.uni_r.A.shape) == 3:
-                    self.uni_r.A = [self.uni_r.A]
-            except AttributeError:
-                pass
-            
-            self.A[0] = None
-            self.A[self.N + 1] = None
 
-            print("loaded.")
-            
-            if do_update:
-                self.update()
+        if toload[3]:
+            self.uni_l.K_left[-1] = toload[3]
+        if toload[6]:
+            self.uni_r.K[0] = toload[6]
 
-            return toload[8]
-            
-        except AttributeError:
-            print("Error loading state: Bad data!")
-            return
+        if do_update:
+            self.update()
+
+        return userdata
