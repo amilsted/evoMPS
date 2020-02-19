@@ -875,11 +875,13 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             self.A = toload[0]
             self.l[0] = toload[1]
             self.uni_l.r[-1] = toload[2]
-            self.uni_l.K_left[-1] = toload[3]
+            if toload[3]:
+                self.uni_l.K_left[-1] = toload[3]
             self.r[self.N] = toload[4]
             self.r[self.N + 1] = self.r[self.N]
             self.uni_r.l[-1] = toload[5]
-            self.uni_r.K[0] = toload[6]
+            if toload[6]:
+                self.uni_r.K[0] = toload[6]
             
             self.grown_left = toload[7][0, 0]
             self.grown_right = toload[7][0, 1]

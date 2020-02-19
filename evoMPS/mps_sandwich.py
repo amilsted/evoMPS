@@ -194,6 +194,26 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         # self.shrunk_left = toload[7][1, 0]
         # self.shrunk_right = toload[7][1, 1]
 
+    def save_state(self, file_name, userdata=None):
+        tosave = sp.empty((9), dtype=sp.ndarray)
+
+        Asave = self.A.copy()
+        Asave[0] = self.uni_l.A
+        Asave[self.N + 1] = self.uni_r.A
+
+        tosave[0] = Asave
+        tosave[1] = self.l[0]
+        tosave[2] = self.uni_l.r[-1]
+        tosave[3] = None
+        tosave[4] = self.r[self.N]
+        tosave[5] = self.uni_r.l[-1]
+        tosave[6] = None
+        tosave[7] = sp.array([[self.grown_left, self.grown_right],
+                             [self.shrunk_left, self.shrunk_right]])
+        tosave[8] = userdata
+
+        sp.save(file_name, tosave)
+
     @property
     def sanity_checks(self):
         """Whether to perform additional (potentially costly) sanity checks."""
