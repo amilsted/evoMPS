@@ -353,11 +353,6 @@ class Vari_Opt_SC_op:
         return res.reshape(x.shape) * self.tau
 
 
-#class TDVP_Split(object):
-#  """TDVP class for the split-step integrator and DMRG.
-#  """
-
-
 def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=None, 
                     use_local_ham=True, ncv=20, tol=1E-14, expm_max_steps=10,
                     DMRG=False,
@@ -595,11 +590,11 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
         Anp1 = mps.get_A(n + 1)
         if ham_sites == 2 and Anp1 is not None:
             AA[n] = tm.calc_AA(mps.A[n], Anp1)                    
-            mps.C[n] = tm.calc_C_mat_op_AA(ham[n], AA[n])
+            Cn = tm.calc_C_mat_op_AA(ham[n], AA[n])
             KRnp1 = KR[n + 1]
             if KRnp1 is None:
                 KRnp1 = sp.zeros((mps.D[n], mps.D[n]), dtype=mps.typ)
-            KR[n], _ = tm.calc_K(KRnp1, mps.C[n], None, 
+            KR[n], _ = tm.calc_K(KRnp1, Cn, None, 
                 mps.get_r(n + 1), mps.A[n], AA[n])
         
         if ham_sites == 3:
@@ -608,8 +603,8 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             Anp2 = mps.get_A(n + 2)
             if Anp2 is not None:
                 AAAn = tm.calc_AAA_AA(AA[n], Anp2)
-                mps.C[n] = tm.calc_C_3s_mat_op_AAA(ham[n], AAAn)
-                KR[n], _ = tm.calc_K_3s(KR[n + 1], mps.C[n], None, 
+                Cn = tm.calc_C_3s_mat_op_AAA(ham[n], AAAn)
+                KR[n], _ = tm.calc_K_3s(KR[n + 1], Cn, None, 
                     mps.get_r(n + 2), mps.A[n], AAAn)
             
         if not HMPO is None:
