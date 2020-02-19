@@ -185,7 +185,7 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, AAp1Ap2):
     
     Hr = eps_r_op_3s_C123_AAA456(rp2, C, AAp1Ap2)
         
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -196,7 +196,7 @@ def calc_K_3s_l(Km1, Cm2, lm3, r, A, Am2Am1A):
     
     Hl = eps_l_op_3s_AAA123_C456(lm3, Am2Am1A, Cm2)  
     
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
