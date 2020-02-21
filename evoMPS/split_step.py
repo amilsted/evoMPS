@@ -65,7 +65,7 @@ class Vari_Opt_Single_Site_Op:
         if self.ham_sites == 2:
             Anm1 = m.get_A(n - 1)
             if Anm1 is not None:
-                lnm2 = mm.eyemat(m.get_l(n - 2).shape[0], dtype=An.dtype)
+                lnm2 = mm.eyemat(Anm1.shape[1], dtype=An.dtype)
                 AAnm1 = tm.calc_AA(Anm1, An)
                 Cnm1 = tm.calc_C_mat_op_AA(self.ham[n - 1], AAnm1)
                 Cnm1 = sp.transpose(Cnm1, axes=(1, 0, 2, 3)).copy()
@@ -73,7 +73,7 @@ class Vari_Opt_Single_Site_Op:
                     res[s] += tm.eps_l_noop(lnm2, Anm1, Cnm1[s, :])
             Anp1 = m.get_A(n + 1)
             if Anp1 is not None:
-                rnp2 = mm.eyemat(m.get_r(n + 1).shape[0], dtype=An.dtype)
+                rnp2 = mm.eyemat(Anp1.shape[2], dtype=An.dtype)
                 AAn = tm.calc_AA(An, Anp1)
                 Cn = tm.calc_C_mat_op_AA(self.ham[n], AAn)
                 for s in range(m.q[n]):
@@ -83,7 +83,7 @@ class Vari_Opt_Single_Site_Op:
             Anm2 = m.get_A(n - 2)
             Anm1 = m.get_A(n - 1)
             if Anm2 is not None:
-                lnm3 = mm.eyemat(m.get_l(n - 3).shape[0], dtype=An.dtype)
+                lnm3 = mm.eyemat(Anm2.shape[1], dtype=An.dtype)
                 AAAnm2 = tm.calc_AAA_AA(self.AAnm2, An)
                 Cnm2 = tm.calc_C_3s_mat_op_AAA(self.ham[n - 2], AAAnm2)
                 Cnm2 = sp.transpose(Cnm2, axes=(2, 0, 1, 3, 4)).copy()
@@ -92,17 +92,18 @@ class Vari_Opt_Single_Site_Op:
 
             Anp1 = m.get_A(n + 1)
             if Anm1 is not None and Anp1 is not None:
+                rnp1 = mm.eyemat(Anp1.shape[2], dtype=An.dtype)
                 AAnm1 = tm.calc_AA(Anm1, An)  
                 AAAnm1 = tm.calc_AAA_AA(AAnm1, Anp1)
                 Cnm1 = tm.calc_C_3s_mat_op_AAA(self.ham[n - 1], AAAnm1)
                 for s in range(m.q[n]):
                     for u in range(m.q[n - 1]):
                         res[s] += m.get_A(n - 1)[u].conj().T.dot(
-                                  tm.eps_r_noop(m.get_r(n + 1), Cnm1[u, s, :], m.get_A(n + 1)))
+                                  tm.eps_r_noop(rnp1, Cnm1[u, s, :], m.get_A(n + 1)))
             
             Anp2 = m.get_A(n + 2)
             if Anp2 is not None:
-                rnp2 = mm.eyemat(m.get_r(n + 2).shape[0], dtype=An.dtype)
+                rnp2 = mm.eyemat(Anp2.shape[2], dtype=An.dtype)
                 AAn = tm.calc_AA(An, Anp1)
                 AAAn = tm.calc_AAA_AA(AAn, Anp2)
                 Cn = tm.calc_C_3s_mat_op_AAA(self.ham[n], AAAn)
@@ -202,7 +203,7 @@ class Vari_Opt_Two_Site_Op:
 
                 # first contract the ham term with the single-site tensor on
                 # the left
-                lnm2 = mm.eyemat(m.get_l(n - 2).shape[0], dtype=AAn.dtype)
+                lnm2 = mm.eyemat(Anm1.shape[1], dtype=AAn.dtype)
                 tmp = sp.zeros([m.q[n], m.q[n], m.D[n - 1], m.D[n - 1]], dtype=res.dtype)
                 for s_in in range(m.q[n]):
                     for s_out in range(m.q[n]):
@@ -225,7 +226,7 @@ class Vari_Opt_Two_Site_Op:
 
                 # first contract the ham term with the single-site tensor on
                 # the right
-                rnp2 = mm.eyemat(m.get_r(n + 2).shape[0], dtype=AAn.dtype)
+                rnp2 = mm.eyemat(Anp2.shape[2], dtype=AAn.dtype)
                 tmp = sp.zeros([m.q[n+1], m.q[n+1], m.D[n+1], m.D[n+1]], dtype=res.dtype)
                 for s_in in range(m.q[n+1]):
                     for s_out in range(m.q[n+1]):
@@ -243,7 +244,7 @@ class Vari_Opt_Two_Site_Op:
             Anm2 = m.get_A(n - 2)
             if Anm2 is not None:
                 # term n-2,n-1,n
-                lnm3 = mm.eyemat(m.get_l(n - 3).shape[0], dtype=AAn.dtype)
+                lnm3 = mm.eyemat(Anm2.shape[1], dtype=AAn.dtype)
                 tmp = sp.zeros((m.q[n], m.q[n], m.D[n-1], m.D[n-1]), dtype=res.dtype)
                 for s_in in range(m.q[n]):
                     for s_out in range(m.q[n]):
@@ -255,7 +256,7 @@ class Vari_Opt_Two_Site_Op:
             Anm1 = m.get_A(n - 1)
             if Anm1 is not None:
                 # term n-1,n,n+1
-                lnm2 = mm.eyemat(m.get_l(n - 2).shape[0], dtype=AAn.dtype)
+                lnm2 = mm.eyemat(Anm1.shape[1], dtype=AAn.dtype)
                 tmp = sp.zeros((m.q[n], m.q[n+1], m.q[n], m.q[n+1], m.D[n-1], m.D[n-1]), dtype=res.dtype)
                 for s1_in in range(m.q[n]):
                     for s1_out in range(m.q[n]):
@@ -268,7 +269,7 @@ class Vari_Opt_Two_Site_Op:
             Anp2 = m.get_A(n + 2)
             if Anp2 is not None:
                 # term n,n+1,n+2
-                rnp2 = mm.eyemat(m.get_r(n + 2).shape[0], dtype=AAn.dtype)
+                rnp2 = mm.eyemat(Anp2.shape[2], dtype=AAn.dtype)
                 tmp = sp.zeros((m.q[n], m.q[n+1], m.q[n], m.q[n+1], m.D[n+1], m.D[n+1]), dtype=res.dtype)
                 for s1_in in range(m.q[n]):
                     for s1_out in range(m.q[n]):
@@ -282,7 +283,7 @@ class Vari_Opt_Two_Site_Op:
             Anp3 = m.get_A(n + 3)
             if Anp3 is not None:
                 # term n+1,n+2,n+3
-                rnp3 = mm.eyemat(m.get_r(n + 3).shape[0], dtype=AAn.dtype)
+                rnp3 = mm.eyemat(Anp3.shape[2], dtype=AAn.dtype)
                 tmp = sp.zeros([m.q[n+1], m.q[n+1], m.D[n+1], m.D[n+1]], dtype=res.dtype)
                 for s_in in range(m.q[n+1]):
                     for s_out in range(m.q[n+1]):
@@ -387,21 +388,22 @@ class Vari_Opt_SC_op:
         if self.ham_sites == 2:
             AGAn = tm.calc_AA(m.A[n], GAp1)
             Cn = tm.calc_C_mat_op_AA(self.ham[n], AGAn)
-            rnp1 = mm.eyemat(m.get_r(n + 1).shape[0], dtype=Gn.dtype)
+            rnp1 = mm.eyemat(GAp1.shape[2], dtype=Gn.dtype)
             for s in range(m.q[n]):
                 sres = tm.eps_r_noop(rnp1, Cn[s, :], m.A[n + 1])
                 res += m.A[n][s].conj().T.dot(sres)
         elif self.ham_sites == 3:
             Anp2 = m.get_A(n + 2)
             if Anp2 is not None:
-                rnp2 = mm.eyemat(m.get_r(n + 2).shape[0], dtype=Gn.dtype)
+                rnp2 = mm.eyemat(Anp2.shape[2], dtype=Gn.dtype)
                 GAAnp1 = tm.calc_AA(GAp1, Anp2)
                 Cn = tm.calc_C_3s_mat_op_AAA(self.ham[n], tm.calc_AAA_AAr(m.A[n], GAAnp1))
                 for s in range(m.q[n]):
                     res += m.A[n][s].conj().T.dot(
                              tm.eps_r_op_2s_AA12_C34(rnp2, Cn[s, :, :], self.AAnp1))
-            if m.get_l(n - 2) is not None:
-                lnm2 = mm.eyemat(m.get_l(n - 2).shape[0], dtype=Gn.dtype)
+            Anm1 = m.get_A(n - 1)
+            if Anm1 is not None:
+                lnm2 = mm.eyemat(Anm1.shape[1], dtype=Gn.dtype)
                 AAGAm1 = tm.calc_AAA_AA(self.AAnm1, GAp1)
                 Cm1 = tm.calc_C_3s_mat_op_AAA(self.ham[n - 1], AAGAm1)
                 Cm1 = sp.transpose(Cm1, axes=(2, 0, 1, 3, 4)).copy()
@@ -674,7 +676,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             KLnm1 = KL[n - 1]
             if KLnm1 is None:
                 KLnm1 = sp.zeros((mps.D[n-1], mps.D[n-1]), dtype=mps.typ)
-            lnm2 = mm.eyemat(mps.get_l(n - 2).shape[0], dtype=mps.typ)
+            lnm2 = mm.eyemat(Anm1.shape[1], dtype=mps.typ)
             KL[n], _ = tm.calc_K_l(KLnm1, Cnm1, lnm2,
                                     None, mps.A[n], AAnm1)
         elif ham_sites == 3:
@@ -685,7 +687,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
                 KLnm1 = KL[n - 1]
                 if KLnm1 is None:
                     KLnm1 = sp.zeros((mps.D[n-1], mps.D[n-1]), dtype=mps.typ)
-                lnm3 = mm.eyemat(mps.get_l(n - 3).shape[0], dtype=mps.typ)
+                lnm3 = mm.eyemat(Anm2.shape[1], dtype=mps.typ)
                 KL[n], _ = tm.calc_K_3s_l(KLnm1, Cnm2, lnm3,
                                             None, mps.A[n], AAAnm2)
                                     
@@ -701,7 +703,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             KRnp1 = KR[n + 1]
             if KRnp1 is None:
                 KRnp1 = sp.zeros((mps.D[n], mps.D[n]), dtype=mps.typ)
-            rnp1 = mm.eyemat(mps.get_r(n + 1).shape[0], dtype=mps.typ)
+            rnp1 = mm.eyemat(Anp1.shape[2], dtype=mps.typ)
             KR[n], _ = tm.calc_K(KRnp1, Cn, None, 
                 rnp1, mps.A[n], AAn)
         
@@ -713,7 +715,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
                 KRnp1 = KR[n + 1]
                 if KRnp1 is None:
                     KRnp1 = sp.zeros((mps.D[n], mps.D[n]), dtype=mps.typ)
-                rnp2 = mm.eyemat(mps.get_r(n + 2).shape[0], dtype=mps.typ)
+                rnp2 = mm.eyemat(Anp2.shape[2], dtype=mps.typ)
                 KR[n], _ = tm.calc_K_3s(KRnp1, Cn, None, 
                     rnp2, mps.A[n], AAAn)
             
@@ -870,7 +872,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             # We guarantee this, but do not update the r matrices as we go.
             # Do it now.
             for n in range(1, mps.N+1):
-                mps.r[n] = mm.eyemat(mps.get_r(n).shape[0], dtype=mps.typ)
+                mps.r[n] = mm.eyemat(mps.D[n], dtype=mps.typ)
             # NOTE: This does *not* update all relevant quantities. The callback
             #       should do that (without modifying the A tensors!).
             cb_func(mps, i,
