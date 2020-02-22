@@ -55,9 +55,18 @@ class Excite_H_Op:
             r_mix /= sp.sqrt(inner)
             self.l_mix_1_2 = l_mix
             self.r_mix_1_2 = r_mix
-        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_2_1 = self.l_mix_1_2.conj().T
+            self.r_mix_2_1 = self.r_mix_1_2.conj().T
+        elif tdvp is tdvp2:
             self.l_mix_1_2 = tdvp.l[0]
-            self.r_mix_1_2 = tdvp2.r[0]
+            self.r_mix_1_2 = tdvp.r[0]
+            self.l_mix_2_1 = tdvp.l[0]
+            self.r_mix_2_1 = tdvp.r[0]
+        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_1_2 = None
+            self.r_mix_1_2 = None
+            self.l_mix_2_1 = None
+            self.r_mix_2_1 = None
 
         self.p = p
         
@@ -294,7 +303,7 @@ class Excite_H_Op:
 
         y = tm.eps_l_noop(l, B, A)
         
-        M = pinv_1mE(y, [A_], [A], self.l_mix_1_2.conj().T, self.r_mix_1_2.conj().T,
+        M = pinv_1mE(y, [A_], [A], self.l_mix_2_1, self.r_mix_2_1,
                      p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
                      use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
@@ -481,6 +490,29 @@ class Excite_H_Op_tp:
         self.tdvp = tdvp
         self.tdvp2 = tdvp2
         self.force_pseudo = force_pseudo
+        if force_pseudo and not tdvp is tdvp2:
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=True)
+            l_mix = eV.reshape((tdvp.D, tdvp2.D))
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=False)
+            r_mix = eV.reshape((tdvp.D, tdvp2.D))
+            inner = m.adot(l_mix, r_mix)
+            l_mix /= sp.sqrt(inner)
+            r_mix /= sp.sqrt(inner)
+            self.l_mix_1_2 = l_mix
+            self.r_mix_1_2 = r_mix
+            self.l_mix_2_1 = self.l_mix_1_2.conj().T
+            self.r_mix_2_1 = self.r_mix_1_2.conj().T
+        elif tdvp is tdvp2:
+            self.l_mix_1_2 = tdvp.l[0]
+            self.r_mix_1_2 = tdvp.r[0]
+            self.l_mix_2_1 = tdvp.l[0]
+            self.r_mix_2_1 = tdvp.r[0]
+        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_1_2 = None
+            self.r_mix_1_2 = None
+            self.l_mix_2_1 = None
+            self.r_mix_2_1 = None
+
         self.p = p
         
         self.D = tdvp.D
@@ -614,10 +646,8 @@ class Excite_H_Op_tp:
                 log.warning("Sanity Fail in calc_BHB! Bad Vri!")
 
         y = tm.eps_l_noop(l, B, A)
-        
-#        if pseudo:
-#            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
+        M = pinv_1mE(y, [A_], [A], self.l_mix_2_1, self.r_mix_2_1,
+                     p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
                      use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
                      sanity_checks=self.sanity_checks, sc_data='M')
@@ -688,10 +718,9 @@ class Excite_H_Op_tp:
                 tmp += sp.exp(+2.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, B, A_A_o12c[al][1]), A, A_A_o12c[al][0]) #11
             y = y1 + tmp #7, 9, 11
             del(tmp)
-        
-        if pseudo:
-            y = y - m.adot(l, y) * r_
-        y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
+
+        y_pi = pinv_1mE(y, [A], [A_], self.l_mix_1_2, self.r_mix_1_2,
+                        p=p, left=False, 
                         pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         CUDA_use_batch=self.pinv_CUDA_batch,
