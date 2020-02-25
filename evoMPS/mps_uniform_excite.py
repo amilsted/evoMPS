@@ -164,12 +164,12 @@ class Excite_H_Op:
             
             return C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
         elif self.ham_sites == 3:
-            C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
+            C_Vri_AA_conj = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
             for s in range(self.q):
                 for t in range(self.q):
                     for u in range(self.q):
-                        C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
-            C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
+                        C_Vri_AA_conj[s, t, u] = Vri_[s].dot(AA_[t, u])
+            C_Vri_AA_conj = sp.tensordot(ham_.conj(), C_Vri_AA_conj, ((0, 1, 2), (0, 1, 2))).copy(order='C')
             
             C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
                                         A_.shape[1], Vri_.shape[1]), 
@@ -188,8 +188,9 @@ class Excite_H_Op:
                 for j in range(self.q):
                     for i in range(self.q):
                         for s in range(self.q):
-                            C_AhAhlAA[j, t, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
-            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (1, 0, 2, 3))).copy(order='C')
+                            C_AhAhlAA[i, j, s, t] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
+            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((0, 1, 3, 4), (0, 1, 2, 3)))
+            C_AhAhlAA = sp.transpose(C_AhAhlAA, (1, 0, 2, 3)).copy(order='C')
             
             C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
                                         A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -197,8 +198,9 @@ class Excite_H_Op:
                 for u in range(self.q):
                     for k in range(self.q):
                         for j in range(self.q):
-                            C_AA_r_Ah_Vrih_[u, t, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (1, 0, 2, 3))).copy(order='C')
+                            C_AA_r_Ah_Vrih_[u, t, j, k] = AA_[u, t].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 1, 2), (0, 1, 2, 3)))
+            C_AA_r_Ah_Vrih_ = sp.transpose(C_AA_r_Ah_Vrih_, (1, 0, 2, 3)).copy(order='C')
             
             C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
                                    A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -233,16 +235,17 @@ class Excite_H_Op:
                 for u in range(self.q):
                     for k in range(self.q):
                         C_AA_Vrh[k, u, t] = AA_[t, u].dot(Vr_[k].conj().T)
-            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0))).copy(order='C')
+            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0)))
+            C_AA_Vrh = sp.transpose(C_AA_Vrh, (2,0,1,3,4)).copy(order='C')
             
-            C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
+            C_conj = sp.tensordot(ham_.conj(), AAA_, ((0, 1, 2), (0, 1, 2))).copy(order='C')
             
-            rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
+            rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_conj)
 
             #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
             #TODO: Make this consistent with the updated 2-site case above.
             
-            return V_, Vr_, Vri_, Vri_A_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10,
+            return V_, Vr_, Vri_, Vri_A_, C_conj, C_Vri_AA_conj, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10,
 
     
     def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
@@ -251,7 +254,7 @@ class Excite_H_Op:
             pinv_solver = las.gmres
             
         if self.ham_sites == 3:
-            V_, Vr_, Vri_, Vri_A_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, \
+            V_, Vr_, Vri_, Vri_A_, C_conj, C_Vri_AA_conj, C_AAA_r_Ah_Vrih, \
                     C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, \
                     C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10 = prereq
         else:
@@ -323,7 +326,7 @@ class Excite_H_Op:
         
         if self.ham_sites == 3:
             tmp = BAA_ + sp.exp(+1.j * p) * ABA_ + sp.exp(+2.j * p) * AAB
-            res = l_sqrt.dot(tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_Vri_AA_)) #1 1D, #3, #3c
+            res = l_sqrt.dot(tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_Vri_AA_conj)) #1 1D, #3, #3c
         else:
             tmp = BA_ + sp.exp(+1.j * p) * AB
             res = l_sqrt.dot(tm.eps_r_op_2s_AA12_C34(r_, tmp, C_Vri_A_conj)) #1, #3 OK
@@ -332,7 +335,7 @@ class Excite_H_Op:
         
         exp = sp.exp
         subres = sp.zeros_like(res)
-        eye = m.eyemat(C_.shape[2], dtype=tdvp.typ)
+        eye = m.eyemat(C_conj.shape[2], dtype=tdvp.typ)
         eye2 = m.eyemat(A.shape[2], dtype=tdvp.typ)
         if self.ham_sites == 3:
             subres += exp(-2.j * p) * tm.eps_l_noop(Mh, A, C_AAA_r_Ah_Vrih) #12
@@ -341,7 +344,7 @@ class Excite_H_Op:
                 #subres += exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_AAA_r_Ah_Vrih[s])) #12
                 subres += tm.eps_r_noop(B[s], C_AhAhlAA[s, :], Vr_) #2b
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_AA_r_Ah_Vrih_[s, :]) #4
-                subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2 -ive of that it should be....
+                subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2
                 subres += exp(-1.j * p) * tm.eps_l_op_2s_AA12_C34(eye2, C_AhlAA_conj[s, :, :], BA_).dot(Vr_[s].conj().T) #4b
                 subres += exp(-2.j * p) * tm.eps_l_op_2s_AA12_C34(l.dot(B[s]), AA, C_AA_Vrh[s, :, :]) #4c
                 
@@ -352,8 +355,8 @@ class Excite_H_Op:
                 subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(Bs_r, C_AhlAA[s, :, :], Vri_A_) #3b
                     
                 #for t in xrange(self.q):
-                    #subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
-                    #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[s, t])) #4
+                    #subres += (C_AhAhlAA[s, t].dot(B[s]).dot(Vr_[t].conj().T)) #2b
+                    #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[t, s])) #4
                     #subres += (exp(-3.j * p) * AA[t, s].conj().T.dot(Mh).dot(C_AAA_Vrh_[t, s])) #12b
                     
                     #for u in xrange(self.q):
@@ -382,7 +385,7 @@ class Excite_H_Op:
 
         if self.ham_sites == 3:
             tmp = sp.exp(+1.j * p) * BAA_ + sp.exp(+2.j * p) * ABA_ + sp.exp(+3.j * p) * AAB #9, #11, #11b
-            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_)
+            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_conj)
         elif self.ham_sites == 2:
             tmp = sp.exp(+1.j * p) * BA_ + sp.exp(+2.j * p) * AB #9, #11
             y = y1 + tm.eps_r_op_2s_AA12_C34(r_, tmp, C_conj)
