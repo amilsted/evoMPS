@@ -15,6 +15,7 @@ from . import tdvp_common as tm
 from . import matmul as m
 from . import mps_uniform_pinv as pinv
 import math as ma
+from fractions import gcd
 import logging
 
 log = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class EOp:
         self.A1 = A1
         self.A2 = A2
         
-        self.D1 = A1[0].shape[1]
+        self.D1 = A1[0].shape[1]  # we assume the bond dimension is uniform
         self.D2 = A2[0].shape[1]
         
         self.shape = (self.D1 * self.D2, self.D1 * self.D2)
@@ -284,13 +285,26 @@ class EvoMPS_MPS_Uniform(object):
         
         self.tmp = np.zeros_like(self.A[0][0])
         
-    def _get_dense_transfer_op_block(self):
-        E = m.eyemat(self.D**2)
-        for k in range(self.L):
-            A = self.A[k]
-            Ek = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
-            for s in range(A.shape[0]):
-                Ek += sp.kron(A[s], A[s].conj())
+    def _get_dense_transfer_op_block(self, k=0, other=None):
+        if other is None:
+            other = self
+        if self.q != other.q:
+            raise ValueError("Physical dimensions must be equal!")
+
+        L_ = self.L * other.L // gcd(self.L, other.L)
+        As1 = list(self.A) * (L_ // self.L)
+        As2 = list(other.A) * (L_ // other.L)
+        As1 = As1[k:] + As1[:k]
+        As2 = As2[k:] + As2[:k]
+
+        E = m.eyemat(self.D * other.D)
+        dtype = (As1[0][0,0,0] * As2[0][0,0,0]).dtype
+        for k in range(L_):
+            A1 = As1[k]
+            A2 = As2[k]
+            Ek = sp.zeros((A1.shape[1]*A2.shape[1], A1.shape[2]*A2.shape[2]), dtype=dtype)
+            for s in range(A1.shape[0]):
+                Ek += sp.kron(A1[s], A2[s].conj())
             E = E.dot(Ek)
         return E
         
@@ -391,26 +405,41 @@ class EvoMPS_MPS_Uniform(object):
         
     def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
                                     left=False, max_retries=3, 
-                                    return_eigenvectors=False):
-        if self.D == 1:
-            return sp.array([1. + 0.j])
-        elif self.D <= 3:
-            E = self._get_dense_transfer_op_block()
+                                    return_eigenvectors=False,
+                                    force_dense=False,
+                                    force_sparse=False,
+                                    dense_cutoff=64,
+                                    other=None):
+        if other is None:
+            other=self
+        ED = self.D * other.D
+        
+        if (ED <= dense_cutoff or force_dense) and not force_sparse:
+            E = self._get_dense_transfer_op_block(k=k, other=other)
+                
+            if return_eigenvectors:
+                return la.eig(E, left=left, right=not left)
             return la.eigvals(E)
-        
-        A = list(self.A)
-        A = A[k:] + A[:k]
-        
-        opE = self._get_EOP(A, A, left)
-        
-        if left:
-            v0 = np.asarray(self.l[(k - 1) % self.L])
+
+        L_ = self.L * other.L // gcd(self.L, other.L)
+
+        As1 = list(self.A) * (L_ // self.L)
+        As2 = list(other.A) * (L_ // other.L)
+        As1 = As1[k:] + As1[:k]
+        As2 = As2[k:] + As2[:k]
+
+        if other is self:
+            if left:
+                v0 = np.asarray(self.l[(k - 1) % self.L]).ravel()
+            else:
+                v0 = np.asarray(self.r[(k - 1) % self.L]).ravel()
         else:
-            v0 = np.asarray(self.r[(k - 1) % self.L])
-        
+            v0 = None
+
+        opE = self._get_EOP(As1, As2, left)
         for i in range(max_retries):
             try:
-                res = las.eigs(opE, which='LM', k=nev, v0=v0.ravel(), tol=tol, 
+                res = las.eigs(opE, which='LM', k=nev, v0=v0, tol=tol, 
                               ncv=ncv, return_eigenvectors=return_eigenvectors)
                 break
             except las.ArpackNoConvergence:
@@ -421,9 +450,9 @@ class EvoMPS_MPS_Uniform(object):
         if i == max_retries - 1:
             log.error("_calc_E_largest_eigenvalues: Failed to converge!")
             raise EvoMPSNoConvergence("_calc_E_largest_eigenvalues failed!")
-                          
+
         return res
-        
+
     def calc_E_gap(self, tol=1E-6, nev=2, ncv=None):
         """
         Calculates the spectral gap of E by calculating the second-largest eigenvalue.
@@ -455,12 +484,12 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-12, nev=3, ncv=None):
+    def correlation_length(self, tol=1E-12, nev=3, ncv=20):
         """
         Calculates the correlation length in units of the lattice spacing.
         
         The correlation length is equal to the inverse of the natural logarithm
-        of the maginitude of the second-largest eigenvalue of the transfer 
+        of the magnitude of the second-largest eigenvalue of the transfer 
         (or super) operator E.
         
         Parameters
@@ -474,9 +503,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         if self.D == 1:
             return 0.
-        
-        if ncv is None:
-            ncv = max(20, 2 * nev + 1)
+
         
         ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
@@ -1046,7 +1073,7 @@ class EvoMPS_MPS_Uniform(object):
             
     def fidelity_per_site(self, other, full_output=False, left=False, 
                           force_dense=False, force_sparse=False,
-                          dense_cutoff=64):
+                          dense_cutoff=64, ncv=20):
         """Returns the per-site fidelity d.
               
         Also returns the largest eigenvalue "w" of the overlap transfer
@@ -1081,56 +1108,23 @@ class EvoMPS_MPS_Uniform(object):
         V : ndarray
             The right (or left if left == True) eigenvector corresponding to w (if full_output == True).
         """
-        assert self.q == other.q, "Hilbert spaces must have same dimensions!"
-        
-        from fractions import gcd
+        res = self._calc_E_largest_eigenvalues(
+            other=other, left=left,
+            force_dense=force_dense, force_sparse=force_sparse,
+            dense_cutoff=dense_cutoff,
+            return_eigenvectors=full_output,
+            nev=1, ncv=ncv)
+
         L_ = self.L * other.L // gcd(self.L, other.L)
 
-        As1 = list(self.A) * (L_ // self.L)
-        As2 = list(other.A) * (L_ // other.L)
-
-        ED = self.D * other.D
-        
-        if ED == 1:
-            ev = 1
-            for k in range(L_):
-                evk = 0
-                for s in range(self.q):    
-                    evk += As1[k][s] * As2[k][s].conj()
-                ev *= evk
-            if left:
-                ev = ev.conj()
-            if full_output:
-                return abs(ev)**(1./L_), ev, sp.ones((1), dtype=self.typ)
-            else:
-                return abs(ev)**(1./L_), ev
-        elif (ED <= dense_cutoff or force_dense) and not force_sparse:
-            E = m.eyemat(ED, dtype=As1[0].dtype)
-            for k in range(L_):
-                Ek = sp.zeros((ED, ED), dtype=As1[0].dtype)
-                for s in range(As1[k].shape[0]):
-                    Ek += sp.kron(As1[k][s], As2[k][s].conj())
-                E = E.dot(Ek)
-                
-            if full_output:
-                ev, eV = la.eig(E, left=left, right=not left)
-            else:
-                ev = la.eigvals(E)
-            
+        if full_output:
+            ev, eV = res
             ind = abs(ev).argmax()
-            if full_output:
-                return abs(ev[ind])**(1./L_), ev[ind], eV[:, ind]
-            else:
-                return abs(ev[ind])**(1./L_), ev[ind]
+            return abs(ev[ind])**(1./L_), ev[ind], eV[:, ind]
         else:
-            opE = self._get_EOP(As1, As2, left)
-            res = las.eigs(opE, which='LM', k=1, ncv=20, return_eigenvectors=full_output)
-            if full_output:
-                ev, eV = res
-                return abs(ev[0])**(1./L_), ev[0], eV[:, 0]
-            else:
-                ev = res
-                return abs(ev[0])**(1./L_), ev[0]
+            ev = res
+            ind = abs(ev).argmax()
+            return abs(ev[ind])**(1./L_), ev[ind]
             
     def phase_align(self, other):
         """Adjusts the parameter tensor A by a phase-factor to align it with another state.
@@ -1148,8 +1142,8 @@ class EvoMPS_MPS_Uniform(object):
         phi : complex
             The phase difference (phase of the eigenvalue).
         """
-        d, phi = self.fidelity_per_site(other, full_output=False, left=False)
-        
+        _, phi = self.fidelity_per_site(other, full_output=False, left=False)
+
         self.A[0] *= phi.conj() / abs(phi)
         
         return phi
