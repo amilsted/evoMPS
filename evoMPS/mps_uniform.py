@@ -403,7 +403,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, conv, opE.calls, nev, ncv
         
-    def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
+    def _calc_E_largest_eigenvalues(self, k=0, tol=1E-14, nev=2, ncv=None, 
                                     left=False, max_retries=3, 
                                     return_eigenvectors=False,
                                     force_dense=False,
@@ -453,7 +453,7 @@ class EvoMPS_MPS_Uniform(object):
 
         return res
 
-    def calc_E_gap(self, tol=1E-6, nev=2, ncv=None):
+    def calc_E_gap(self, tol=1E-14, nev=2, ncv=None):
         """
         Calculates the spectral gap of E by calculating the second-largest eigenvalue.
         
@@ -484,7 +484,7 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-12, nev=3, ncv=20):
+    def correlation_length(self, tol=1E-14, nev=3, ncv=20):
         """
         Calculates the correlation length in units of the lattice spacing.
         
@@ -1073,7 +1073,7 @@ class EvoMPS_MPS_Uniform(object):
             
     def fidelity_per_site(self, other, full_output=False, left=False, 
                           force_dense=False, force_sparse=False,
-                          dense_cutoff=64, ncv=20):
+                          dense_cutoff=64, ncv=20, tol=1E-14):
         """Returns the per-site fidelity d.
               
         Also returns the largest eigenvalue "w" of the overlap transfer
@@ -1113,7 +1113,7 @@ class EvoMPS_MPS_Uniform(object):
             force_dense=force_dense, force_sparse=force_sparse,
             dense_cutoff=dense_cutoff,
             return_eigenvectors=full_output,
-            nev=1, ncv=ncv)
+            nev=1, ncv=ncv, tol=tol)
 
         L_ = self.L * other.L // gcd(self.L, other.L)
 
