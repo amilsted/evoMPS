@@ -330,9 +330,9 @@ class Excite_H_Op:
         else:
             tmp = BA_ + sp.exp(+1.j * p) * AB
             res = l_sqrt.dot(tm.eps_r_op_2s_AA12_C34(r_, tmp, C_Vri_A_conj)) #1, #3 OK
-                    
+
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
-        
+
         exp = sp.exp
         subres = sp.zeros_like(res)
         eye = m.eyemat(C_conj.shape[2], dtype=tdvp.typ)
@@ -341,7 +341,6 @@ class Excite_H_Op:
             subres += exp(-2.j * p) * tm.eps_l_noop(Mh, A, C_AAA_r_Ah_Vrih) #12
             subres += exp(-3.j * p) * tm.eps_l_op_2s_AA12_C34(Mh, AA, C_AAA_Vrh_) #12b
             for s in range(self.q):
-                #subres += exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_AAA_r_Ah_Vrih[s])) #12
                 subres += tm.eps_r_noop(B[s], C_AhAhlAA[s, :], Vr_) #2b
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_AA_r_Ah_Vrih_[s, :]) #4
                 subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2
@@ -353,24 +352,11 @@ class Excite_H_Op:
                 except AttributeError:
                     Bs_r = B[s].dot(r_)
                 subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(Bs_r, C_AhlAA[s, :, :], Vri_A_) #3b
-                    
-                #for t in xrange(self.q):
-                    #subres += (C_AhAhlAA[s, t].dot(B[s]).dot(Vr_[t].conj().T)) #2b
-                    #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[t, s])) #4
-                    #subres += (exp(-3.j * p) * AA[t, s].conj().T.dot(Mh).dot(C_AAA_Vrh_[t, s])) #12b
-                    
-                    #for u in xrange(self.q):
-                        #subres += A[s].conj().T.dot(l.dot(AB[t, u]).dot(C_A_r_Ah_Vrih[s, t, u])) #2 -ive of that it should be....
-                        #subres += (exp(+1.j * p) * C_AhlAA[t, s, s].dot(B[u]).dot(r_.dot(A_[u].conj().T)).dot(Vri_[t].conj().T)) #3b
-                        #subres += (exp(-1.j * p) * C_AhAhlA[s, t, u].dot(BA_[t, u]).dot(Vr_[s].conj().T)) #4b
-                        #subres += (exp(-2.j * p) * AA[t, s].conj().T.dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
+
         else:
             for s in range(self.q):
-                #subres += C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
                 subres += tm.eps_r_noop(B[s], C_AhlA[s, :], Vr_) #2
-                #+ exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[t, s]) #4 OK with 3
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_A_Vrh_[s, :]) #4
-                #+ exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_[s, t])).dot(Vr_[t].conj().T)) #12
                 subres += exp(-2.j * p) * A[s].conj().T.dot(Mh).dot(tm.eps_r_noop(eye, C_[s, :], Vr_)) #12
                     
         res += l_sqrt_i.dot(subres)
@@ -396,7 +382,7 @@ class Excite_H_Op:
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         CUDA_use_batch=self.pinv_CUDA_batch,
                         sanity_checks=self.sanity_checks, sc_data='y_pi')
-        #print m.adot(l, y_pi)
+
         if self.sanity_checks:
             z = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, A, A_)
             tst = la.norm((y - z).ravel()) / la.norm(y.ravel())
@@ -407,7 +393,6 @@ class Excite_H_Op:
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
-            #print "expval = " + str(expval)
             if expval < -self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
             if abs(expval.imag) > self.sanity_tol:
