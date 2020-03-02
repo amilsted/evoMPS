@@ -617,7 +617,27 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                 restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
         self.calc_K()
-        
+
+    def phase_align(self, other):
+        """Adjusts the parameter tensor A by a phase-factor to align it with another state.
+
+        This ensures that the largest eigenvalue of the overlap transfer operator
+        is real.
+
+        Parameters
+        ----------
+        other : EvoMPS_MPS_Uniform
+            MPS with which to calculate the per-site fidelity.
+
+        Returns
+        -------
+        phi : complex
+            The phase difference (phase of the eigenvalue).
+        """
+        phi = super(EvoMPS_TDVP_Uniform, self).phase_align(other)
+        self.calc_C()  # needed, since AA and C also change phases!
+        return phi
+
     def take_step(self, dtau, B=None, dynexp=False, D_max=128, dD_max=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
