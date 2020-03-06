@@ -583,12 +583,12 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, i < max_itr - 1, i
     
-    def calc_lr(self):
+    def calc_lr(self, rescale=True):
         """Determines the dominant left and right eigenvectors of the transfer 
         operator E.
         
         Uses an iterative method (e.g. Arnoldi iteration) to determine the
-        largest eigenvalue and the correspoinding left and right eigenvectors,
+        largest eigenvalue and the corresponding left and right eigenvectors,
         which are stored as self.l and self.r respectively.
         
         The parameter tensor self.A is rescaled so that the largest eigenvalue
@@ -609,7 +609,7 @@ class EvoMPS_MPS_Uniform(object):
             else:
                 if self.ev_use_arpack:
                     self.l[-1], self.conv_l, self.itr_l, nev, ncv = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                                                   calc_l=True, rescale=True,
+                                                                   calc_l=True, rescale=rescale,
                                                                    tol=self.itr_rtol,
                                                                    nev=self.ev_arpack_nev,
                                                                    ncv=self.ev_arpack_ncv)
@@ -621,13 +621,13 @@ class EvoMPS_MPS_Uniform(object):
                 else:
                     self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
                                                             tmp, 
-                                                            calc_l=True,
+                                                            calc_l=True, rescale=rescale,
                                                             max_itr=self.pow_itr_max,
                                                             rtol=self.itr_rtol, 
                                                             atol=self.itr_atol)
                     self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
                                                             tmp, 
-                                                            calc_l=False,
+                                                            calc_l=False, rescale=False,
                                                             max_itr=self.pow_itr_max,
                                                             rtol=self.itr_rtol, 
                                                             atol=self.itr_atol)
