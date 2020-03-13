@@ -762,8 +762,16 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
                 self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
 
             if (not Vrh_np1 is None and not Vlh_n is None):
-                Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n, 
-                                           Vrh_np1, l_s_nm1, r_s_np1)
+                if self.ham_sites == 2:
+                    Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n,
+                                            Vrh_np1, l_s_nm1, r_s_np1)
+                else:
+                    Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s_ham_3s(
+                       self.get_A(n - 1), self.get_A(n + 2),
+                       self.get_C(n), self.get_C(n - 1),
+                       Vlh_n, Vrh_np1,
+                       self.get_l(n - 2), self.get_r(n + 2),
+                       l_s_nm1, l_si_nm1, r_s_np1, r_si_np1)
 
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(
                     Y_n,
