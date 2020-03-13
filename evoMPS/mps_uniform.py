@@ -182,6 +182,9 @@ class EvoMPS_MPS_Uniform(object):
                     
         self.randomize(do_update=do_update)
 
+    def maxD_is_less_than(self, Dmax):
+        return self.D < Dmax
+
     @classmethod
     def from_tensors(cls, As, do_update=True):
         """Creates a uniform MPS from a collection of MPS tensors.

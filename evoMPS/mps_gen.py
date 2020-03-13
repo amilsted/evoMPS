@@ -140,6 +140,29 @@ class EvoMPS_MPS_Generic(object):
             
         sp.fill_diagonal(self.r[self.N], 1.)
 
+    def get_D(self, n):
+        if n < 0:
+            return None
+        elif n > self.N:
+            return None
+        return self.D[n]
+
+    def get_q(self, n):
+        if n < 1:
+            return None
+        elif n > self.N:
+            return None
+        return self.q[n]
+
+    def maxD_is_less_than(self, Dmax):
+        Dmaxs = sp.array(
+            [self.get_D(0)] + [Dmax] * (self.N - 1) + [self.get_D(self.N)])
+        for n in range(1, self.N):
+            Dmaxs[n] = min(Dmaxs[n - 1] * self.get_q(n), Dmaxs[n])
+        for n in reversed(range(1, self.N)):
+            Dmaxs[n] = min(Dmaxs[n + 1] * self.get_q(n+1), Dmaxs[n])
+        return sp.all(self.D[:self.N + 1] < Dmaxs)
+
     def get_A(self, n):
         if 1 <= n <= self.N:
             return self.A[n]

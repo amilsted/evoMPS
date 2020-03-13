@@ -856,7 +856,6 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         if phase_align:
             self.phase_align(donor)
-            self.calc_C()  # needed, since phases on AA and C also change!
 
         self.calc_K_l()
         self.calc_l_r_roots()

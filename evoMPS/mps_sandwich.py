@@ -579,16 +579,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             return self.uni_l.D
         elif n > self.N:
             return self.uni_r.D
-        else:
-            return self.D[n]
+        return self.D[n]
 
     def get_q(self, n):
         if n < 1:
             return self.uni_l.q
         elif n > self.N:
             return self.uni_r.q
-        else:
-            return self.q[n]
+        return self.q[n]
 
     def get_A(self, n):
         if n < 1:
