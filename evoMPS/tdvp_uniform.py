@@ -829,7 +829,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12):
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12, return_H=False):
         op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
@@ -843,7 +843,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         if not np.allclose(H, H.conj().T):
             log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
-         
+        
+        if return_H:
+            return la.eigh(H, eigvals_only=not return_eigenvectors), H
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
@@ -958,7 +960,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         
     def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
                                  pinv_tol=1E-12, phase_align=True,
-                                 force_pseudo=False):
+                                 force_pseudo=False, return_H=False):
         op = self._prepare_excite_op_top_nontriv(donor, p,
                                                  pinv_tol=pinv_tol,
                                                  phase_align=phase_align,
@@ -975,7 +977,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         if not np.allclose(H, H.conj().T):
             log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
-         
+        
+        if return_H:
+            return la.eigh(H, eigvals_only=not return_eigenvectors), H
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15,
