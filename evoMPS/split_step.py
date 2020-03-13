@@ -621,7 +621,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
                                       HML=HML[n - 1], HMR=HMR[n], HMn=HM[n],
                                       use_local_ham=use_local_ham,
                                       sanity_checks=mps.sanity_checks)
-        #AAn_old = tm.calc_AA(mps.A[n], mps.A[n+1]).ravel()
+        AAn_old = tm.calc_AA(mps.A[n], mps.A[n+1]).ravel()
         #AAn = AAn_old.reshape((mps.q[n], mps.q[n+1], mps.D[n - 1], mps.D[n + 1]))
         #print(n, sp.inner(AAn_old.conj(), lop.matvec(AAn_old)), "skipped!")
 
