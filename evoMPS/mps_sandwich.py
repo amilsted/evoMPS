@@ -574,6 +574,22 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
     #TODO: Add shrinking by fidelity and gauge-alignment!
 
+    def get_D(self, n):
+        if n < 0:
+            return self.uni_l.D
+        elif n > self.N:
+            return self.uni_r.D
+        else:
+            return self.D[n]
+
+    def get_q(self, n):
+        if n < 1:
+            return self.uni_l.q
+        elif n > self.N:
+            return self.uni_r.q
+        else:
+            return self.q[n]
+
     def get_A(self, n):
         if n < 1:
             return self.uni_l.A[(n - 1) % self.uni_l.L]
