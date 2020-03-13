@@ -738,11 +738,19 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
                 self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
 
             if (not Vrh_np1 is None and not Vlh_n is None):
-                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n, 
+                if self.ham_sites == 2:
+                    _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n,
                                            Vrh_np1, l_s_nm1, r_s_np1)
+                else:
+                    _, etaBB_sq[n] = tm.calc_BB_Y_2s_ham_3s(
+                       self.get_A(n - 1), self.get_A(n + 2),
+                       self.get_C(n), self.get_C(n - 1),
+                       Vlh_n, Vrh_np1,
+                       self.get_l(n - 2), self.get_r(n + 2),
+                       l_s_nm1, l_si_nm1, r_s_np1, r_si_np1)
         return etaBB_sq
 
-    def calc_BB(self, sv_tol=1E-10, dD_max=16, D_max=0):
+    def calc_BB(self, sv_tol=1E-10, dD_max=16, D_max=0, compute_eta=False):
         dD_maxes = sp.minimum(D_max - self.D, dD_max)
 
         BB12 = [None] * (self.N + 1)
@@ -750,6 +758,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
         dD = [0] * (self.N + 1)
         etaBB_sq = sp.zeros((self.N + 1), dtype=sp.complex128)
         for n in range(1, self.N):
+            if self.D[n] >= D_max and not compute_eta:
+                continue
+
             l_s_nm1, l_si_nm1, r_s_np1, r_si_np1 = tm.calc_l_r_roots(
                 self.get_l(n - 1),
                 self.get_r(n + 1),
@@ -773,14 +784,15 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
                        self.get_l(n - 2), self.get_r(n + 2),
                        l_s_nm1, l_si_nm1, r_s_np1, r_si_np1)
 
-                BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(
-                    Y_n,
-                    Vlh_n,
-                    Vrh_np1,
-                    l_si_nm1,
-                    r_si_np1,
-                    dD_max=dD_maxes[n],
-                    sv_tol=sv_tol)
+                if self.D[n] < D_max:
+                    BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(
+                        Y_n,
+                        Vlh_n,
+                        Vrh_np1,
+                        l_si_nm1,
+                        r_si_np1,
+                        dD_max=dD_maxes[n],
+                        sv_tol=sv_tol)
 
                 #if BB12[n] is None:
                 #    log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
