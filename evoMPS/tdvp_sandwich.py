@@ -481,9 +481,9 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
                 
             self.h_expect[n - 1] = he
 
-        self.dH_expect = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
+        self.dH_expect = (mm.adot_noconj(self.K_l[self.N_centre], self.get_r(self.N_centre)) 
                           + mm.adot(
-                              self.l[self.N_centre - self.ham_sites + 1],
+                              self.get_l(self.N_centre - self.ham_sites + 1),
                               self.K[self.N_centre - self.ham_sites + 2]) 
                           - (self.N + self.ham_sites - 1) * h_left_uni)
         
