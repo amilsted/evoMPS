@@ -14,7 +14,7 @@ def evolve(sys, t, dt=0.01, integ="euler",
     auto_truncate=True):
     num_steps = int(t / dt)
     for i in range(num_steps + 1):
-        sys.update()
+        sys.update(auto_truncate=auto_truncate)
         B = sys.calc_B()
 
         if not cb_func is None:
@@ -24,7 +24,7 @@ def evolve(sys, t, dt=0.01, integ="euler",
             break
 
         if integ.lower() == "euler":
-            sys.take_step(dt * 1.j, B=B)
+            sys.take_step(dt * 1.j, B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
         elif integ.lower() == "rk4":
             if dynexp and not sp.all(sys.D >= D_max):  # FIXME: D comparison not very useful for finite open chains...
                 dt_e = dt**(5. / 2.)  # Do a small Euler step with an error of the same order as the RK4 step
