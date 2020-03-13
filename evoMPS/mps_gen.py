@@ -161,7 +161,7 @@ class EvoMPS_MPS_Generic(object):
             Dmaxs[n] = min(Dmaxs[n - 1] * self.get_q(n), Dmaxs[n])
         for n in reversed(range(1, self.N)):
             Dmaxs[n] = min(Dmaxs[n + 1] * self.get_q(n+1), Dmaxs[n])
-        return sp.all(self.D[:self.N + 1] < Dmaxs)
+        return sp.any(self.D[:self.N + 1] < Dmaxs)
 
     def get_A(self, n):
         if 1 <= n <= self.N:
