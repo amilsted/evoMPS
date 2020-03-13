@@ -460,7 +460,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
 
     return x
     
-def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
+def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, VshL):
     D = A.shape[2]
     Dm1 = A.shape[1]
     q = A.shape[0]
@@ -473,7 +473,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x_part.fill(0)
         for s in range(q):
             x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
-            x_part += Vsh[s].dot(lm1_s.dot(x_subpart))
+            x_part += VshL[s].dot(lm1_s.dot(x_subpart))
             
         try:
             x += r_si.dot_left(x_part)
@@ -491,11 +491,40 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         if not Km1 is None:
             x_subpart += Km1.dot(A[s]) #~3rd line
         
-        x_part += Vsh[s].dot(lm1_si.dot(x_subpart))
+        x_part += VshL[s].dot(lm1_si.dot(x_subpart))
     try:
         x += r_s.dot_left(x_part)
     except AttributeError:
         x += x_part.dot(r_s)
+
+    return x
+
+def calc_x_l_3s(Km1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, AAm2, Am1, A, Ap1, AAp1, lm1_s, lm1_si, r_s, r_si, VshL):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    x = sp.zeros((q * Dm1 - D, D), dtype=A.dtype)
+
+    VL = VshL.transpose((0,2,1)).conj()
+
+    if Km1 is not None:
+        x += mm.mmul(eps_l_noop(lm1_si.dot(Km1), VL, A), r_s)
+
+    if C is not None:
+        part = np.array([eps_r_op_2s_AA12_C34(rp2, C[s], AAp1) for s in range(q)])
+        x += mm.mmul(eps_l_noop(lm1_s, VL, part), r_si)
+
+    if Cm1 is not None:
+        lVL = np.array([lm1_si.dot(VL[s]) for s in range(q)])
+        Am1lVL = calc_AA(Am1, lVL)
+        Cm1_t = Cm1.transpose((2,0,1,3,4)).copy()
+        part = np.array([eps_l_op_2s_AA12_C34(lm2, Am1lVL, Cm1_t[s]) for s in range(q)])
+        x += mm.mmul(eps_r_noop(rp1, part, Ap1), r_si)
+
+    if Cm2 is not None:
+        Cm2_t = Cm2.transpose((2,0,1,3,4)).copy()
+        part = np.array([eps_l_op_2s_AA12_C34(lm3, AAm2, Cm2_t[s]) for s in range(q)])
+        x += mm.mmul(eps_l_noop(lm1_si, VL, part), r_s)
 
     return x
 
