@@ -292,57 +292,60 @@ def go(sim, tau, steps, force_calc_lr=False, RK4=False,
 
     return data, endata, Sdata, oldata
 
-class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
+class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):
 
     def __init__(self, N, uni_ground, uni_right=None, update_bulks=True):
         
-        super(EvoMPS_TDVP_Sandwich, self).__init__(
-            N, uni_ground, uni_right, update_bulks=update_bulks)
-        
-        assert uni_ground.ham_sites == 2, 'Sandwiches only supported for \
-                                           nearest-neighbour Hamiltonians at present!'
-        
-        self.uni_l.calc_B()
-        self.eta_sq_uni = self.uni_l.eta_sq
-        print("Bulk eta: ", self.eta_sq_uni)
-        
-        self.h_nn = None
+        self.ham = None
         """The Hamiltonian for the nonuniform region. 
            Can be changed, for example, to perform
            a quench or to study an impurity problem. 
            The number of neighbouring sites acted on must be 
            specified in ham_sites."""
         
-        if callable(self.uni_l.ham):
-            self.h_nn = lambda n, s, t, u, v: self.uni_l.ham(s, t, u, v)
+        if callable(uni_ground.ham):
+            self.ham = lambda n, *args: uni_ground.ham(*args)
         else:
-            self.h_nn = [self.uni_l.ham] * (self.N + 1)
+            self.ham = [uni_ground.ham] * (N + 1)
+
+        self.ham_sites = uni_ground.ham_sites
+
+        super(EvoMPS_TDVP_Sandwich, self).__init__(
+            N, uni_ground, uni_right, update_bulks=update_bulks)
 
         self.eps = sp.finfo(self.typ).eps
 
+        self.uni_l.calc_B()
+        self.eta_sq_uni = self.uni_l.eta_sq
+        print("Bulk eta: ", self.eta_sq_uni)
 
     def _init_arrays(self):
         super(EvoMPS_TDVP_Sandwich, self)._init_arrays()
         
-        self.AA = sp.empty((self.N + 1), dtype=sp.ndarray) #Elements 1..N
-        
+        # We maps site numbers to indices of these arrays in the
+        # get_AA() and get_AAA() methods.
+        self._AA = sp.empty((self.N + 2), dtype=sp.ndarray)
+        self._AAA = sp.empty((self.N + 2), dtype=sp.ndarray)
+
         #Make indicies correspond to the thesis
         #Deliberately add a None to the end to catch [-1] indexing!
         self.K = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
         self.K_l = sp.empty((self.N + 3), dtype=sp.ndarray) #Elements 1..N
-        self.C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
+        self._C = sp.empty((self.N + 2), dtype=sp.ndarray) #Elements 1..N-1
 
-        self.K_l[0] = sp.zeros((self.D[0], self.D[0]), dtype=self.typ, order=self.odr)
-        self.C[0] = sp.empty((self.q[0], self.q[1], self.D[0], self.D[1]), dtype=self.typ, order=self.odr)
-        for n in range(1, self.N + 1):
-            self.C[n] = sp.empty((self.q[n], self.q[n+1], self.D[n-1], self.D[n+1]), dtype=self.typ, order=self.odr)
-        for n in range(1, self.N_centre + 1):
-            self.K_l[n] = sp.zeros((self.D[n], self.D[n]), dtype=self.typ, order=self.odr)
+        for n in range(-1, self.N + 1):
+            if n <= self.N - self.ham_sites + 1:
+                ham_shape = []
+                for i in range(self.ham_sites):
+                    ham_shape.append(self.get_q(n + i))
+                C_shape = tuple(ham_shape + [self.get_D(n - 1), self.get_D(n - 1 + self.ham_sites)])
+                self._C[n+1] = sp.full(C_shape, sp.NaN, dtype=self.typ, order=self.odr)
+        for n in range(self.N_centre + 1):
+            self.K_l[n] = sp.full((self.D[n], self.D[n]), sp.NaN, dtype=self.typ, order=self.odr)
         for n in range(self.N_centre, self.N + 2):
-            self.K[n] = sp.zeros((self.D[n - 1], self.D[n - 1]), dtype=self.typ, order=self.odr)
+            self.K[n] = sp.full((self.D[n - 1], self.D[n - 1]), sp.NaN, dtype=self.typ, order=self.odr)
             
         self.eta_sq = sp.zeros((self.N + 1), dtype=self.typ)
-        self.eta_sq.fill(0)
         """The per-site contributions to the norm-squared of the TDVP tangent vector 
            (projection of the exact time evolution onto the MPS tangent plane. 
            Only available after calling take_step()."""
@@ -351,8 +354,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         """
         self.eta = sp.NaN
         
-        self.h_expect = sp.empty((self.N + 1), dtype=self.typ)
-        self.h_expect.fill(sp.NaN)
+        self.h_expect = sp.full((self.N + 1), sp.NaN, dtype=self.typ)
         """The local energy expectation values (of each Hamiltonian term), 
            available after calling update() or calc_K()."""
            
@@ -374,18 +376,31 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         tdvp.l = cp.deepcopy(mps.l)
         tdvp.r = cp.deepcopy(mps.r)
         tdvp.D = cp.deepcopy(mps.D)
-        tdvp.h_nn = ham_C
+        tdvp.ham = ham_C
         # TODO: Instead of updating, copy more stuff?
         tdvp.update(restore_CF=False, normalize=True)
         return tdvp
 
     def get_AA(self, n):
-        if n < 0:
+        if n < -1:
             return self.uni_l.AA[(n - 1) % self.uni_l.L]
         elif n > self.N:
             return self.uni_r.AA[(n - self.N - 1) % self.uni_r.L]
         else:
-            return self.AA[n]
+            return self._AA[n+1]
+
+    def get_AAA(self, n):
+        if n < -1:
+            return tm.calc_AAA_AA(self.uni_l.AA[(n - 1) % self.uni_l.L], self.get_A(n+2))
+        elif n > self.N:
+            return tm.calc_AAA_AA(self.uni_r.AA[(n - self.N - 1) % self.uni_r.L], self.get_A(n+2))
+        else:
+            return self._AAA[n+1]
+
+    def get_C(self, n):
+        if n < -1 or n > self.N:
+            return None
+        return self._C[n+1]
 
     def calc_C(self, n_low=-1, n_high=-1):
         """Generates the C matrices used to calculate the K's and ultimately the B's
@@ -401,23 +416,29 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         This calculation can be significantly faster if h_nn is in array form.
 
         """
-        if self.h_nn is None:
+        if self.ham is None:
             return
 
         if n_low < 1:
-            n_low = 0
+            n_low = 2 - self.ham_sites
         if n_high < 1:
             n_high = self.N + 1
-        
-        if callable(self.h_nn):
-            for n in range(n_low, n_high):
-                self.C[n] = tm.calc_C_func_op(lambda s,t,u,v: self.h_nn(n,s,t,u,v), 
-                                              self.get_A(n), self.get_A(n + 1))
-        else:
-            for n in range(n_low, n_high):                   
-                self.AA[n] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
-                
-                self.C[n] = tm.calc_C_mat_op_AA(self.h_nn[n], self.AA[n])
+
+        for n in range(n_low, n_high):
+            if callable(self.ham):
+                ham_n = lambda *args: self.ham(n, *args)
+                ham_n = sp.vectorize(ham_n, otypes=[sp.complex128])
+                ham_n = sp.fromfunction(ham_n, tuple(self.get_C(n).shape[:-2] * 2))
+            else:
+                ham_n = self.ham[n]
+
+            if self.ham_sites == 2:
+                self._AA[n+1] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
+                self._C[n+1] = tm.calc_C_mat_op_AA(ham_n, self.get_AA(n))
+            else:
+                self._AA[n+1] = tm.calc_AA(self.get_A(n), self.get_A(n + 1))
+                self._AAA[n+1] = tm.calc_AAA_AA(self.get_AA(n), self.get_A(n + 2))
+                self._C[n+1] = tm.calc_C_3s_mat_op_AAA(ham_n, self.get_AAA(n))
 
     def calc_K(self):
         """Generates the right K matrices used to calculate the B's
@@ -439,21 +460,32 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
         self.K_l[0][:] = K_left[-1]
 
-        for n in range(self.N, self.N_centre - 1, -1):
-            self.K[n], he = tm.calc_K(self.K[n + 1], self.C[n], self.get_l(n - 1),
-                                      self.r[n + 1], self.A[n], self.get_AA(n))
+        for n in range(self.N, self.N_centre - self.ham_sites + 1, -1):
+            if self.ham_sites == 2:
+                self.K[n], he = tm.calc_K(self.K[n + 1], self.get_C(n), self.get_l(n - 1),
+                                        self.r[n + 1], self.get_A(n), self.get_AA(n))
+            else:
+                self.K[n], he = tm.calc_K_3s(self.K[n + 1], self.get_C(n), self.get_l(n - 1), 
+                                            self.get_r(n + 2), self.get_A(n), self.get_AAA(n))
                 
             self.h_expect[n] = he
 
         for n in range(1, self.N_centre + 1):
-            self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.C[n - 1], self.get_l(n - 2),
-                                          self.r[n], self.A[n], self.get_AA(n - 1))
+            if self.ham_sites == 2:
+                self.K_l[n], he = tm.calc_K_l(self.K_l[n - 1], self.get_C(n - 1), self.get_l(n - 2),
+                                          self.r[n], self.get_A(n), self.get_AA(n - 1))
+            else:
+                self.K_l[n], he = tm.calc_K_3s_l(
+                    self.K_l[n - 1], self.get_C(n - 2), self.get_l(n - 3), self.r[n],
+                    self.A[n], self.get_AAA(n - 2))
                 
             self.h_expect[n - 1] = he
 
         self.dH_expect = (mm.adot_noconj(self.K_l[self.N_centre], self.r[self.N_centre]) 
-                          + mm.adot(self.l[self.N_centre - 1], self.K[self.N_centre]) 
-                          - (self.N + 1) * self.uni_r.h_expect)
+                          + mm.adot(
+                              self.l[self.N_centre - self.ham_sites + 1],
+                              self.K[self.N_centre - self.ham_sites + 2]) 
+                          - (self.N + self.ham_sites - 1) * h_left_uni)
         
 #        self.h_left = mm.adot_noconj(K_left, self.r[0])
 #        self.h_right = mm.adot(self.l[self.N], self.K[self.N + 1])
@@ -488,20 +520,31 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
             lm2 = self.get_l(n - 2)
         else:
             lm2 = None
-            
-        if n < self.N + 1:
-            C = self.C[n]
-        else:
-            C = None
         
         if right:
-            x = tm.calc_x(self.K[n + 1], C, self.C[n - 1], self.r[n + 1],
-                          lm2, self.get_A(n - 1), self.A[n], self.get_A(n + 1),
-                          sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+            if self.ham_sites == 2:
+                x = tm.calc_x(self.K[n + 1], self.get_C(n), self.get_C(n - 1), self.r[n + 1],
+                            lm2, self.get_A(n - 1), self.A[n], self.get_A(n + 1),
+                            sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+            else:
+                x = tm.calc_x_3s(self.K[n + 1], self.get_C(n), self.get_C(n - 1), self.get_C(n - 2),
+                                self.get_r(n + 1), self.get_r(n + 2),
+                                self.get_l(n - 2), self.get_l(n - 3),
+                                self.get_AA(n - 2), self.get_A(n - 1), self.A[n],
+                                self.get_A(n + 1), self.get_AA(n + 1),
+                                sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
-            x = tm.calc_x_l(self.K_l[n - 1], C, self.C[n - 1], self.r[n + 1],
+            if self.ham_sites == 2:
+                x = tm.calc_x_l(self.K_l[n - 1], self.get_C(n), self.get_C(n - 1), self.r[n + 1],
                           lm2, self.get_A(n - 1), self.A[n], self.get_A(n + 1),
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
+            else:
+                x = tm.calc_x_l_3s(self.K_l[n - 1], self.get_C(n), self.get_C(n - 1), self.get_C(n - 2),
+                                  self.get_r(n + 1), self.get_r(n + 2),
+                                  self.get_l(n - 2), self.get_l(n - 3),
+                                  self.get_AA(n - 2), self.get_A(n - 1), self.A[n],
+                                  self.get_A(n + 1), self.get_AA(n + 1),
+                                  sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
 
         return x
         
@@ -537,32 +580,46 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         lcm1 = self.get_l(Nc - 1)
         lcm2 = self.get_l(Nc - 2)
         
+        # Center tensor can alter norm, so subtract the energy here!
         #Note: this is a 'bra-vector'
         K_l_cm1 = self.K_l[Nc - 1] - lcm1 * mm.adot_noconj(self.K_l[Nc - 1], self.r[Nc - 1])
-        
         Kcp1 = self.K[Nc + 1] - rc * mm.adot(self.l[Nc], self.K[Nc + 1])
-        
-        Cc = self.C[Nc] - self.h_expect[Nc] * self.AA[Nc]
-        Ccm1 = self.C[Nc - 1] - self.h_expect[Nc - 1] * self.AA[Nc - 1]
-        
-        for s in range(self.q[1]):
-            try: #3
-                Bc[s] = Ac[s].dot(rc_i.dot_left(Kcp1))
-            except AttributeError:
-                Bc[s] = Ac[s].dot(Kcp1.dot(rc_i))
+
+        if self.ham_sites == 2:
+            # Center tensor can alter norm, so subtract the energy here!
+            Cc = self.get_C(Nc) - self.h_expect[Nc] * self.get_AA(Nc)
+            Ccm1 = self.get_C(Nc - 1) - self.h_expect[Nc - 1] * self.get_AA(Nc - 1)
             
-            for t in range(self.q[2]): #1
-                try:
-                    Bc[s] += Cc[s, t].dot(rcp1.dot(rc_i.dot_left(mm.H(Acp1[t]))))
-                except AttributeError:
-                    Bc[s] += Cc[s, t].dot(rcp1.dot(mm.H(Acp1[t]).dot(rc_i)))                    
+            for s in range(Bc.shape[0]):
+                Bc[s] = mm.mmul(Ac[s], Kcp1, rc_i)  #3
                 
-            Bcsbit = K_l_cm1.dot(Ac[s]) #4
-                            
-            for t in range(self.q[0]): #2
-                Bcsbit += mm.H(Acm1[t]).dot(lcm2.dot(Ccm1[t,s]))
-                
-            Bc[s] += lcm1_i.dot(Bcsbit)
+                for t in range(self.q[2]): #1
+                    Bc[s] += mm.mmul(Cc[s, t], rcp1, mm.H(Acp1[t]), rc_i)
+
+                Bcsbit = K_l_cm1.dot(Ac[s]) #4
+                                
+                for t in range(self.q[0]): #2
+                    Bcsbit += mm.H(Acm1[t]).dot(lcm2.dot(Ccm1[t,s]))
+                    
+                Bc[s] += lcm1_i.dot(Bcsbit)
+        else:
+            Cc = self.get_C(Nc) - self.h_expect[Nc] * self.get_AAA(Nc)
+            Ccm1 = self.get_C(Nc - 1) - self.h_expect[Nc - 1] * self.get_AAA(Nc - 1)
+            Ccm1 = Ccm1.transpose((1,0,2,3,4)).copy()
+            Ccm2 = self.get_C(Nc - 2) - self.h_expect[Nc - 2] * self.get_AAA(Nc - 2)
+            Ccm2 = Ccm2.transpose((2,0,1,3,4)).copy()
+            for s in range(Bc.shape[0]):
+                Bc[s] = mm.mmul(Ac[s], Kcp1, rc_i)
+                Bc[s] += lcm1_i.dot(K_l_cm1.dot(Ac[s]))
+                Bc[s] += mm.mmul(
+                    tm.eps_r_op_2s_AA12_C34(self.get_r(Nc + 2), Cc[s], self.get_AA(Nc + 1)),
+                    rc_i)
+                Bc[s] += mm.mmul(
+                    lcm1_i,
+                    tm.eps_l_op_2s_AA12_C34(self.get_l(Nc - 3), self.get_AA(Nc - 2), Ccm2[s]))
+                part = sp.array([tm.eps_r_noop(rcp1, Ccm1[s,t,:,:,:], Acp1) for t in range(Ccm1.shape[1])])
+                part = tm.eps_l_noop(lcm2, Acm1, part)
+                Bc[s] += mm.mmul(lcm1_i, part, rc_i)
            
         rb = tm.eps_r_noop(rc, Bc, Bc)
         eta_sq = mm.adot(lcm1, rb)
@@ -681,7 +738,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
 
             if (not Vrh_np1 is None and not Vlh_n is None):
-                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh_n, 
+                _, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n, 
                                            Vrh_np1, l_s_nm1, r_s_np1)
         return etaBB_sq
 
@@ -705,7 +762,7 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
                 self.get_A(n+1), r_s_np1, sanity_checks=self.sanity_checks)
 
             if (not Vrh_np1 is None and not Vlh_n is None):
-                Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s(self.C[n], Vlh_n, 
+                Y_n, etaBB_sq[n] = tm.calc_BB_Y_2s(self.get_C(n), Vlh_n, 
                                            Vrh_np1, l_s_nm1, r_s_np1)
 
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(
@@ -826,14 +883,14 @@ class EvoMPS_TDVP_Sandwich(EvoMPS_MPS_Sandwich):#, EvoMPS_TDVP_Generic):
         
     def grow_left(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_left(m)
-        if not callable(self.h_nn):
-            self.h_nn = [self.uni_l.ham] * m * self.uni_l.L + list(self.h_nn)
+        if not callable(self.ham):
+            self.ham = [self.uni_l.ham] * m * self.uni_l.L + list(self.ham)
         self.N_centre += m
             
     def grow_right(self, m):
         super(EvoMPS_TDVP_Sandwich, self).grow_right(m)
-        if not callable(self.h_nn):
-            self.h_nn = list(self.h_nn) + [self.uni_r.ham] * m * self.uni_r.L
+        if not callable(self.ham):
+            self.ham = list(self.ham) + [self.uni_r.ham] * m * self.uni_r.L
 
     def save_state(self, file_name, userdata=None):
         tosave = sp.empty((9), dtype=sp.ndarray)
