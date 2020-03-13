@@ -24,7 +24,8 @@ def evolve(sys, t, dt=0.01, integ="euler",
             break
 
         if integ.lower() == "euler":
-            sys.take_step(dt * 1.j, B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
+            _dynexp = dynexp and sys.maxD_is_less_than(D_max)
+            sys.take_step(dt * 1.j, B=B, dynexp=_dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
         elif integ.lower() == "rk4":
             if dynexp and sys.maxD_is_less_than(D_max):
                 dt_e = dt**(5. / 2.)  # Do a small Euler step with an error of the same order as the RK4 step
