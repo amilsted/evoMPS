@@ -437,6 +437,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
                     DMRG=False,
                     print_progress=True, norm_est=1.0,
                     two_site=False, D_max=None, min_schmidt=None,
+                    switch_to_1site=False,
                     KL_bulk=None, KR_bulk=None,
                     cb_func=None, debug=False):
     """Take a time-step dtau using the split-step integrator.
@@ -756,19 +757,19 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             return norm_est, None, None, 0.0
 
         if DMRG:
-            terr = opt_AA(n, moving_right=n < mps.N - 1)
+            terr = opt_AA(n, moving_right=True)
             expm_info_AA = None
         else:
             norm_est, expm_info_AA, terr = evolve_AA(
-                n, dtau/2., norm_est, calc_norm_est=True, moving_right=n < mps.N - 1)
+                n, dtau/2., norm_est, calc_norm_est=True, moving_right=True)
         # centre matrix has now moved one site right
 
         expm_info_A = None
-        if n < mps.N - 1:
-            update_Heff_left(n)
+        update_Heff_left(n)  # We do this at n == N - 1 too, in case we want
+                             # to do a one-site update on the return sweep.
 
-            if not DMRG:
-                _, expm_info_A = evolve_A(n + 1, -dtau/2., norm_est)
+        if n < mps.N - 1 and not DMRG:
+            _, expm_info_A = evolve_A(n + 1, -dtau/2., norm_est)
 
         return norm_est, expm_info_AA, expm_info_A, terr
 
@@ -801,7 +802,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
     def left_move_2site(n, norm_est):
         if debug:
             _check_central(mps, n+1)
-        if n == mps.N:
+        if n == 0:
             return norm_est, None, None, 0.0
 
         if DMRG:
@@ -814,7 +815,9 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
 
         update_Heff_right(n+1)
         if n == 1:
-            update_Heff_right(1)  # so we have the energy expectation value
+            update_Heff_right(1)  # so we have the energy expectation value,
+                                  # and so we can do a one-site move next,
+                                  # if the bond dim. is maxed out.
 
         if not DMRG and n > 1:
             _, expm_info_A = evolve_A(n, -dtau/2., norm_est)
@@ -842,33 +845,48 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             HMA[n] = tm.apply_MPO_local(HM[n], mps.A[n])
             HMR[n - 1] = mps.calc_MPO_rm1(HMA[n], n, HMR[n])
 
+    def can_increase_D(n):
+        can = (
+            (mps.D[n] < D_max) and
+            (mps.D[n] < mps.D[n-1] * mps.q[n]) and
+            (mps.D[n] < mps.D[n+1] * mps.q[n+1]))
+        return can
+
     for i in range(num_steps):
         iexpm_lr = [None] * (2 * mps.N + 1)
         terr_lr = sp.zeros(mps.N+1)
         for n in range(1, mps.N + 1):
             if print_progress:
-                print('{0}\r'.format("Sweep LR:" + str(n) + '        '), end=' ')
-            sys.stdout.flush()
-            if two_site:
+                sys.stdout.write('\r{0}'.format("Sweep LR:" + str(n) + '        '))
+                sys.stdout.flush()
+            if two_site and (can_increase_D(n) or not switch_to_1site):
                 norm_est, iexpm_lr[2*n-1], iexpm_lr[2*n], terr_lr[n] = right_move_2site(n, norm_est)
+                if n == mps.N - 1:
+                    # To avoid evolving the last site twice, in case N-1 was two-step.
+                    norm_est, iexpm_lr[2*n+1], iexpm_lr[2*n+2], terr_lr[n+1] = right_move_2site(n+1, norm_est)
+                    continue
             else:
                 norm_est, iexpm_lr[2*n-1], iexpm_lr[2*n] = right_move_1site(n, norm_est)
-        if print_progress:
-            print()
-        
+                terr_lr[n] = sp.NaN
+
         iexpm_rl = [None] * (2 * mps.N + 1)
         terr_rl = sp.zeros(mps.N+1)
         for n in range(mps.N, 0, -1):
             if print_progress:
-                print('{0}\r'.format("Sweep RL:" + str(n) + '        '), end=' ')
-            sys.stdout.flush()
-            if two_site:
-                norm_est, iexpm_rl[2*n-1], iexpm_rl[2*n], terr_rl[n] = left_move_2site(n, norm_est)
+                sys.stdout.write('\r{0}'.format("Sweep RL:" + str(n) + '        '))
+                sys.stdout.flush()
+            if two_site and (can_increase_D(n-1) or not switch_to_1site):
+                norm_est, iexpm_rl[2*n-1], iexpm_rl[2*n], terr_rl[n] = left_move_2site(n-1, norm_est)
+                if n == 2:
+                    # To avoid evolving the first site twice, in case 2 was two-step.
+                    norm_est, iexpm_rl[2*n-3], iexpm_rl[2*n-2], terr_rl[n-1] = left_move_2site(n-2, norm_est)
+                    continue
             else:
                 norm_est, iexpm_rl[2*n-1], iexpm_rl[2*n] = left_move_1site(n, norm_est)
+                terr_rl[n] = sp.NaN
         if print_progress:
-            print()
-    
+            sys.stdout.write('\r')
+
         if cb_func is not None:
             # We guarantee this, but do not update the r matrices as we go.
             # Do it now.
