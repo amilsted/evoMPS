@@ -356,8 +356,10 @@ class Vari_Opt_SC_op:
         self.sanity_checks = sanity_checks
         self.sanity_tol = 1E-12
         
-        d = self.D[n] * self.D[n]
+        #d = self.D[n] * self.D[n]
+        d = mps.get_A(n).shape[2] * mps.get_A(n + 1).shape[1]
         self.shape = (d, d)
+        self.Gshape = (mps.get_A(n).shape[2], mps.get_A(n + 1).shape[1])
         
         self.dtype = sp.dtype(mps.typ)
         
@@ -419,7 +421,7 @@ class Vari_Opt_SC_op:
 
         n = self.n
         
-        Gn = x.reshape((self.D[n], self.D[n]))
+        Gn = x.reshape(self.Gshape)
 
         res = sp.zeros_like(Gn)
         
@@ -576,6 +578,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
                               HML=HML[n], HMR=HMR[n],
                               use_local_ham=use_local_ham,
                               sanity_checks=mps.sanity_checks)
+        Gshp = G.shape
         Gold = G.ravel()
         if debug:
             print(n, sp.inner(Gold.conj(), lop.matvec(Gold))/sp.inner(Gold.conj(), Gold), sp.inner(Gold.conj(), Gold), "evolve_G")
@@ -583,6 +586,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
         #G = zexpmv(lop2, Gold, -dtau/2., norm_est=norm_est, m=ncv, tol=tol,
         #           A_is_Herm=op_is_herm)
         ncv_G = min(ncv, len(Gold)-1)
+
         G, conv, nstep, brkdown, mb, err = gexpmv(
             lop, Gold, step, norm_est, m=ncv_G, tol=tol, mxstep=expm_max_steps)
         expm_info = {
@@ -593,7 +597,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             'num_steps': nstep}
         if not conv:
             log.warn("Krylov exp(M)*v solver for G did not converge in %u steps for site %u.", nstep, n)
-        G = G.reshape((mps.D[n], mps.D[n]))
+        G = G.reshape(Gshp)
         G /= sp.sqrt(mm.adot(G, G))
         return G, expm_info
         
@@ -739,14 +743,16 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             #shift centre matrix right (RCF is like having a centre "matrix" at "1")
             G = tm.restore_LCF_l_seq(mps.A[n - 1:n + 1], mps.l[n - 1:n + 1],
                                     sanity_checks=mps.sanity_checks) 
+            # NOTE: In some cases, G may not be square.
 
             update_Heff_left(n)
             
             if not DMRG:
                 G, expm_info_G = evolve_G(n, -dtau/2., G, norm_est)
             
-            for s in range(mps.q[n + 1]):
-                mps.A[n + 1][s] = G.dot(mps.A[n + 1][s])
+            Anp1 = sp.array([G.dot(mps.A[n + 1][s]) for s in range(mps.q[n + 1])])
+            mps.A[n + 1] = Anp1
+            mps.D[n] = Anp1.shape[1]
 
         return norm_est, expm_info_A, expm_info_G
 
@@ -786,7 +792,7 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             #shift centre matrix left (LCF is like having a centre "matrix" at "N")
             Gi = tm.restore_RCF_r_seq(mps.A[n - 1:n + 1], mps.r[n - 1:n + 1],
                                     sanity_checks=mps.sanity_checks)
-                                    
+            # NOTE: In some cases, Gi may not be square.
         update_Heff_right(n)
 
         expm_info_G = None
@@ -794,8 +800,9 @@ def evolve_split(mps, ham, ham_sites, dtau, num_steps, ham_is_Herm=True, HMPO=No
             if not DMRG:
                 Gi, expm_info_G = evolve_G(n - 1, -dtau/2., Gi, norm_est)
 
-            for s in range(mps.q[n - 1]):
-                mps.A[n - 1][s] = mps.A[n - 1][s].dot(Gi)
+            Anm1 = sp.array([mps.A[n - 1][s].dot(Gi) for s in range(mps.q[n - 1])])
+            mps.A[n - 1] = Anm1
+            mps.D[n - 1] = Anm1.shape[2]
 
         return norm_est, expm_info_A, expm_info_G
 
