@@ -1600,7 +1600,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                  refac=refac, imfac=imfac)
 
     @classmethod
-    def from_file(cls, file, ham, ham_sites=None):
+    def from_file(cls, file, ham, ham_sites=None, do_update=True):
         state = np.load(file, allow_pickle=True)
         newA = state[0]
         if len(newA.shape) == 3:
@@ -1610,8 +1610,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         dtype = newA[0].dtype
         L = len(newA)
         q, D, _ = newA[0].shape
-        tdvp = cls(D, q, ham, ham_sites, L, dtype, False)
-        tdvp.import_state(state)
+        tdvp = cls(D, q, ham, ham_sites, L, dtype, do_update=False)
+        tdvp.import_state(state, do_update=do_update)
         return tdvp
 
     def set_q(self, newq, offset=0):
