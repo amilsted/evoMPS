@@ -1799,14 +1799,14 @@ class EvoMPS_MPS_Uniform(object):
         
         Aop = [np.tensordot(op, A, axes=([1],[0])) for A in self.A]
         
-        res = sp.zeros((d), dtype=self.A[0].dtype)
+        res = []
         x = self.l[(k - 1) % self.L]
         for n in range(k, k + d + 1):
             nm = n % self.L
             x = tm.eps_l_noop(x, self.A[nm], Aop[nm])
-            res[n - k - 1] = m.adot(x, self.r[nm])
+            res.append(m.adot(x, self.r[nm]))
         
-        return res
+        return np.array(res)
         
     def basis_occupancy(self, k=0):
         L = self.L
