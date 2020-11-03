@@ -27,6 +27,9 @@ def calc_AA(A, Ap1):
     #AA = np.array([dot(A[s], A[t]) for s in xrange(self.q) for t in xrange(self.q)])
     #self.AA = AA.reshape(self.q, self.q, self.D, self.D)
 
+    #So does this
+    #return np.transpose(np.tensordot(A, Ap1, axes=((2,),(1,))), (0,2,1,3))
+
 def calc_AAA(A, Ap1, Ap2):
     Dp2 = Ap2.shape[2]
     Dp1 = Ap1.shape[2]
@@ -46,18 +49,33 @@ def calc_AAA(A, Ap1, Ap2):
     
     return AAA
     
-def calc_AAA_AA(AAp1, Ap2):
+def calc_AAA_AA(AA, Ap2):
     Dp2 = Ap2.shape[2]
-    Dm1 = AAp1.shape[2]
-    q = AAp1.shape[0]
-    qp1 = AAp1.shape[1]
+    Dm1 = AA.shape[2]
+    q = AA.shape[0]
+    qp1 = AA.shape[1]
     qp2 = Ap2.shape[0]
     
-    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AAp1.dtype)
+    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=AA.dtype)
     for u in range(q):
         for v in range(qp1):
             for w in range(qp2):
-                np.dot(AAp1[u, v], Ap2[w], out=AAA[u, v, w])
+                np.dot(AA[u, v], Ap2[w], out=AAA[u, v, w])
+    
+    return AAA
+
+def calc_AAA_AAr(A, AAp1):
+    Dp2 = AAp1.shape[3]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    qp1 = AAp1.shape[0]
+    qp2 = AAp1.shape[1]
+    
+    AAA = np.zeros((q, qp1, qp2, Dm1, Dp2), dtype=A.dtype)
+    for u in range(q):
+        for v in range(qp1):
+            for w in range(qp2):
+                np.dot(A[u], AAp1[v, w], out=AAA[u, v, w])
     
     return AAA
     
@@ -225,6 +243,21 @@ def eps_l_op_1s(x, A1, A2, op):
             if o_st != 0:
                 out += o_st * A1[s].conj().T.dot(x.dot(A2[t]))
     return out
+
+#WIP
+def eps_l_op_MPO(x, A1, A2, op): #x: [M,Dket,Dbra]
+    op = op.conj() #[M1,M2,pbra,pket]
+    A1x = np.tensordot(A1.conj(), x, axes=((1), (1))) #[p,D2ket, xM,xD2bra]
+    A1xop = np.tensordot(op, A1x, axes=((0,3), (2,0))) #[M2,pbra, D2ket,xD2bra]
+    res = np.tensordot(A1xop, A2, axes=((1,3),(0,1))) #[M2,D2ket,D2bra]
+    return res
+
+#WIP
+def eps_r_op_MPO(x, A1, A2, op): #x: [M,Dket,Dbra], op: [M1,M2,pbra,pket]
+    A1x = np.tensordot(A1, x, axes=((2), (1))) #[p,D1ket, xM,xD2bra]
+    A1xop = np.tensordot(op, A1x, axes=((1,3), (2,0))) #[M1,pbra, D1ket,xD2bra]
+    res = np.tensordot(A1xop, A2.conj(), axes=((1,3),(0,2))) #[M1,D1ket,D1bra]
+    return res
     
 def eps_r_noop_multi(x, A1, A2):
     """Implements the right epsilon map

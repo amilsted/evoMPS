@@ -71,6 +71,9 @@ cpdef np.ndarray calc_AAA(np.ndarray A, np.ndarray Ap1, np.ndarray Ap2)
 @cython.locals(Dp2 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int, u = cython.int, v = cython.int, w = cython.int, AAA = np.ndarray)
 cpdef np.ndarray calc_AAA_AA(np.ndarray AAp1, np.ndarray Ap2)
 
+@cython.locals(Dp2 = cython.int, Dm1 = cython.int, q = cython.int, qp1 = cython.int, qp2 = cython.int, u = cython.int, v = cython.int, w = cython.int, AAA = np.ndarray)
+cpdef np.ndarray calc_AAA_AAr(np.ndarray A, np.ndarray AAp1)
+
 @cython.locals(q = cython.int, qp1 = cython.int, s = cython.int, t = cython.int, u = cython.int, v = cython.int, h_nn_stuv = npcmp, AAuv = np.ndarray, C = np.ndarray)
 cpdef np.ndarray calc_C_func_op(op, np.ndarray A, np.ndarray Ap1)
 

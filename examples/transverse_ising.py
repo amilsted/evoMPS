@@ -27,7 +27,7 @@ step = 0.08                   #Imaginary time step size
 realstep = 0.01               #Real time step size
 real_steps = 300              #Number of real time steps to simulate
 
-load_saved_ground = True     #Whether to load a saved ground state
+load_saved_ground = False     #Whether to load a saved ground state
 
 auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-12              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
@@ -47,6 +47,23 @@ Sy = 1.j * sp.array([[0, -1],
                        [1, 0]])
 Sz = sp.array([[1, 0],
                  [0, -1]])
+Eye = sp.eye(2)
+
+"""
+Construct an MPO for the total magnetization.
+"""
+mag_MPO_st = sp.zeros((1,2, 2,2))
+mag_MPO_st[0,0,:,:] = Sz
+mag_MPO_st[0,1,:,:] = Eye
+mag_MPO_mid = sp.zeros((2,2, 2,2))
+mag_MPO_mid[0,0,:,:] = Eye
+mag_MPO_mid[1,0,:,:] = Sz
+mag_MPO_mid[1,1,:,:] = Eye
+mag_MPO_end = sp.zeros((2,1, 2,2))
+mag_MPO_end[0,0,:,:] = Eye
+mag_MPO_end[1,0,:,:] = Sz
+
+mag_MPO = [mag_MPO_st] + [mag_MPO_mid]*(N-2) + [mag_MPO_end]
 
 """
 A nearest-neighbour Hamiltonian is a sequence of 4-dimensional arrays, one for
@@ -113,7 +130,6 @@ else:
     real_time = False
     loaded = False
 
-
 if __name__ == '__main__':
     """
     Prepare some loop variables and some vectors to hold data from each step.
@@ -178,8 +194,7 @@ if __name__ == '__main__':
         row.append("%.3g" % Sy_3.real)
         row.append("%.3g" % Sz_3.real)
 
-        m_n = [s.expect_1s(Sz, n).real for n in range(1, N + 1)] #Magnetization
-        m = sp.sum(m_n)
+        m = s.expect_MPO(mag_MPO, 1)
 
         row.append("%.9g" % m)
         M.append(m)

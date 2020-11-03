@@ -12,12 +12,50 @@ import scipy.linalg as la
 from . import matmul as mm
 from . import tdvp_common as tm
 from .mps_gen import EvoMPS_MPS_Generic
+from .mps_uniform import EvoMPS_MPS_Uniform
+from .mps_uniform_pinv import pinv_1mE
 import copy
+
+def sandwich_from_tensors(As_L, As_C, As_R):
+    """Creates a sandwich state from a collection of MPS tensors.
+    `As_L` is the left uniform bulk unit cell.
+    `As_C` is the central nonuniform window.
+    `As_R` is the right uniform bulk unit cell.
+    """
+    N = len(As_C)
+
+    qL = As_L[0].shape[0]
+    DL = As_L[0].shape[1]
+    dtype = As_L[0].dtype
+    sw = EvoMPS_MPS_Sandwich(
+        N,
+        EvoMPS_MPS_Uniform(
+            DL, qL, L=len(As_L), dtype=dtype, do_update=False)
+    )
+
+    for n in range(1, N + 1):
+        sw.A[n] = As_C[n - 1]
+
+    Ds = sp.array(
+        [DL] +
+        [sw.A[n].shape[2] for n in range(1, N + 1)] +
+        [As_R[0].shape[1]]
+    )
+    sw.D = Ds
+
+    sw.uni_l.A = As_L
+    sw.uni_r.A = As_R
+    sw.uni_l.update(restore_CF=False)
+    sw.uni_r.update(restore_CF=False)
+
+    sw.update(restore_CF=False, normalize=False)
+
+    return sw
 
 
 class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
-    def __init__(self, N, uni_ground):
+    def __init__(self, N, uni_ground, uni_right=None, update_bulks=True):
         self.odr = 'C'
         self.typ = sp.complex128
 
@@ -44,14 +82,22 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
            q[n] x D[n - 1] x D[n] tensor."""
           
         self.uni_l = copy.deepcopy(uni_ground)
-        self.uni_l.symm_gauge = True
         self.uni_l.sanity_checks = self.sanity_checks
-        self.uni_l.update()
+        if update_bulks:
+            self.uni_l.symm_gauge = True
+            self.uni_l.update()
         
         if not N % self.uni_l.L == 0:
             print("Warning: Length of nonuniform window is not a multiple of the uniform block size.")
 
-        self.uni_r = copy.deepcopy(self.uni_l)
+        if uni_right is not None:
+            self.uni_r = copy.deepcopy(uni_right)
+            self.uni_r.sanity_checks = self.sanity_checks
+            if update_bulks:
+                self.uni_r.symm_gauge = True
+                self.uni_r.update()
+        else:
+            self.uni_r = copy.deepcopy(self.uni_l)
 
         self.grown_left = 0
         self.grown_right = 0
@@ -62,7 +108,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         for n in range(1, self.N + 1):
             self.A[n][:] = self.uni_l.A[(n - 1) % self.uni_l.L]
-        
+
         for n in range(self.N + 2):
             self.r[n][:] = sp.asarray(self.uni_l.r[(n - 1) % self.uni_l.L])
             self.l[n][:] = sp.asarray(self.uni_l.l[(n - 1) % self.uni_l.L])
@@ -84,6 +130,90 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
             if 0 < n <= self.N:
                 self.A[n] = sp.zeros((self.q[n], self.D[n-1], self.D[n]), dtype=self.typ, order=self.odr)
 
+    @classmethod
+    def from_tensors(cls, As_L, As_C, As_R):
+        """Creates a sandwich state from a collection of MPS tensors.
+        `As_L` is the left uniform bulk unit cell.
+        `As_C` is the central nonuniform window.
+        `As_R` is the right uniform bulk unit cell.
+        """
+        N = len(As_C)
+
+        qL, DL = As_L[0].shape[0:2]
+        qR, DR = As_R[0].shape[0:2]
+        dtype = As_L[0].dtype
+        sw = cls(
+            N,
+            EvoMPS_MPS_Uniform(
+                DL, qL, L=len(As_L), dtype=dtype, do_update=False),
+            uni_right=EvoMPS_MPS_Uniform(
+                DR, qR, L=len(As_R), dtype=dtype, do_update=False),
+            update_bulks=False
+        )
+
+        for n in range(1, N + 1):
+            sw.A[n] = As_C[n - 1]
+
+        Ds = sp.array(
+            [DL] +
+            [sw.A[n].shape[2] for n in range(1, N + 1)] +
+            [As_R[0].shape[1]]
+        )
+        sw.D = Ds
+
+        sw.uni_l.A = As_L
+        sw.uni_r.A = As_R
+        sw.uni_l.update(restore_CF=False)
+        sw.uni_r.update(restore_CF=False)
+
+        sw.update(restore_CF=False, normalize=False)
+
+        return sw
+
+    @classmethod
+    def from_file(cls, file_name):
+        toload = sp.load(file_name, allow_pickle=True)
+        tensors = toload[0]
+
+        return cls.from_tensors(tensors[0], tensors[1:-2], tensors[-2])
+
+        # self.uni_l.A = tensors[0]
+        # self.uni_l.l[-1] = toload[1]
+        # self.uni_l.r[-1] = toload[2]
+        # self.uni_l.l_before_CF = self.uni_l.l[-1]
+        # self.uni_l.r_before_CF = self.uni_l.r[-1]
+
+        # self.uni_r.A = tensors[-2]
+        # self.uni_r.l[-1] = toload[5]
+        # self.uni_r.r[-1] = toload[4]
+        # self.uni_r.l_before_CF = self.uni_r.l[-1]
+        # self.uni_r.r_before_CF = self.uni_r.r[-1]
+
+        # self.grown_left = toload[7][0, 0]
+        # self.grown_right = toload[7][0, 1]
+        # self.shrunk_left = toload[7][1, 0]
+        # self.shrunk_right = toload[7][1, 1]
+
+    def save_state(self, file_name, userdata=None):
+        tosave = sp.empty((9), dtype=sp.ndarray)
+
+        Asave = self.A.copy()
+        Asave[0] = self.uni_l.A
+        Asave[self.N + 1] = self.uni_r.A
+
+        tosave[0] = Asave
+        tosave[1] = self.l[0]
+        tosave[2] = self.uni_l.r[-1]
+        tosave[3] = None
+        tosave[4] = self.r[self.N]
+        tosave[5] = self.uni_r.l[-1]
+        tosave[6] = None
+        tosave[7] = sp.array([[self.grown_left, self.grown_right],
+                             [self.shrunk_left, self.shrunk_right]])
+        tosave[8] = userdata
+
+        sp.save(file_name, tosave)
+
     @property
     def sanity_checks(self):
         """Whether to perform additional (potentially costly) sanity checks."""
@@ -98,10 +228,13 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
     def correct_bond_dimension(self):
         raise NotImplementedError("correct_bond_dimension not currently implemented in sandwich case")
 
-    def update(self, restore_CF=True, normalize=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False):
         """Perform all necessary steps needed before taking the next step,
         or calculating expectation values etc., is possible.
         """
+        if auto_truncate:
+            raise NotImplementedError()
+
         if restore_CF:
             self.restore_CF()
         else:
@@ -124,6 +257,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if n_high < 0:
             n_high = self.N
 
+        self.l[0] = self.uni_l.l[-1]
         super(EvoMPS_MPS_Sandwich, self).calc_l(n_low=n_low, n_high=n_high)
         
         self.l[self.N + 1] = tm.eps_l_noop(self.l[self.N], self.uni_r.A[0], self.uni_r.A[0])
@@ -138,6 +272,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
         if n_high < 0:
             n_high = self.N - 1
 
+        self.r[self.N] = self.uni_r.r[-1]
         super(EvoMPS_MPS_Sandwich, self).calc_r(n_low=n_low, n_high=n_high)
 
     def simple_renorm(self, update_lr=True):
@@ -151,7 +286,7 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         if update_lr:
             self.calc_l(n_low=self.N_centre)
-            self.calc_r(n_high=self.N_centre)
+            self.calc_r(n_high=self.N_centre-1)
 
     def restore_CF_dbg(self):
         for n in range(self.N + 2):
@@ -439,6 +574,20 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
     #TODO: Add shrinking by fidelity and gauge-alignment!
 
+    def get_D(self, n):
+        if n < 0:
+            return self.uni_l.D
+        elif n > self.N:
+            return self.uni_r.D
+        return self.D[n]
+
+    def get_q(self, n):
+        if n < 1:
+            return self.uni_l.q
+        elif n > self.N:
+            return self.uni_r.q
+        return self.q[n]
+
     def get_A(self, n):
         if n < 1:
             return self.uni_l.A[(n - 1) % self.uni_l.L]
@@ -477,158 +626,14 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
                 m = n % self.uni_l.L
                 return tm.eps_r_noop(r_np1, self.uni_l.A[m], self.uni_l.A[m])
 
-    def expect_1s(self, op, n):
-        """Computes the expectation value of a single-site operator.
-
-        A single-site operator is represented as a function taking three
-        integer arguments (n, s, t) where n is the site number and s, t
-        range from 0 to q[n] - 1 and define the requested matrix element <s|o|t>.
-
-        Assumes that the state is normalized.
-
-        Parameters
-        ----------
-        o : ndarray or callable
-            The operator.
-        n : int
-            The site number.
-        """
-        A = self.get_A(n)
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (A.shape[0], A.shape[0]))
-
-        res = tm.eps_r_op_1s(self.get_r(n), A, A, op)
-        return mm.adot(self.get_l(n - 1), res)
-
-    def expect_2s(self, op, n):
-        """Computes the expectation value of a nearest-neighbour two-site operator.
-
-        The operator should be a q[n] x q[n + 1] x q[n] x q[n + 1] array
-        such that op[s, t, u, v] = <st|op|uv> or a function of the form
-        op(s, t, u, v) = <st|op|uv>.
-
-        Parameters
-        ----------
-        o : ndarray or callable
-            The operator array or function.
-        n : int
-            The leftmost site number (operator acts on n, n + 1).
-        """
-        A = self.get_A(n)
-        Ap1 = self.get_A(n + 1)
-        AA = tm.calc_AA(A, Ap1)
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (A.shape[0], Ap1.shape[0], A.shape[0], Ap1.shape[0]))
-
-        C = tm.calc_C_mat_op_AA(op, AA)
-        res = tm.eps_r_op_2s_C12_AA34(self.get_r(n + 1), C, AA)
-        return mm.adot(self.get_l(n - 1), res)
-
-    def expect_1s_cor(self, op1, op2, n1, n2):
-        """Computes the correlation of two single site operators acting on two different sites.
-
-        See expect_1S().
-
-        n1 must be smaller than n2.
-
-        Assumes that the state is normalized.
-
-        Parameters
-        ----------
-        op1 : function
-            The first operator, acting on the first site.
-        op2 : function
-            The second operator, acting on the second site.
-        n1 : int
-            The site number of the first site.
-        n2 : int
-            The site number of the second site (must be > n1).
-        """
-        A1 = self.get_A(n1)
-        A2 = self.get_A(n2)
-
-        if callable(op1):
-            op1 = sp.vectorize(op1, otypes=[sp.complex128])
-            op1 = sp.fromfunction(op1, (A1.shape[0], A1.shape[0]))
-
-        if callable(op2):
-            op2 = sp.vectorize(op2, otypes=[sp.complex128])
-            op2 = sp.fromfunction(op2, (A2.shape[0], A2.shape[0]))
-
-        r_n = tm.eps_r_op_1s(self.get_r(n2), A2, A2, op2)
-
-        for n in reversed(range(n1 + 1, n2)):
-            r_n = tm.eps_r_noop(r_n, self.get_A(n), self.get_A(n))
-
-        r_n = tm.eps_r_op_1s(r_n, A1, A1, op1)
-
-        return mm.adot(self.get_l(n1 - 1), r_n)
-
-    def density_2s(self, n1, n2):
-        """Returns a reduced density matrix for a pair of sites.
-        
-        Currently only supports sites in the nonuniform window.
-
-        Parameters
-        ----------
-        n1 : int
-            The site number of the first site.
-        n2 : int
-            The site number of the second site (must be > n1).
-        """
-        rho = sp.empty((self.q[n1] * self.q[n2], self.q[n1] * self.q[n2]), dtype=sp.complex128)
-        r_n2 = sp.empty_like(self.r[n2 - 1])
-        r_n1 = sp.empty_like(self.r[n1 - 1])
-        ln1m1 = self.get_l(n1 - 1)
-
-        for s2 in range(self.q[n2]):
-            for t2 in range(self.q[n2]):
-                r_n2 = mm.mmul(self.A[n2][t2], self.r[n2], mm.H(self.A[n2][s2]))
-
-                r_n = r_n2
-                for n in reversed(range(n1 + 1, n2)):
-                    r_n = tm.eps_r_noop(r_n, self.A[n], self.A[n])
-
-                for s1 in range(self.q[n1]):
-                    for t1 in range(self.q[n1]):
-                        r_n1 = mm.mmul(self.A[n1][t1], r_n, mm.H(self.A[n1][s1]))
-                        tmp = mm.adot(ln1m1, r_n1)
-                        rho[s1 * self.q[n1] + s2, t1 * self.q[n1] + t2] = tmp
-        return rho
-
-    def apply_op_1s(self, op, n):
-        """Applies a one-site operator op to site n.
-
-        Can be used to create excitations.
-        """
-
-        if not (0 < n <= self.N):
-            raise ValueError("Operators can only be applied to sites 1 to N!")
-
-        newA = sp.zeros_like(self.A[n])
-
-        if callable(op):
-            op = sp.vectorize(op, otypes=[sp.complex128])
-            op = sp.fromfunction(op, (self.q[n], self.q[n]))
-
-        for s in range(self.q[n]):
-            for t in range(self.q[n]):
-                newA[s] += self.A[n][t] * op[s, t]
-
-        self.A[n] = newA
-
     def overlap(self, other, sanity_checks=False):
         if not self.N == other.N:
             print("States must have same number of non-uniform sites!")
             return
 
-        if not sp.all(self.D == other.D):
-            print("States must have same bond-dimensions!")
-            return
+        #if not sp.all(self.D == other.D):
+        #    print("States must have same bond-dimensions!")
+        #    return
 
         if not sp.all(self.q == other.q):
             print("States must have same Hilbert-space dimensions!")
@@ -651,8 +656,8 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 #
 #            print la.norm(AR - self.uni_r.A)
 
-        r = gr.dot(sp.asarray(other.uni_r.r)).dot(mm.H(gr))
-        fac = la.norm(sp.asarray(self.uni_r.r)) / la.norm(r)
+        r = mm.mmul(gr, other.uni_r.r[-1], mm.H(gr))
+        fac = la.norm(sp.asarray(self.uni_r.r[-1])) / la.norm(r)
         gr *= sp.sqrt(fac)
         gri /= sp.sqrt(fac)
 
@@ -707,9 +712,111 @@ class EvoMPS_MPS_Sandwich(EvoMPS_MPS_Generic):
 
         return mm.adot(self.uni_l.l[-1], r)
 
-    def save_state(self, file):
-        raise NotImplementedError("save_state not implemented in sandwich case")
+    def overlap_tangent(self, B, p, top_triv=True, return_contributions=False):
+        """Inner product of the state with an MPS tangent vector.
+        Assumes the uniform left and right parts of the tangent vector terms
+        are defined by the *same tensors* that define the left and right bulk
+        parts of the sandwich state.
+        This will generically require computing excitations anew using the left
+        and right bulk tensors.
 
+        It is also assumed that `B` is "right gauge-fixing" with respect to
+        its bulk tensors.
+        """
+        if not (self.uni_l.L == 1 and self.uni_r.L == 1):
+            raise ValueError("Bulk unit cell size must currently be 1.")
+        rR = self.uni_r.r[0]
+        AR = self.uni_r.A[0]
+        check_gf = tm.eps_r_noop(rR, AR, B)
+        print("check GF:", la.norm(check_gf))
 
-    def load_state(self, file):
-        raise NotImplementedError("load_state not implemented in sandwich case")
+        lL = self.uni_l.l[0]
+        AL = self.uni_l.A[0]
+
+        pseudo = top_triv
+
+        # FIXME: rR is not correct here since, even if top_triv is true,
+        #        AL and AR need not be equal.
+        vBL = pinv_1mE(
+            tm.eps_l_noop(lL, AL, B), [AL], [AR], lL, rR, p=p, 
+            left=True, pseudo=pseudo)
+
+        rs = [rR]
+        for j in range(self.N, 0, -1):
+            rs.insert(0, tm.eps_r_noop(rs[0], self.A[j], AR))
+        # rs[0] is now the right half including site 1, so the r matrix needed
+        # for computations involving site 0.
+
+        ol_left_bulk = mm.adot(vBL, rs[0]) * sp.exp(-1.j * p)
+
+        l = lL
+        ols_window = []
+        for j in range(1, self.N + 1):
+            res_j = sp.exp(1.j * p * j) * mm.adot(
+                l, tm.eps_r_noop(rs[j], self.A[j], B))
+            ols_window.append(res_j)
+            l = tm.eps_l_noop(l, self.A[j], AL)
+
+        if return_contributions:
+            return ol_left_bulk, sp.array(ols_window)
+        return ol_left_bulk + sum(ols_window)
+
+    def load_state(self, file_name, autogrow=False, do_update=True):
+        toload = sp.load(file_name, allow_pickle=True)
+
+        if toload.shape[0] != 9:
+            print("Error loading state: Bad data!")
+            return
+
+        if autogrow and toload[0].shape[0] != self.A.shape[0]:
+            newN = toload[0].shape[0] - 3
+            print("Changing N to: %u" % newN)
+            self.grow_left(newN - self.N)
+
+        if toload[0].shape != self.A.shape:
+            print("Cannot load state: Dimension mismatch!")
+            return
+
+        self.A = toload[0]
+        self.l[0] = toload[1]
+        self.uni_l.r[-1] = toload[2]
+        self.r[self.N] = toload[4]
+        self.r[self.N + 1] = self.r[self.N]
+        self.uni_r.l[-1] = toload[5]
+
+        self.grown_left = toload[7][0, 0]
+        self.grown_right = toload[7][0, 1]
+        self.shrunk_left = toload[7][1, 0]
+        self.shrunk_right = toload[7][1, 1]
+        
+        self.uni_l.A = self.A[0]
+        self.uni_l.l[-1] = self.l[0]
+        self.uni_l.l_before_CF = self.uni_l.l[-1]
+        self.uni_l.r_before_CF = self.uni_l.r[-1]
+        
+        self.uni_r.A = self.A[self.N + 1]
+        self.uni_r.r[-1] = self.r[self.N]
+        self.uni_r.l_before_CF = self.uni_r.l[-1]
+        self.uni_r.r_before_CF = self.uni_r.r[-1]
+
+        try:
+            if len(self.uni_l.A.shape) == 3:
+                self.uni_l.A = [self.uni_l.A]
+        except AttributeError:
+            pass
+
+        try:
+            if len(self.uni_r.A.shape) == 3:
+                self.uni_r.A = [self.uni_r.A]
+        except AttributeError:
+            pass
+
+        self.A[0] = None
+        self.A[self.N + 1] = None
+
+        print("loaded.")
+        
+        if do_update:
+            self.update()
+
+        return toload[8]

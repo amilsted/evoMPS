@@ -4,10 +4,6 @@
 Created on Fri Nov  4 13:05:59 2011
 
 @author: Ashley Milsted
-
-TODO:
-    Look into using e.g. sp.linalg.fblas.zgemm._cpointer from cython? Or
-    link it to blas at compile time using distutils...
 """
 from __future__ import absolute_import, division, print_function
 

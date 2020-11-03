@@ -25,9 +25,10 @@ except ImportError:
     print("INFO: No c versions of epsilon maps. Compile extension modules for a boost at low bond-dimensions.")
     from evoMPS.core_common import eps_l_noop, eps_r_noop, \
                                    eps_l_noop_inplace, eps_r_noop_inplace
-                                   
-from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, \
+
+from evoMPS.core_common import calc_AA, calc_AAA, calc_AAA_AA, calc_AAA_AAr, \
                                eps_l_op_1s, eps_r_op_1s, eps_r_noop_multi, \
+                               eps_l_op_MPO, eps_r_op_MPO, \
                                eps_r_op_2s_A, eps_r_op_2s_AA12, \
                                eps_r_op_2s_AA_func_op, \
                                eps_r_op_2s_C12, eps_r_op_2s_C34, \
@@ -135,7 +136,7 @@ def calc_K_tp(Kp1, lm1, rp1, A, Ap1, C_tp):
     
     Hr = eps_r_op_2s_C12_tp(rp1, C_tp, A, Ap1)
 
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -146,7 +147,7 @@ def calc_K(Kp1, C, lm1, rp1, A, AAp1):
     
     Hr = eps_r_op_2s_C12_AA34(rp1, C, AAp1)
 
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -157,7 +158,7 @@ def calc_K_l_tp(Km1, lm2, r, Am1, A, Cm1_tp):
     
     Hl = eps_l_op_2s_C34_tp(lm2, Am1, A, Cm1_tp)
 
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
@@ -173,7 +174,7 @@ def calc_K_l(Km1, Cm1, lm2, r, A, Am1A):
     
     Hl = eps_l_op_2s_AA12_C34(lm2, Am1A, Cm1)
 
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
@@ -184,7 +185,7 @@ def calc_K_3s(Kp1, C, lm1, rp2, A, AAp1Ap2):
     
     Hr = eps_r_op_3s_C123_AAA456(rp2, C, AAp1Ap2)
         
-    op_expect = mm.adot(lm1, Hr)
+    op_expect = mm.adot(lm1, Hr) if lm1 is not None else np.NaN
         
     K += Hr
     
@@ -195,7 +196,7 @@ def calc_K_3s_l(Km1, Cm2, lm3, r, A, Am2Am1A):
     
     Hl = eps_l_op_3s_AAA123_C456(lm3, Am2Am1A, Cm2)  
     
-    op_expect = mm.adot_noconj(Hl, r)
+    op_expect = mm.adot_noconj(Hl, r) if r is not None else np.NaN
         
     K += Hl
     
@@ -342,12 +343,12 @@ def calc_Vsh_l(A, lm1_sqrt, sanity_checks=False):
 
     return Vsh
 
-def apply_MPO_local(Mn, An):
+def apply_MPO_local(Mn, An): #Mn: [M1,M2,pbra,pket]
     q = An.shape[0]
     Dm1 = An.shape[1]
     D = An.shape[2]
-    MAn = sp.tensordot(An, Mn, axes=[[0], [2]])
-    MAn = sp.transpose(MAn, axes=(4, 0, 2, 1, 3)).copy()
+    MAn = sp.tensordot(Mn, An, axes=[[3], [0]]) #[M1,M2,pbra, D1,D2]
+    MAn = sp.transpose(MAn, axes=(2, 3,0, 4,1)).copy() #[pbra, D1,M1, D2,M2]
     MAn = MAn.reshape((q, Dm1 * len(Mn), D * len(Mn[0])))
     
     return MAn
@@ -459,7 +460,7 @@ def calc_x_3s(Kp1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, Am2Am1, Am1, A, Ap1, Ap1Ap2,
 
     return x
     
-def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
+def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, VshL):
     D = A.shape[2]
     Dm1 = A.shape[1]
     q = A.shape[0]
@@ -472,7 +473,7 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         x_part.fill(0)
         for s in range(q):
             x_subpart = eps_r_noop_inplace(rp1, C[s], Ap1, x_subpart) #~1st line
-            x_part += Vsh[s].dot(lm1_s.dot(x_subpart))
+            x_part += VshL[s].dot(lm1_s.dot(x_subpart))
             
         try:
             x += r_si.dot_left(x_part)
@@ -490,11 +491,40 @@ def calc_x_l(Km1, C, Cm1, rp1, lm2, Am1, A, Ap1, lm1_s, lm1_si, r_s, r_si, Vsh):
         if not Km1 is None:
             x_subpart += Km1.dot(A[s]) #~3rd line
         
-        x_part += Vsh[s].dot(lm1_si.dot(x_subpart))
+        x_part += VshL[s].dot(lm1_si.dot(x_subpart))
     try:
         x += r_s.dot_left(x_part)
     except AttributeError:
         x += x_part.dot(r_s)
+
+    return x
+
+def calc_x_l_3s(Km1, C, Cm1, Cm2, rp1, rp2, lm2, lm3, AAm2, Am1, A, Ap1, AAp1, lm1_s, lm1_si, r_s, r_si, VshL):
+    D = A.shape[2]
+    Dm1 = A.shape[1]
+    q = A.shape[0]
+    x = sp.zeros((q * Dm1 - D, D), dtype=A.dtype)
+
+    VL = VshL.transpose((0,2,1)).conj()
+
+    if Km1 is not None:
+        x += mm.mmul(eps_l_noop(lm1_si.dot(Km1), VL, A), r_s)
+
+    if C is not None:
+        part = np.array([eps_r_op_2s_AA12_C34(rp2, C[s], AAp1) for s in range(q)])
+        x += mm.mmul(eps_l_noop(lm1_s, VL, part), r_si)
+
+    if Cm1 is not None:
+        lVL = np.array([lm1_si.dot(VL[s]) for s in range(q)])
+        Am1lVL = calc_AA(Am1, lVL)
+        Cm1_t = Cm1.transpose((2,0,1,3,4)).copy()
+        part = np.array([eps_l_op_2s_AA12_C34(lm2, Am1lVL, Cm1_t[s]) for s in range(q)])
+        x += mm.mmul(eps_r_noop(rp1, part, Ap1), r_si)
+
+    if Cm2 is not None:
+        Cm2_t = Cm2.transpose((2,0,1,3,4)).copy()
+        part = np.array([eps_l_op_2s_AA12_C34(lm3, AAm2, Cm2_t[s]) for s in range(q)])
+        x += mm.mmul(eps_l_noop(lm1_si, VL, part), r_s)
 
     return x
 
@@ -641,7 +671,7 @@ def herm_fac_with_inv(A, lower=False, zero_tol=1E-15, return_rank=False,
         if calc_inv:
             #Replace almost-zero values with zero and perform a pseudo-inverse
             ev_sq_i = sp.zeros_like(ev, dtype=A.dtype)
-            ev_sq_i[-nonzeros:] = 1. / ev_sq[-nonzeros:]
+            ev_sq_i[-nonzeros:] = 1. / ev_sq.diag[-nonzeros:]
             
             ev_sq_i = mm.simple_diag_matrix(ev_sq_i, dtype=A.dtype)        
                    
@@ -733,12 +763,18 @@ def restore_RCF_r_seq(A, r, GN=None, sanity_checks=False, sc_data=''):
         Gh = GN.conj().T
     for n in range(len(A) - 1, 0, -1):
         q, Dm1, D = A[n].shape
-        AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * D, Dm1))
+
+        Dnew = Gh.shape[0]
+        
+        AG = sp.array([Gh.dot(As.conj().T) for As in A[n]]).reshape((q * Dnew, Dm1))
         Q, R = la.qr(AG, mode='economic')
-        A[n] = sp.transpose(Q.conj().reshape((q, D, Dm1)), axes=(0, 2, 1))
+        
+        Dm1_new = Q.shape[1]
+        
+        A[n] = sp.transpose(Q.conj().reshape((q, Dnew, Dm1_new)), axes=(0, 2, 1))
         Gh = R
         
-        r[n - 1] = mm.eyemat(Dm1, dtype=A[n].dtype)
+        r[n - 1] = mm.eyemat(Dm1_new, dtype=A[n].dtype)
         
         if sanity_checks:
             r_nm1_ = eps_r_noop(r[n], A[n], A[n])
@@ -965,10 +1001,16 @@ def restore_LCF_l_seq(A, l, G0=None, sanity_checks=False, sc_data=''):
 
     for n in range(1, len(A)):
         q, Dm1, D = A[n].shape
+
+        Dm1_new = G.shape[0]
+
         GA = sp.array([G.dot(As) for As in A[n]])
-        GA = GA.reshape((q * Dm1, D))
+        GA = GA.reshape((q * Dm1_new, D))
         Q, G = la.qr(GA, mode='economic')
-        A[n] = Q.reshape((q, Dm1, D))
+
+        D_new = Q.shape[1]
+
+        A[n] = Q.reshape((q, Dm1_new, D_new))
         
         l[n] = mm.eyemat(D, dtype=A[n].dtype)
         

@@ -13,7 +13,9 @@ import scipy.linalg as la
 import scipy.sparse.linalg as las
 from . import tdvp_common as tm
 from . import matmul as m
+from . import mps_uniform_pinv as pinv
 import math as ma
+from fractions import gcd
 import logging
 
 log = logging.getLogger(__name__)
@@ -36,7 +38,7 @@ class EOp:
         self.A1 = A1
         self.A2 = A2
         
-        self.D1 = A1[0].shape[1]
+        self.D1 = A1[0].shape[1]  # we assume the bond dimension is uniform
         self.D2 = A2[0].shape[1]
         
         self.shape = (self.D1 * self.D2, self.D1 * self.D2)
@@ -114,6 +116,8 @@ class EvoMPS_MPS_Uniform(object):
         
         if dtype is None:
             self.typ = np.complex128
+        else:
+            self.typ = dtype
         
         self.itr_rtol = 1E-13
         self.itr_atol = 1E-14
@@ -177,6 +181,23 @@ class EvoMPS_MPS_Uniform(object):
         self._init_arrays(D, q, L)
                     
         self.randomize(do_update=do_update)
+
+    def maxD_is_less_than(self, Dmax):
+        return self.D < Dmax
+
+    @classmethod
+    def from_tensors(cls, As, do_update=True):
+        """Creates a uniform MPS from a collection of MPS tensors.
+        `As` is a list of the tensor in the unit cell.
+        """
+        q, D = As[0].shape[0:2]
+        dtype = As[0].dtype
+        mps = cls(D, q, L=len(As), dtype=dtype, do_update=False)
+        for j in range(len(As)):
+            mps.A[j][:] = As[j]
+        if do_update:
+            mps.update(restore_CF=False)
+        return mps
 
     def randomize(self, do_update=True):
         """Randomizes the parameter tensors self.A.
@@ -267,13 +288,26 @@ class EvoMPS_MPS_Uniform(object):
         
         self.tmp = np.zeros_like(self.A[0][0])
         
-    def _get_dense_transfer_op_block(self):
-        E = m.eyemat(self.D**2)
-        for k in range(self.L):
-            A = self.A[k]
-            Ek = sp.zeros((A.shape[1]**2, A.shape[2]**2), dtype=A.dtype)
-            for s in range(A.shape[0]):
-                Ek += sp.kron(A[s], A[s].conj())
+    def _get_dense_transfer_op_block(self, k=0, other=None):
+        if other is None:
+            other = self
+        if self.q != other.q:
+            raise ValueError("Physical dimensions must be equal!")
+
+        L_ = self.L * other.L // gcd(self.L, other.L)
+        As1 = list(self.A) * (L_ // self.L)
+        As2 = list(other.A) * (L_ // other.L)
+        As1 = As1[k:] + As1[:k]
+        As2 = As2[k:] + As2[:k]
+
+        E = m.eyemat(self.D * other.D)
+        dtype = (As1[0][0,0,0] * As2[0][0,0,0]).dtype
+        for k in range(L_):
+            A1 = As1[k]
+            A2 = As2[k]
+            Ek = sp.zeros((A1.shape[1]*A2.shape[1], A1.shape[2]*A2.shape[2]), dtype=dtype)
+            for s in range(A1.shape[0]):
+                Ek += sp.kron(A1[s], A2[s].conj())
             E = E.dot(Ek)
         return E
         
@@ -372,28 +406,43 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, conv, opE.calls, nev, ncv
         
-    def _calc_E_largest_eigenvalues(self, k=0, tol=1E-6, nev=2, ncv=None, 
+    def _calc_E_largest_eigenvalues(self, k=0, tol=1E-14, nev=2, ncv=None, 
                                     left=False, max_retries=3, 
-                                    return_eigenvectors=False):
-        if self.D == 1:
-            return sp.array([1. + 0.j])
-        elif self.D <= 3:
-            E = self._get_dense_transfer_op_block()
+                                    return_eigenvectors=False,
+                                    force_dense=False,
+                                    force_sparse=False,
+                                    dense_cutoff=64,
+                                    other=None):
+        if other is None:
+            other=self
+        ED = self.D * other.D
+        
+        if (ED <= dense_cutoff or force_dense) and not force_sparse:
+            E = self._get_dense_transfer_op_block(k=k, other=other)
+                
+            if return_eigenvectors:
+                return la.eig(E, left=left, right=not left)
             return la.eigvals(E)
-        
-        A = list(self.A)
-        A = A[k:] + A[:k]
-        
-        opE = self._get_EOP(A, A, left)
-        
-        if left:
-            v0 = np.asarray(self.l[(k - 1) % self.L])
+
+        L_ = self.L * other.L // gcd(self.L, other.L)
+
+        As1 = list(self.A) * (L_ // self.L)
+        As2 = list(other.A) * (L_ // other.L)
+        As1 = As1[k:] + As1[:k]
+        As2 = As2[k:] + As2[:k]
+
+        if other is self:
+            if left:
+                v0 = np.asarray(self.l[(k - 1) % self.L]).ravel()
+            else:
+                v0 = np.asarray(self.r[(k - 1) % self.L]).ravel()
         else:
-            v0 = np.asarray(self.r[(k - 1) % self.L])
-        
+            v0 = None
+
+        opE = self._get_EOP(As1, As2, left)
         for i in range(max_retries):
             try:
-                res = las.eigs(opE, which='LM', k=nev, v0=v0.ravel(), tol=tol, 
+                res = las.eigs(opE, which='LM', k=nev, v0=v0, tol=tol, 
                               ncv=ncv, return_eigenvectors=return_eigenvectors)
                 break
             except las.ArpackNoConvergence:
@@ -404,10 +453,10 @@ class EvoMPS_MPS_Uniform(object):
         if i == max_retries - 1:
             log.error("_calc_E_largest_eigenvalues: Failed to converge!")
             raise EvoMPSNoConvergence("_calc_E_largest_eigenvalues failed!")
-                          
+
         return res
-        
-    def calc_E_gap(self, tol=1E-6, nev=2, ncv=None):
+
+    def calc_E_gap(self, tol=1E-14, nev=2, ncv=None):
         """
         Calculates the spectral gap of E by calculating the second-largest eigenvalue.
         
@@ -438,12 +487,12 @@ class EvoMPS_MPS_Uniform(object):
         
         return ((ev1_mag - ev2_mag) / ev1_mag)
         
-    def correlation_length(self, tol=1E-12, nev=3, ncv=None):
+    def correlation_length(self, tol=1E-14, nev=3, ncv=20):
         """
         Calculates the correlation length in units of the lattice spacing.
         
         The correlation length is equal to the inverse of the natural logarithm
-        of the maginitude of the second-largest eigenvalue of the transfer 
+        of the magnitude of the second-largest eigenvalue of the transfer 
         (or super) operator E.
         
         Parameters
@@ -457,9 +506,7 @@ class EvoMPS_MPS_Uniform(object):
         """
         if self.D == 1:
             return 0.
-        
-        if ncv is None:
-            ncv = max(20, 2 * nev + 1)
+
         
         ev = self._calc_E_largest_eigenvalues(tol=tol, nev=nev, ncv=ncv)
         log.debug("Eigenvalues of the transfer operator: %s", ev)
@@ -539,12 +586,12 @@ class EvoMPS_MPS_Uniform(object):
         
         return x, i < max_itr - 1, i
     
-    def calc_lr(self):
+    def calc_lr(self, rescale=True):
         """Determines the dominant left and right eigenvectors of the transfer 
         operator E.
         
         Uses an iterative method (e.g. Arnoldi iteration) to determine the
-        largest eigenvalue and the correspoinding left and right eigenvectors,
+        largest eigenvalue and the corresponding left and right eigenvectors,
         which are stored as self.l and self.r respectively.
         
         The parameter tensor self.A is rescaled so that the largest eigenvalue
@@ -565,7 +612,7 @@ class EvoMPS_MPS_Uniform(object):
             else:
                 if self.ev_use_arpack:
                     self.l[-1], self.conv_l, self.itr_l, nev, ncv = self._calc_lr_ARPACK(self.lL_before_CF, tmp,
-                                                                   calc_l=True, rescale=True,
+                                                                   calc_l=True, rescale=rescale,
                                                                    tol=self.itr_rtol,
                                                                    nev=self.ev_arpack_nev,
                                                                    ncv=self.ev_arpack_ncv)
@@ -577,13 +624,13 @@ class EvoMPS_MPS_Uniform(object):
                 else:
                     self.l[-1], self.conv_l, self.itr_l = self._calc_lr(self.lL_before_CF, 
                                                             tmp, 
-                                                            calc_l=True,
+                                                            calc_l=True, rescale=rescale,
                                                             max_itr=self.pow_itr_max,
                                                             rtol=self.itr_rtol, 
                                                             atol=self.itr_atol)
                     self.r[-1], self.conv_r, self.itr_r = self._calc_lr(self.rL_before_CF, 
                                                             tmp, 
-                                                            calc_l=False,
+                                                            calc_l=False, rescale=False,
                                                             max_itr=self.pow_itr_max,
                                                             rtol=self.itr_rtol, 
                                                             atol=self.itr_atol)
@@ -1029,7 +1076,7 @@ class EvoMPS_MPS_Uniform(object):
             
     def fidelity_per_site(self, other, full_output=False, left=False, 
                           force_dense=False, force_sparse=False,
-                          dense_cutoff=64):
+                          dense_cutoff=64, ncv=20, tol=1E-14):
         """Returns the per-site fidelity d.
               
         Also returns the largest eigenvalue "w" of the overlap transfer
@@ -1064,64 +1111,29 @@ class EvoMPS_MPS_Uniform(object):
         V : ndarray
             The right (or left if left == True) eigenvector corresponding to w (if full_output == True).
         """
-        assert self.q == other.q, "Hilbert spaces must have same dimensions!"
-        
-        from fractions import gcd
+        res = self._calc_E_largest_eigenvalues(
+            other=other, left=left,
+            force_dense=force_dense, force_sparse=force_sparse,
+            dense_cutoff=dense_cutoff,
+            return_eigenvectors=full_output,
+            nev=1, ncv=ncv, tol=tol)
+
         L_ = self.L * other.L // gcd(self.L, other.L)
 
-        As1 = list(self.A) * (L_ // self.L)
-        As2 = list(other.A) * (L_ // other.L)
-
-        ED = self.D * other.D
-        
-        if ED == 1:
-            ev = 1
-            for k in range(L_):
-                evk = 0
-                for s in range(self.q):    
-                    evk += As1[k][s] * As2[k][s].conj()
-                ev *= evk
-            if left:
-                ev = ev.conj()
-            if full_output:
-                return abs(ev)**(1./L_), ev, sp.ones((1), dtype=self.typ)
-            else:
-                return abs(ev)**(1./L_), ev
-        elif (ED <= dense_cutoff or force_dense) and not force_sparse:
-            E = m.eyemat(ED, dtype=As1[0].dtype)
-            for k in range(L_):
-                Ek = sp.zeros((ED, ED), dtype=As1[0].dtype)
-                for s in range(As1[k].shape[0]):
-                    Ek += sp.kron(As1[k][s], As2[k][s].conj())
-                E = E.dot(Ek)
-                
-            if full_output:
-                ev, eV = la.eig(E, left=left, right=not left)
-            else:
-                ev = la.eigvals(E)
-            
+        if full_output:
+            ev, eV = res
             ind = abs(ev).argmax()
-            if full_output:
-                return abs(ev[ind])**(1./L_), ev[ind], eV[:, ind]
-            else:
-                return abs(ev[ind])**(1./L_), ev[ind]
+            return abs(ev[ind])**(1./L_), ev[ind], eV[:, ind]
         else:
-            opE = self._get_EOP(As1, As2, left)
-            res = las.eigs(opE, which='LM', k=1, ncv=20, return_eigenvectors=full_output)
-            if full_output:
-                ev, eV = res
-                return abs(ev[0])**(1./L_), ev[0], eV[:, 0]
-            else:
-                ev = res
-                return abs(ev[0])**(1./L_), ev[0]
+            ev = res
+            ind = abs(ev).argmax()
+            return abs(ev[ind])**(1./L_), ev[ind]
             
     def phase_align(self, other):
         """Adjusts the parameter tensor A by a phase-factor to align it with another state.
         
         This ensures that the largest eigenvalue of the overlap transfer operator
         is real.
-        
-        An update() is needed after doing this!
         
         Parameters
         ----------
@@ -1133,9 +1145,9 @@ class EvoMPS_MPS_Uniform(object):
         phi : complex
             The phase difference (phase of the eigenvalue).
         """
-        d, phi = self.fidelity_per_site(other, full_output=False, left=False)
-        
-        self.A[0] *= phi.conj()
+        _, phi = self.fidelity_per_site(other, full_output=False, left=False)
+
+        self.A[0] *= phi.conj() / abs(phi)
         
         return phi
 
@@ -1174,7 +1186,7 @@ class EvoMPS_MPS_Uniform(object):
             return
             
         #Phase-align first
-        self.A[0] *= phi.conj()
+        self.A[0] *= phi.conj() / abs(phi)
             
         gRL = gRL.reshape(self.D, self.D)
         
@@ -1185,12 +1197,12 @@ class EvoMPS_MPS_Uniform(object):
             if k == self.L - 1:
                 gRk = gRL
             else:
-                gRk = tm.eps_r_noop(other.rs[k + 1], self.A[k + 1], other.As[k + 1])
+                gRk = tm.eps_r_noop(other.r[k + 1], self.A[k + 1], other.A[k + 1])
                 
             try:
-                g[k] = other.rs[k].inv().dotleft(gRk)
+                g[k] = other.r[k].inv().dotleft(gRk)
             except:
-                g[k] = gRk.dot(m.invmh(other.rs[k]))
+                g[k] = gRk.dot(m.invmh(other.r[k]))
                 
             gi[k] = la.inv(g[k])
             
@@ -1573,9 +1585,9 @@ class EvoMPS_MPS_Uniform(object):
         The state must be up-to-date and in canonical form -- see self.update()!
         
         The results only make sense if the string is a symmetry of the state,
-        such that it consitutes and MPS gauge transformation. In this case,
-        the fidelity per site will be equal to 1.
-        
+        such that it consitutes an MPS gauge transformation. In this case,
+        the overlap per site will be equal to 1.
+
         Parameters
         ----------
         op : ndarray or callable
@@ -1591,8 +1603,11 @@ class EvoMPS_MPS_Uniform(object):
         -------
         expval : ndarray
             The expectation values for each Schmidt vector (data type may be complex).
-        fid_per_site : float
-            Fidelity per site of state with transformed state.
+        ol_per_site : float
+            Overlap per site of state with transformed state.
+        virtop : ndarray (if return_g==True)
+            Matrix representing the action of the string operator within the
+            space of Schmidt vectors.
         """
         if callable(op):
             op = np.vectorize(op, otypes=[np.complex128])
@@ -1614,21 +1629,121 @@ class EvoMPS_MPS_Uniform(object):
             opE = self._get_EOP(Aop, Ashift, False)
             ev, eV = las.eigs(opE, v0=np.asarray(self.r[(k - 1) % self.L]), which='LM', k=1, ncv=ncv)
             ev = ev[0]
-            #Note: eigs normalizes the eigenvector so that norm(eV) = 1.
-            
-        r = eV.reshape((self.D, self.D))
-        
+            # NOTE: eigs normalizes the eigenvector so that norm(eV) = 1.
+            # NOTE: There will also be an arbitrary global phase on eV.
+
+        virtop = eV.reshape((self.D, self.D))
+
+        # Restore normalization
         if self.symm_gauge:
-            g = self.r[(k - 1) % self.L].inv().dot(r) #r = self.r[k] * g
+            # For symmetric gauge, norm(eV) = 1 corresponds to the same
+            # normalization as the vector of Schmidt values (self.r).
+            virtop = self.r[(k - 1) % self.L].inv().dot(virtop) #r = self.r[k] * g
         else:
-            g = r * sp.sqrt(self.D) #Must restore normalization.
-            
-        Or = r.diagonal().copy()
-        
+            # RCF: norm(eV) = 1 means an overall factor of 1/sqrt(D). Undo!
+            virtop = virtop * sp.sqrt(self.D)
+
+        expvals = virtop.diagonal().copy()
+
+        # Assuming the operator is a symmetry of the state, we can fix the
+        # global phase by requiring the most-significant Schmidt vector (unique
+        # since the operator is a symmetry) has zero phase:
+        ssq = self.schmidt_sq((k - 1) % self.L)
+        ind = ssq.real.argmax()
+        phase = sp.conj(expvals[ind]) / abs(expvals[ind])
+        expvals *= phase
+        virtop *= phase
+
         if return_g:
-            return Or, abs(ev)**(1./self.L), g
+            return expvals, ev**(1./self.L), virtop
         else:
-            return Or, abs(ev)**(1./self.L)
+            return expvals, ev**(1./self.L)
+
+    def expect_sum_1s_density_hc(self, op, k=0, tol=1E-6, maxiter=1000, return_g=False):
+        """Returns the expectation values of a sum of 1-site operators acting
+           on the Schmidt vectors for the half-chain decomposition.
+
+        This computes, for example, the magnetization of each Schmidt vector.
+
+        For block lengths other than 1, the cut is *before* the kth site in a 
+        block (counting from zero).
+
+        The operator should be a self.q x self.q matrix.
+
+        The state must be up-to-date and in canonical form -- see self.update()!
+
+        The results only make sense if the operator annihilates the state!
+        
+        Parameters
+        ----------
+        op : ndarray or callable
+            The operator.
+        k : int
+            Site offset within block.
+        tol : float
+            Tolerance for the implicit pseudo-inverse computation.
+        maxiter : int
+            Number of iterations for the implicit pseudo-inverse computation.
+            
+        Returns
+        -------
+        expvals : ndarray
+            The expectation values for each Schmidt vector (data type may be complex).
+        fullstate_expval_per_site : number
+            The expectation value per site of the sum operator on the full state.
+        virtop : ndarray (if return_g==True)
+            Matrix representing the action of the string operator within the
+            space of Schmidt vectors.
+        """
+        expval = 0
+        for j in range(self.L):
+            expval += self.expect_1s(op, j)
+        if abs(expval) > 1e-8:
+            log.warning("expect_sum_1s_density_hc: expectation value '{}' "
+                "of operator on whole state should be zero. "
+                "Result invalid.".format(expval))
+
+        rops = tm.eps_r_op_1s(self.r[k], self.A[k], self.A[k], op)
+        for j in range(1, self.L):
+            pos = (k + j) % self.L
+            rj = tm.eps_r_op_1s(self.r[pos], self.A[pos], self.A[pos], op)
+            for l in range(j):
+                pos = (k + j - l - 1) % self.L
+                rj = tm.eps_r_noop(rj, self.A[pos], self.A[pos])
+            assert pos == k
+            rops += rj
+        expval2 = m.adot(self.l[k - 1], rops)
+
+        if self.D == 1:
+            return sp.zeros((1), dtype=self.typ)
+
+        Ashift = self.A[k:] + self.A[:k]
+        virtop = pinv.pinv_1mE(
+            rops,
+            Ashift,
+            Ashift,
+            self.l[(k - 1) % self.L],
+            self.r[k],
+            left=False,
+            pseudo=True,
+            tol=tol,
+            maxiter=maxiter,
+            sanity_checks=self.sanity_checks,
+            sc_data="expect_sum_1s_density_hc()"
+        )
+        virtop = virtop.reshape((self.D, self.D))
+
+        # restore normalization
+        if self.symm_gauge:
+            virtop = self.r[(k - 1) % self.L].inv().dot(virtop)
+        # NOTE: In RCF, the Schmidt vectors are already normalized.
+
+        expvals = virtop.diagonal().copy()
+
+        if return_g:
+            return expvals, expval2/self.L, virtop
+        else:
+            return expvals, expval2/self.L
 
     def expect_string_per_site_1s(self, op, ncv=20):
         """Calculates the per-site factor of a string expectation value.
@@ -1684,14 +1799,14 @@ class EvoMPS_MPS_Uniform(object):
         
         Aop = [np.tensordot(op, A, axes=([1],[0])) for A in self.A]
         
-        res = sp.zeros((d), dtype=self.A[0].dtype)
+        res = []
         x = self.l[(k - 1) % self.L]
         for n in range(k, k + d + 1):
             nm = n % self.L
             x = tm.eps_l_noop(x, self.A[nm], Aop[nm])
-            res[n - k - 1] = m.adot(x, self.r[nm])
+            res.append(m.adot(x, self.r[nm]))
         
-        return res
+        return np.array(res)
         
     def basis_occupancy(self, k=0):
         L = self.L

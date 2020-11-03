@@ -83,6 +83,10 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
       p1 = 10.0**(round( log10( t_new )-SQR1 )-1)
       t_new = trunc( t_new/p1 + 0.55 ) * p1
 
+      vs = sp.zeros((m+2,n), A.dtype)  # to hold the Krylov subspace
+
+      axpy = la.blas.get_blas_funcs('axpy', arrays=(vs[0, :], vs[0, :]))
+
       #step-by-step integration ...
       while t_now < t_out:
 
@@ -90,7 +94,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
             t_step = min( t_out-t_now, t_new )
 
             #initialize Krylov subspace
-            vs = sp.zeros((m+2,n), A.dtype)
+            vs.fill(0)
             vs[0,:] = w / beta
 
             H = sp.zeros((mh,mh), A.dtype)
@@ -104,7 +108,7 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
                         #Compute overlaps of new vector Av with all other Kyrlov vectors
                         #(these are elements of an upper Hessenberg matrix)
                         hij = sp.vdot(vs[i-1,:], vs[j,:])
-                        vs[j,:] -= hij * vs[i-1,:] #orthogonalize new vector. maybe switch to axpy
+                        axpy(x=vs[i-1,:], y=vs[j,:], a=-hij) #orthogonalize new vector.
                         H[i-1,j-1] = hij #store matrix element
 
                   hj1j = la.norm( vs[j,:] )
@@ -208,8 +212,8 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
                   print('integration ', nstep, ' ---------------------------------')
                   #print('scale-square = ', nscale)
                   print('step_size = ', t_step)
-                  print('err_loc   = ',err_loc)
-                  print('next_step = ',t_new)
+                  print('err_loc   = ', err_loc)
+                  print('next_step = ', t_new)
 
             step_min = min( step_min, t_step )
             step_max = max( step_max, t_step )
@@ -221,4 +225,4 @@ def gexpmv(A, v, t, anorm, m=None, tol=0.0, w=None, verbose=False, mxstep=500, b
             iflag = 1
             break
 
-      return w, nstep < mxstep, nstep, ibrkflag==1, mbrkdwn
+      return w, nstep < mxstep, nstep, ibrkflag==1, mbrkdwn, (x_error, s_error)

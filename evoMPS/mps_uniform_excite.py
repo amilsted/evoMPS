@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
         
 class Excite_H_Op:
     def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
-                 sanity_checks=False, sanity_tol=1E-12):
+                 sanity_checks=False, sanity_tol=1E-12,
+                 force_pseudo=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -43,6 +44,30 @@ class Excite_H_Op:
         
         self.tdvp = tdvp
         self.tdvp2 = tdvp2
+        self.force_pseudo = force_pseudo
+        if force_pseudo and not tdvp is tdvp2:
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=True)
+            l_mix = eV.reshape((tdvp.D, tdvp2.D))
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=False)
+            r_mix = eV.reshape((tdvp.D, tdvp2.D))
+            inner = m.adot(l_mix, r_mix)
+            l_mix /= sp.sqrt(inner)
+            r_mix /= sp.sqrt(inner)
+            self.l_mix_1_2 = l_mix
+            self.r_mix_1_2 = r_mix
+            self.l_mix_2_1 = self.l_mix_1_2.conj().T
+            self.r_mix_2_1 = self.r_mix_1_2.conj().T
+        elif tdvp is tdvp2:
+            self.l_mix_1_2 = tdvp.l[0]
+            self.r_mix_1_2 = tdvp.r[0]
+            self.l_mix_2_1 = tdvp.l[0]
+            self.r_mix_2_1 = tdvp.r[0]
+        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_1_2 = None
+            self.r_mix_1_2 = None
+            self.l_mix_2_1 = None
+            self.r_mix_2_1 = None
+
         self.p = p
         
         self.D = tdvp.D
@@ -139,12 +164,12 @@ class Excite_H_Op:
             
             return C_, C_conj, V_, Vr_, Vri_, C_Vri_A_conj, C_AhlA, C_A_Vrh_, rhs10
         elif self.ham_sites == 3:
-            C_Vri_AA_ = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
+            C_Vri_AA_conj = np.empty((self.q, self.q, self.q, Vri_.shape[1], A_.shape[2]), dtype=tdvp.typ)
             for s in range(self.q):
                 for t in range(self.q):
                     for u in range(self.q):
-                        C_Vri_AA_[s, t, u] = Vri_[s].dot(AA_[t, u])
-            C_Vri_AA_ = sp.tensordot(ham_, C_Vri_AA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
+                        C_Vri_AA_conj[s, t, u] = Vri_[s].dot(AA_[t, u])
+            C_Vri_AA_conj = sp.tensordot(ham_.conj(), C_Vri_AA_conj, ((0, 1, 2), (0, 1, 2))).copy(order='C')
             
             C_AAA_r_Ah_Vrih = np.empty((self.q, self.q, self.q, self.q, self.q, #FIXME: could be too memory-intensive
                                         A_.shape[1], Vri_.shape[1]), 
@@ -163,8 +188,9 @@ class Excite_H_Op:
                 for j in range(self.q):
                     for i in range(self.q):
                         for s in range(self.q):
-                            C_AhAhlAA[j, t, i, s] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
-            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((4, 1, 0, 3), (1, 0, 2, 3))).copy(order='C')
+                            C_AhAhlAA[i, j, s, t] = AA[i, j].conj().T.dot(l.dot(AA[s, t]))
+            C_AhAhlAA = sp.tensordot(ham_, C_AhAhlAA, ((0, 1, 3, 4), (0, 1, 2, 3)))
+            C_AhAhlAA = sp.transpose(C_AhAhlAA, (1, 0, 2, 3)).copy(order='C')
             
             C_AA_r_Ah_Vrih_ = np.empty((self.q, self.q, self.q, self.q,
                                         A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -172,8 +198,9 @@ class Excite_H_Op:
                 for u in range(self.q):
                     for k in range(self.q):
                         for j in range(self.q):
-                            C_AA_r_Ah_Vrih_[u, t, k, j] = AA_[t, u].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
-            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 2, 1), (1, 0, 2, 3))).copy(order='C')
+                            C_AA_r_Ah_Vrih_[u, t, j, k] = AA_[u, t].dot(r_.dot(A_[k].conj().T)).dot(Vri_[j].conj().T)
+            C_AA_r_Ah_Vrih_ = sp.tensordot(ham_, C_AA_r_Ah_Vrih_, ((4, 5, 1, 2), (0, 1, 2, 3)))
+            C_AA_r_Ah_Vrih_ = sp.transpose(C_AA_r_Ah_Vrih_, (1, 0, 2, 3)).copy(order='C')
             
             C_AAA_Vrh_ = np.empty((self.q, self.q, self.q, self.q,
                                    A_.shape[1], Vri_.shape[1]), dtype=tdvp.typ)
@@ -185,7 +212,7 @@ class Excite_H_Op:
             C_AAA_Vrh_ = sp.tensordot(ham_, C_AAA_Vrh_, ((3, 4, 5, 2), (0, 1, 2, 3))).copy(order='C')
             
             C_Vri_A_r_Ah_ = np.empty((self.q, self.q, self.q,
-                                      A_.shape[2], Vri_.shape[1]), dtype=tdvp.typ)
+                                      Vri_.shape[1], A_.shape[1]), dtype=tdvp.typ)
             for u in range(self.q):
                 for k in range(self.q):
                     for j in range(self.q):
@@ -208,16 +235,17 @@ class Excite_H_Op:
                 for u in range(self.q):
                     for k in range(self.q):
                         C_AA_Vrh[k, u, t] = AA_[t, u].dot(Vr_[k].conj().T)
-            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0))).copy(order='C')
+            C_AA_Vrh = sp.tensordot(ham_, C_AA_Vrh, ((4, 5, 2), (2, 1, 0)))
+            C_AA_Vrh = sp.transpose(C_AA_Vrh, (2,0,1,3,4)).copy(order='C')
             
-            C_ = sp.tensordot(ham_, AAA_, ((3, 4, 5), (0, 1, 2))).copy(order='C')
+            C_conj = sp.tensordot(ham_.conj(), AAA_, ((0, 1, 2), (0, 1, 2))).copy(order='C')
             
-            rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_)
+            rhs10 = tm.eps_r_op_3s_C123_AAA456(r_, AAA_, C_Vri_AA_conj)
 
             #NOTE: These C's are good as C12 or C34, but only because h is Hermitian!
             #TODO: Make this consistent with the updated 2-site case above.
             
-            return V_, Vr_, Vri_, Vri_A_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10,
+            return V_, Vr_, Vri_, Vri_A_, C_conj, C_Vri_AA_conj, C_AAA_r_Ah_Vrih, C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10,
 
     
     def calc_BHB(self, x, p, tdvp, tdvp2, prereq,
@@ -226,7 +254,7 @@ class Excite_H_Op:
             pinv_solver = las.gmres
             
         if self.ham_sites == 3:
-            V_, Vr_, Vri_, Vri_A_, C_, C_Vri_AA_, C_AAA_r_Ah_Vrih, \
+            V_, Vr_, Vri_, Vri_A_, C_conj, C_Vri_AA_conj, C_AAA_r_Ah_Vrih, \
                     C_AhAhlAA, C_AA_r_Ah_Vrih_, C_AAA_Vrh_, C_Vri_A_r_Ah_, \
                     C_AhlAA, C_AhlAA_conj, C_AA_Vrh, rhs10 = prereq
         else:
@@ -248,7 +276,7 @@ class Excite_H_Op:
         K__r = tdvp2.K[0]
         K_l = tdvp.K_left[0]
         
-        pseudo = tdvp2 is tdvp
+        pseudo = tdvp2 is tdvp or self.force_pseudo
         
         B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
         
@@ -258,7 +286,7 @@ class Excite_H_Op:
         
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
-            if not la.norm(tst) > self.sanity_tol:
+            if la.norm(tst) > self.sanity_tol:
                 log.warning("Sanity check failed: Gauge-fixing violation! " 
                             + str(la.norm(tst)))
 
@@ -278,9 +306,8 @@ class Excite_H_Op:
 
         y = tm.eps_l_noop(l, B, A)
         
-#        if pseudo:
-#            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
+        M = pinv_1mE(y, [A_], [A], self.l_mix_2_1, self.r_mix_2_1,
+                     p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
                      use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
                      sanity_checks=self.sanity_checks, sc_data='M')
@@ -294,31 +321,29 @@ class Excite_H_Op:
             tst = la.norm(y - y2) / norm
             if tst > self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! Bad M. Off by: %g", tst)
-#        if pseudo:
-#            M = M - l * m.adot(r_, M)
+
         Mh = M.conj().T.copy(order='C')
         
         if self.ham_sites == 3:
             tmp = BAA_ + sp.exp(+1.j * p) * ABA_ + sp.exp(+2.j * p) * AAB
-            res = l_sqrt.dot(tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_Vri_AA_)) #1 1D, #3, #3c
+            res = l_sqrt.dot(tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_Vri_AA_conj)) #1 1D, #3, #3c
         else:
             tmp = BA_ + sp.exp(+1.j * p) * AB
             res = l_sqrt.dot(tm.eps_r_op_2s_AA12_C34(r_, tmp, C_Vri_A_conj)) #1, #3 OK
-                    
+
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(rhs10)) #10
-        
+
         exp = sp.exp
         subres = sp.zeros_like(res)
-        eye = m.eyemat(C_.shape[2], dtype=tdvp.typ)
+        eye = m.eyemat(C_conj.shape[2], dtype=tdvp.typ)
         eye2 = m.eyemat(A.shape[2], dtype=tdvp.typ)
         if self.ham_sites == 3:
             subres += exp(-2.j * p) * tm.eps_l_noop(Mh, A, C_AAA_r_Ah_Vrih) #12
             subres += exp(-3.j * p) * tm.eps_l_op_2s_AA12_C34(Mh, AA, C_AAA_Vrh_) #12b
             for s in range(self.q):
-                #subres += exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_AAA_r_Ah_Vrih[s])) #12
                 subres += tm.eps_r_noop(B[s], C_AhAhlAA[s, :], Vr_) #2b
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_AA_r_Ah_Vrih_[s, :]) #4
-                subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2 -ive of that it should be....
+                subres += A[s].conj().T.dot(l.dot(tm.eps_r_op_2s_AA12_C34(eye2, AB, C_Vri_A_r_Ah_[s, :, :]))) #2
                 subres += exp(-1.j * p) * tm.eps_l_op_2s_AA12_C34(eye2, C_AhlAA_conj[s, :, :], BA_).dot(Vr_[s].conj().T) #4b
                 subres += exp(-2.j * p) * tm.eps_l_op_2s_AA12_C34(l.dot(B[s]), AA, C_AA_Vrh[s, :, :]) #4c
                 
@@ -327,24 +352,11 @@ class Excite_H_Op:
                 except AttributeError:
                     Bs_r = B[s].dot(r_)
                 subres += exp(+1.j * p) * tm.eps_r_op_2s_AA12_C34(Bs_r, C_AhlAA[s, :, :], Vri_A_) #3b
-                    
-                #for t in xrange(self.q):
-                    #subres += (C_AhAhlAA[t, s].dot(B[s]).dot(Vr_[t].conj().T)) #2b
-                    #subres += (exp(-1.j * p) * A[s].conj().T.dot(l.dot(B[t])).dot(C_AA_r_Ah_Vrih_[s, t])) #4
-                    #subres += (exp(-3.j * p) * AA[t, s].conj().T.dot(Mh).dot(C_AAA_Vrh_[t, s])) #12b
-                    
-                    #for u in xrange(self.q):
-                        #subres += A[s].conj().T.dot(l.dot(AB[t, u]).dot(C_A_r_Ah_Vrih[s, t, u])) #2 -ive of that it should be....
-                        #subres += (exp(+1.j * p) * C_AhlAA[t, s, s].dot(B[u]).dot(r_.dot(A_[u].conj().T)).dot(Vri_[t].conj().T)) #3b
-                        #subres += (exp(-1.j * p) * C_AhAhlA[s, t, u].dot(BA_[t, u]).dot(Vr_[s].conj().T)) #4b
-                        #subres += (exp(-2.j * p) * AA[t, s].conj().T.dot(l.dot(B[u])).dot(C_AA_Vrh[t, s, u])) #4c
+
         else:
             for s in range(self.q):
-                #subres += C_AhlA[s, t].dot(B[s]).dot(Vr_[t].conj().T) #2 OK
                 subres += tm.eps_r_noop(B[s], C_AhlA[s, :], Vr_) #2
-                #+ exp(-1.j * p) * A[t].conj().T.dot(l.dot(B[s])).dot(C_A_Vrh_[t, s]) #4 OK with 3
                 subres += exp(-1.j * p) * tm.eps_l_noop(l.dot(B[s]), A, C_A_Vrh_[s, :]) #4
-                #+ exp(-2.j * p) * A[s].conj().T.dot(Mh.dot(C_[s, t])).dot(Vr_[t].conj().T)) #12
                 subres += exp(-2.j * p) * A[s].conj().T.dot(Mh).dot(tm.eps_r_noop(eye, C_[s, :], Vr_)) #12
                     
         res += l_sqrt_i.dot(subres)
@@ -356,22 +368,21 @@ class Excite_H_Op:
         res += sp.exp(-1.j * p) * l_sqrt_i.dot(Mh.dot(tm.eps_r_noop(K__r, A_, Vri_))) #8
         
         y1 = sp.exp(+1.j * p) * tm.eps_r_noop(K__r, B, A_) #7
-        
+
         if self.ham_sites == 3:
             tmp = sp.exp(+1.j * p) * BAA_ + sp.exp(+2.j * p) * ABA_ + sp.exp(+3.j * p) * AAB #9, #11, #11b
-            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_)
+            y = y1 + tm.eps_r_op_3s_C123_AAA456(r_, tmp, C_conj)
         elif self.ham_sites == 2:
             tmp = sp.exp(+1.j * p) * BA_ + sp.exp(+2.j * p) * AB #9, #11
             y = y1 + tm.eps_r_op_2s_AA12_C34(r_, tmp, C_conj)
-        
-        if pseudo:
-            y = y - m.adot(l, y) * r_
-        y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
+
+        y_pi = pinv_1mE(y, [A], [A_], self.l_mix_1_2, self.r_mix_1_2,
+                        p=p, left=False,
                         pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         CUDA_use_batch=self.pinv_CUDA_batch,
                         sanity_checks=self.sanity_checks, sc_data='y_pi')
-        #print m.adot(l, y_pi)
+
         if self.sanity_checks:
             z = y_pi - sp.exp(+1.j * p) * tm.eps_r_noop(y_pi, A, A_)
             tst = la.norm((y - z).ravel()) / la.norm(y.ravel())
@@ -382,11 +393,10 @@ class Excite_H_Op:
         
         if self.sanity_checks:
             expval = m.adot(x, res) / m.adot(x, x)
-            #print "expval = " + str(expval)
             if expval < -self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
             if abs(expval.imag) > self.sanity_tol:
-                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
+                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval.imag)
         
         return res, M, y_pi   
     
@@ -442,7 +452,8 @@ def get_A_ops(A0, A1, op_tp, conj=False):
 
 class Excite_H_Op_tp:
     def __init__(self, tdvp, tdvp2, p, pinv_tol=1E-12,
-                 sanity_checks=False, sanity_tol=1E-12):
+                 sanity_checks=False, sanity_tol=1E-12,
+                 force_pseudo=False):
         """Creates an Excite_H_Op object, which is a LinearOperator.
         
         This wraps the effective Hamiltonian in terms of MPS tangent vectors
@@ -466,6 +477,30 @@ class Excite_H_Op_tp:
         
         self.tdvp = tdvp
         self.tdvp2 = tdvp2
+        self.force_pseudo = force_pseudo
+        if force_pseudo and not tdvp is tdvp2:
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=True)
+            l_mix = eV.reshape((tdvp.D, tdvp2.D))
+            fid, ev, eV = tdvp.fidelity_per_site(tdvp2, full_output=True, left=False)
+            r_mix = eV.reshape((tdvp.D, tdvp2.D))
+            inner = m.adot(l_mix, r_mix)
+            l_mix /= sp.sqrt(inner)
+            r_mix /= sp.sqrt(inner)
+            self.l_mix_1_2 = l_mix
+            self.r_mix_1_2 = r_mix
+            self.l_mix_2_1 = self.l_mix_1_2.conj().T
+            self.r_mix_2_1 = self.r_mix_1_2.conj().T
+        elif tdvp is tdvp2:
+            self.l_mix_1_2 = tdvp.l[0]
+            self.r_mix_1_2 = tdvp.r[0]
+            self.l_mix_2_1 = tdvp.l[0]
+            self.r_mix_2_1 = tdvp.r[0]
+        else:  # NOTE: These are not used if pseudo is off
+            self.l_mix_1_2 = None
+            self.r_mix_1_2 = None
+            self.l_mix_2_1 = None
+            self.r_mix_2_1 = None
+
         self.p = p
         
         self.D = tdvp.D
@@ -577,7 +612,7 @@ class Excite_H_Op_tp:
         K__r = tdvp2.K[0]
         K_l = tdvp.K_left[0]
         
-        pseudo = tdvp2 is tdvp
+        pseudo = tdvp2 is tdvp or self.force_pseudo
         
         B = tdvp2.get_B_from_x(x, tdvp2.Vsh[0], l_sqrt_i, r__sqrt_i)
         
@@ -587,7 +622,7 @@ class Excite_H_Op_tp:
         
         if self.sanity_checks:
             tst = tm.eps_r_noop(r_, B, A_)
-            if not la.norm(tst) > self.sanity_tol:
+            if la.norm(tst) > self.sanity_tol:
                 log.warning("Sanity check failed: Gauge-fixing violation! " 
                             + str(la.norm(tst)))
 
@@ -599,10 +634,8 @@ class Excite_H_Op_tp:
                 log.warning("Sanity Fail in calc_BHB! Bad Vri!")
 
         y = tm.eps_l_noop(l, B, A)
-        
-#        if pseudo:
-#            y = y - m.adot(r_, y) * l #should just = y due to gauge-fixing
-        M = pinv_1mE(y, [A_], [A], l, r_, p=-p, left=True, pseudo=pseudo, 
+        M = pinv_1mE(y, [A_], [A], self.l_mix_2_1, self.r_mix_2_1,
+                     p=-p, left=True, pseudo=pseudo, 
                      out=M_prev, tol=self.pinv_tol, solver=pinv_solver,
                      use_CUDA=self.pinv_CUDA, CUDA_use_batch=self.pinv_CUDA_batch,
                      sanity_checks=self.sanity_checks, sc_data='M')
@@ -673,10 +706,9 @@ class Excite_H_Op_tp:
                 tmp += sp.exp(+2.j * p) * tm.eps_r_noop(tm.eps_r_noop(r_, B, A_A_o12c[al][1]), A, A_A_o12c[al][0]) #11
             y = y1 + tmp #7, 9, 11
             del(tmp)
-        
-        if pseudo:
-            y = y - m.adot(l, y) * r_
-        y_pi = pinv_1mE(y, [A], [A_], l, r_, p=p, left=False, 
+
+        y_pi = pinv_1mE(y, [A], [A_], self.l_mix_1_2, self.r_mix_1_2,
+                        p=p, left=False, 
                         pseudo=pseudo, out=y_pi_prev, tol=self.pinv_tol, 
                         solver=pinv_solver, use_CUDA=self.pinv_CUDA,
                         CUDA_use_batch=self.pinv_CUDA_batch,
@@ -699,7 +731,7 @@ class Excite_H_Op_tp:
             if expval < -self.sanity_tol:
                 log.warning("Sanity Fail in calc_BHB! H is not pos. semi-definite (%s)", expval)
             if abs(expval.imag) > self.sanity_tol:
-                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval)
+                log.warning("Sanity Fail in calc_BHB! H is not Hermitian (%s)", expval.imag)
         
         return res, M, y_pi  
     

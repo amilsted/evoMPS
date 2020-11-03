@@ -99,7 +99,44 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         self.etaBB = sp.NaN
         """The norm of the TDVP evolution captured by the two-site tangent plane.
            Available after calling take_step() with dynexp=True."""
-           
+
+    @classmethod
+    def from_tensors(cls, As, ham, ham_sites=None, do_update=True):
+        """Creates a sandwich state from a collection of MPS tensors.
+        `As` is a list of the tensor in the unit cell.
+        """
+        q, D = As[0].shape[0:2]
+        dtype = As[0].dtype
+        mps = EvoMPS_MPS_Uniform.from_tensors(As, do_update=do_update)
+        return cls.from_mps(mps, ham, ham_sites)
+
+    @classmethod
+    def from_mps(cls, mps, ham, ham_sites=None):
+        tdvp = cls(mps.D, mps.q, ham, ham_sites, mps.L, mps.typ, False)
+        tdvp.A = cp.deepcopy(mps.A)
+        tdvp.AA = cp.deepcopy(mps.AA)
+        tdvp.l = cp.deepcopy(mps.l)
+        tdvp.r = cp.deepcopy(mps.r)
+        tdvp.lL_before_CF = tdvp.l[-1]
+        tdvp.lL_before_CF = tdvp.r[-1]
+        tdvp.odr = mps.odr
+        tdvp.itr_rtol = mps.itr_rtol
+        tdvp.itr_atol = mps.itr_atol
+        tdvp.zero_tol = mps.zero_tol
+        tdvp.pow_itr_max = mps.pow_itr_max
+        tdvp.ev_brute = mps.ev_brute
+        tdvp.ev_use_arpack = mps.ev_use_arpack
+        tdvp.ev_arpack_nev = mps.ev_arpack_nev
+        tdvp.ev_arpack_ncv = mps.ev_arpack_ncv
+        tdvp.ev_arpack_CUDA = mps.ev_arpack_CUDA
+        tdvp.CUDA_batch_maxD = mps.CUDA_batch_maxD
+        tdvp.symm_gauge = mps.symm_gauge
+        tdvp.sanity_checks = mps.sanity_checks
+        tdvp.check_fac = mps.check_fac
+        tdvp.eps = mps.eps
+        tdvp.userdata = mps.userdata
+        return tdvp
+
     def set_ham(self, ham, ham_sites=None):
         if ham_sites is None:
             try:
@@ -580,8 +617,28 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                                                 restore_CF_after_trunc=restore_CF_after_trunc)
         self.calc_C()
         self.calc_K()
-        
-    def take_step(self, dtau, B=None, dynexp=False, maxD=128, dD_max=16, 
+
+    def phase_align(self, other):
+        """Adjusts the parameter tensor A by a phase-factor to align it with another state.
+
+        This ensures that the largest eigenvalue of the overlap transfer operator
+        is real.
+
+        Parameters
+        ----------
+        other : EvoMPS_MPS_Uniform
+            MPS with which to calculate the per-site fidelity.
+
+        Returns
+        -------
+        phi : complex
+            The phase difference (phase of the eigenvalue).
+        """
+        phi = super(EvoMPS_TDVP_Uniform, self).phase_align(other)
+        self.calc_C()  # needed, since AA and C also change phases!
+        return phi
+
+    def take_step(self, dtau, B=None, dynexp=False, D_max=128, dD_max=16, 
                   sv_tol=1E-14, BB=None):
         """Performs a complete forward-Euler step of imaginary time dtau.
         
@@ -599,9 +656,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         if B is None:
             B = self.calc_B()
         
-        if dynexp and self.D < maxD:
+        if dynexp and self.D < D_max:
             if BB is None:
-                BB = self.calc_B_2s(dD_max=min(dD_max, maxD - self.D), sv_tol=sv_tol)
+                BB = self.calc_B_2s(dD_max=min(dD_max, D_max - self.D), sv_tol=sv_tol)
             if not BB is None:
                 BB1, BB2, etaBB_sq = BB
                 oldD = self.D
@@ -621,7 +678,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             for k in range(self.L):
                 self.A[k] += -dtau * B[k]
             
-    def take_step_RK4(self, dtau, B_i=None, dynexp=False, maxD=128, dD_max=16, 
+    def take_step_RK4(self, dtau, B_i=None, dynexp=False, D_max=128, dD_max=16, 
                       sv_tol=1E-14, BB=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
@@ -649,7 +706,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         else:
             B = self.calc_B() #k1
         B_fin = B
-        self.take_step(dtau / 2., B=B, dynexp=dynexp, maxD=maxD, dD_max=dD_max, sv_tol=sv_tol, BB=BB)
+        self.take_step(dtau / 2., B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol, BB=BB)
 
         dD = self.A[0].shape[1] - A0[0].shape[1]
         if dD > 0:
@@ -772,7 +829,7 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
                           
         return res
     
-    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12):
+    def excite_top_triv_brute(self, p, return_eigenvectors=False, pinv_tol=1E-12, return_H=False):
         op = self._prepare_excite_op_top_triv(p, pinv_tol=pinv_tol)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
@@ -786,40 +843,35 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         if not np.allclose(H, H.conj().T):
             log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
-         
+        
+        if return_H:
+            return la.eigh(H, eigvals_only=not return_eigenvectors), H
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _prepare_excite_op_top_nontriv(self, donor, p, pinv_tol=1E-12,
-                                       pinv_solver=None):
+                                       pinv_solver=None, phase_align=True,
+                                       force_pseudo=False):
         if callable(self.ham):
             self.set_ham_array_from_function(self.ham)
         if callable(donor.ham):
             donor.set_ham_array_from_function(donor.ham)
-            
-#        self.calc_lr()
-#        self.restore_CF()
-#        donor.calc_lr()
-#        donor.restore_CF()
-        
-        self.phase_align(donor)
-        
-        #htp = self.ham_tp
-        #self.ham_tp = None
-        self.update()
-        #donor.update()
-        
+
+        if phase_align:
+            self.phase_align(donor)
+
         self.calc_K_l()
-        #self.ham_tp = htp
         self.calc_l_r_roots()
         donor.calc_l_r_roots()
         donor.Vsh[0] = tm.calc_Vsh(donor.A[0], donor.r_sqrt[0], sanity_checks=self.sanity_checks)
         
         if not self.ham_tp is None:
             op = Excite_H_Op_tp(self, donor, p, pinv_tol=pinv_tol,
-                             sanity_checks=self.sanity_checks)
+                             sanity_checks=self.sanity_checks,
+                             force_pseudo=force_pseudo)
         else:
             op = Excite_H_Op(self, donor, p, pinv_tol=pinv_tol,
-                             sanity_checks=self.sanity_checks)
+                             sanity_checks=self.sanity_checks,
+                             force_pseudo=force_pseudo)
         op.pinv_CUDA = self.PPinv_use_CUDA
         op.pinv_solver = pinv_solver
 
@@ -828,7 +880,8 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
     def excite_top_nontriv(self, donor, p, nev=6, tol=0, max_itr=None, v0=None,
                            which='SM', return_eigenvectors=False, sigma=None,
                            ncv=None, max_retries=3, pinv_tol=1E-12,
-                           pinv_solver=None):
+                           pinv_solver=None, phase_align=True,
+                           force_pseudo=False):
         """Calculates approximate eigenvectors and eigenvalues of the Hamiltonian
         using tangent vectors of the current state as ansatz states.
         
@@ -871,6 +924,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Maximum number of retries (with growing ncv), in case of no convergence.
         pinv_tol : float
             Tolerance for pseudo-inverse operations.
+        phase_align : bool
+            If False, do not adjust the global phase of the "donor" state. This
+            may lead to an effective non-physical momentum offset.
             
         Returns
         -------
@@ -880,7 +936,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             Matrix of eigenvectors (if return_eigenvectors == True).
         """
         op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol,
-                                                 pinv_solver=pinv_solver)
+                                                 pinv_solver=pinv_solver,
+                                                 phase_align=phase_align,
+                                                 force_pseudo=force_pseudo)
         
         if ncv is None:
             ncv = max(20, 2 * nev + 1)
@@ -901,8 +959,12 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
         return res
         
     def excite_top_nontriv_brute(self, donor, p, return_eigenvectors=False,
-                                 pinv_tol=1E-12):
-        op = self._prepare_excite_op_top_nontriv(donor, p, pinv_tol=pinv_tol)
+                                 pinv_tol=1E-12, phase_align=True,
+                                 force_pseudo=False, return_H=False):
+        op = self._prepare_excite_op_top_nontriv(donor, p,
+                                                 pinv_tol=pinv_tol,
+                                                 phase_align=phase_align,
+                                                 force_pseudo=force_pseudo)
         
         x = np.empty(((self.q - 1)*self.D**2), dtype=self.typ)
         
@@ -915,7 +977,9 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
 
         if not np.allclose(H, H.conj().T):
             log.warning("Warning! H is not Hermitian! %s", la.norm(H - H.conj().T))
-         
+        
+        if return_H:
+            return la.eigh(H, eigvals_only=not return_eigenvectors), H
         return la.eigh(H, eigvals_only=not return_eigenvectors)
 
     def _B_overlap_calc_BR(self, B, p_, conj=False, con_tol=None, GF_tol=1E-15,
@@ -1530,11 +1594,26 @@ class EvoMPS_TDVP_Uniform(EvoMPS_MPS_Uniform):
             
     def load_state(self, file, expand=False, truncate=False, expand_q=False,
                    shrink_q=False, refac=0.1, imfac=0.1):
-        state = np.load(file)
+        state = np.load(file, allow_pickle=True)
         return self.import_state(state, expand=expand, truncate=truncate,
                                  expand_q=expand_q, shrink_q=shrink_q,
                                  refac=refac, imfac=imfac)
-            
+
+    @classmethod
+    def from_file(cls, file, ham, ham_sites=None, do_update=True):
+        state = np.load(file, allow_pickle=True)
+        newA = state[0]
+        if len(newA.shape) == 3:
+            newA = [newA]
+        elif len(newA.shape) == 4:
+            newA = list(newA)
+        dtype = newA[0].dtype
+        L = len(newA)
+        q, D, _ = newA[0].shape
+        tdvp = cls(D, q, ham, ham_sites, L, dtype, do_update=False)
+        tdvp.import_state(state, do_update=do_update)
+        return tdvp
+
     def set_q(self, newq, offset=0):
         oldK = self.K        
         super(EvoMPS_TDVP_Uniform, self).set_q(newq, offset=offset)        

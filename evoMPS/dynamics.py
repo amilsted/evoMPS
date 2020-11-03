@@ -7,11 +7,14 @@ from __future__ import absolute_import, division, print_function
 import scipy as sp
 import scipy.optimize as opti
 import scipy.linalg as la
+import scipy.integrate as intg
 
-def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None):
+def evolve(sys, t, dt=0.01, integ="euler",
+    dynexp=True, D_max=128, dD_max=128, sv_tol=1e-14, cb_func=None,
+    auto_truncate=True):
     num_steps = int(t / dt)
     for i in range(num_steps + 1):
-        sys.update()
+        sys.update(auto_truncate=auto_truncate)
         B = sys.calc_B()
 
         if not cb_func is None:
@@ -21,13 +24,14 @@ def evolve(sys, t, dt=0.01, integ="euler", dynexp=True, maxD=None, cb_func=None)
             break
 
         if integ.lower() == "euler":
-            sys.take_step(dt * 1.j, B=B)
+            _dynexp = dynexp and sys.maxD_is_less_than(D_max)
+            sys.take_step(dt * 1.j, B=B, dynexp=_dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
         elif integ.lower() == "rk4":
-            if dynexp and sys.D < maxD:
-                dt_e = dt**(5. / 2.) #Do a small Euler step with an error of the same order as the RK4 step
+            if dynexp and sys.maxD_is_less_than(D_max):
+                dt_e = dt**(5. / 2.)  # Do a small Euler step with an error of the same order as the RK4 step
                 dt_r = dt - dt_e
-                sys.take_step(dt_e * 1.j, B=B, dynexp=dynexp, maxD=maxD)
-                sys.update(auto_truncate=True)
+                sys.take_step(dt_e * 1.j, B=B, dynexp=dynexp, D_max=D_max, dD_max=dD_max, sv_tol=sv_tol)
+                sys.update(restore_CF=auto_truncate, normalize=auto_truncate, auto_truncate=auto_truncate)
                 sys.take_step_RK4(dt_r * 1.j)
             else:
                 sys.take_step_RK4(dt * 1.j, B_i=B)
@@ -43,14 +47,14 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
             cb_func(sys, j + i, **kwargs)
     else:
         cb_wrap = None
-        
+
     if expand_to_D is None:
         expand_to_D = sys.D
-        
+
     #Converging a low D state first means there is less noise after expansion
     if expand_tol is None:
         expand_tol = tol
-        
+
     #Do a little imaginary time evolution to condition the state
     sys, dj, tau, dtau = opt_im_time(sys, tol=CG_start_tol, dtau_base=h_init, 
                                      max_itr=max_itr, cb_func=cb_wrap)
@@ -68,7 +72,7 @@ def find_ground(sys, tol=1E-6, h_init=0.04, max_itr=10000,
                                          expand_to_D=min(sys.D + expand_step, expand_to_D), 
                                          expand_step=expand_step,
                                          expand_tol=100)
-                                         
+
         j += dj        
         
     sys, dj, h0 = opt_conj_grad(sys, tol=tol, h_init=h_init, max_itr=max_itr, 
@@ -147,7 +151,7 @@ def opt_im_time(sys, tol=1E-6, dtau_base=0.04, dtau0=None, max_itr=10000,
         dynexp = sys.D < expand_to_D and eta.real < expand_tol and expand_wait == 0
         
         sys.take_step(dtau, B=B, dynexp=dynexp, dD_max=expand_step, 
-                      maxD=expand_to_D)
+                      D_max=expand_to_D)
                       
         expand_wait = max(expand_wait - 1, 0)
         if dynexp:
@@ -255,4 +259,114 @@ def opt_conj_grad2(sys, tol=1E-6):
     sys.update()
     sys.calc_B()
     print(sys.h_expect.real, sys.eta)
+
+def evolve_scipy_ode(s, Tmax, max_steps, rtol=1e-6, atol=1e-8, callback=None, integrator=intg.RK45):
+    def state_to_vec(s):
+        return sp.hstack([s.A[n].ravel() for n in range(1, s.N+1)])
+
+    def tensors_to_vec(A):
+        return sp.hstack([A[n].ravel() for n in range(1, len(A))])
+
+    def update_state_from_vec(s, y):
+        ist = 0
+        for n in range(1,s.N+1):
+            iend = ist + s.A[n].size
+            s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
+            ist = iend
+
+    is_first_call_in_step = [True]
+    def ifunc(t, y):
+        #nonlocal is_first_call_in_step
+        update_state_from_vec(s, y)
+        if is_first_call_in_step[0]:
+            s.update()
+            B = s.calc_B(set_eta=True)
+            is_first_call_in_step[0] = False
+        else:
+            s.update(restore_CF=False, normalize=False)
+            B = s.calc_B(set_eta=False)
+
+        for n in range(len(B)):
+            if n > 0 and B[n] is None:
+                B[n] = sp.zeros_like(s.A[n])
+
+        Bvec = tensors_to_vec(B)
+        Bvec = 1.j * Bvec #real time evolution!
+        return Bvec
+
+    print("Init:")
+    igrtr = integrator(ifunc, 0.0, state_to_vec(s), Tmax, rtol=rtol, atol=atol)
+    print("Init done: h_abs = %g" % igrtr.h_abs)
     
+    for i in range(max_steps):
+        s.update() #Note: This changes the variables (without changing the physical state).
+                   #      Should be ok as along as the integrator does not share variable info between steps.
+                   #      The integrator does store y_old, but only uses it for dense_output.
+
+        if callback is not None:
+            callback(s, igrtr, i)
+
+        if igrtr.status != "running":
+            print("Stopping with status:", igrtr.status)
+            break
+
+        is_first_call_in_step = True
+        igrtr.step()
+
+def evolve_scipy_ode_old(s, dt, steps, rtol=1e-6, atol=1e-8,
+        callback=None, integrator="RK45", wrap_to_real=False, **kwargs):
+    def state_to_vec(s):
+        return sp.hstack([s.A[n].ravel() for n in range(1, s.N+1)])
+
+    def tensors_to_vec(A):
+        return sp.hstack([A[n].ravel() for n in range(1, len(A))])
+
+    def update_state_from_vec(s, y):
+        ist = 0
+        for n in range(1,s.N+1):
+            iend = ist + s.A[n].size
+            s.A[n][:] = sp.reshape(y[ist:iend], s.A[n].shape)
+            ist = iend
+
+    is_first_call_in_step = [True]
+    def ifunc(t, y):
+        #nonlocal is_first_call_in_step
+        update_state_from_vec(s, y)
+        if is_first_call_in_step[0]:
+            s.update()
+            B = s.calc_B(set_eta=True)
+            is_first_call_in_step[0] = False
+        else:
+            s.update(restore_CF=False, normalize=False)
+            B = s.calc_B(set_eta=False)
+
+        for n in range(len(B)):
+            if n > 0 and B[n] is None:
+                B[n] = sp.zeros_like(s.A[n])
+
+        Bvec = tensors_to_vec(B)
+        Bvec = 1.j * Bvec #real time evolution!
+        return Bvec
+
+    print("Init:")
+    if wrap_to_real:
+        igrtr = intg.complex_ode(ifunc)
+    else:
+        igrtr = intg.ode(ifunc)
+    igrtr.set_integrator(integrator, **kwargs)
+    igrtr.set_initial_value(state_to_vec(s))
+    
+    for i in range(steps):
+        s.update() #Note: This changes the variables (without changing the physical state).
+                   #      Should be ok as along as the integrator does not share variable info between steps.
+                   #      The integrator does store y_old, but only uses it for dense_output.
+
+        if callback is not None:
+            callback(s, igrtr, i)
+
+        if not igrtr.successful():
+            print("Stopping with status:", igrtr.get_return_code())
+            break
+
+        is_first_call_in_step = True
+        igrtr.integrate(igrtr.t + dt)

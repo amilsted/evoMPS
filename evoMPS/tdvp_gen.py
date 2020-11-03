@@ -422,11 +422,12 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         For the left gauge-fixing case.
         """
         if n_low < 2:
-            n_low = 2
+            n_low = self.ham_sites
         if n_high < 1:
             n_high = self.N
             
         self.K[1] = sp.zeros((self.D[1], self.D[1]), dtype=self.typ)
+        self.K[2] = sp.zeros((self.D[2], self.D[2]), dtype=self.typ)
             
         for n in range(n_low, n_high + 1):
             #if n <= self.N - self.ham_sites + 1:
@@ -434,7 +435,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 self.K[n], ex = tm.calc_K_l(self.K[n - 1], self.C[n - 1], self.l[n - 2], 
                                             self.r[n], self.A[n], self.AA[n - 1])
             else:
-                assert False, 'left gauge fixing not yet supported for three-site Hamiltonians'
+                self.K[n], ex = tm.calc_K_3s_l(
+                    self.K[n - 1], self.C[n - 2], self.l[n - 3], self.r[n],
+                    self.A[n], self.AAA[n - 2])
 
             self.h_expect[n - 1] = ex
             #else:
@@ -565,6 +568,15 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
             Cm1 = None
             Am1 = None
             lm2 = None
+
+        if n > 2:
+            Cm2 = self.C[n - 2]
+            lm3 = self.l[n - 3]
+            AAm2 = self.AA[n - 2]
+        else:
+            Cm2 = None
+            lm3 = None
+            AAm2 = None
             
         if n < self.N:
             Ap1 = self.A[n + 1]
@@ -572,6 +584,13 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         else:
             Ap1 = None
             rp1 = None
+
+        if n < self.N - 1:
+            rp2 = self.r[n + 2]
+            AAp1 = self.AA[n + 1]
+        else:
+            rp2 = None
+            AAp1 = None
             
         if n <= self.N - self.ham_sites + 1:
             C = self.C[n]            
@@ -583,7 +602,9 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                           lm2, Am1, self.A[n], Ap1,
                           sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
         else:
-            assert False, "left gauge-fixing not yet supported for three-site Hamiltonians"
+            x = tm.calc_x_l_3s(Km1, C, Cm1, Cm2, rp1, rp2, lm2, lm3,
+                               AAm2, Am1, self.A[n], Ap1, AAp1,
+                               sqrt_l, sqrt_l_inv, sqrt_r, sqrt_r_inv, Vsh)
             
         return x
         
@@ -611,11 +632,11 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         dD = sp.zeros((self.N + 1), dtype=int)
         BB12 = sp.empty((self.N + 1), dtype=sp.ndarray)
         BB21 = sp.empty((self.N + 1), dtype=sp.ndarray)
-        
+
         dD_maxes = sp.repeat([dD_max], len(self.D))
         if D_max > 0:
-            dD_maxes[self.D + dD_maxes > D_max] = 0
-        
+            dD_maxes = sp.minimum(D_max - self.D, dD_max)
+
         for n in range(1, self.N):
             if not Y[n] is None and dD_maxes[n] > 0:
                 BB12[n], BB21[n + 1], dD[n] = tm.calc_BB_2s(Y[n], Vlh[n], 
@@ -625,7 +646,6 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                 if BB12[n] is None:
                     log.warn("calc_BB_2s: Could not calculate BB_2s at n=%u", n)
 
-                
         return BB12, BB21, dD
     
     def calc_B(self, set_eta=True, l_s=None, l_si=None, r_s=None, r_si=None, 
@@ -909,7 +929,7 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
                        
         self.etaBB = sp.sqrt(self.etaBB_sq.sum())
         
-    def take_step_RK4(self, dtau):
+    def take_step_RK4(self, dtau, B_i=None):
         """Take a step using the fourth-order explicit Runge-Kutta method.
         
         This requires more memory than a simple forward Euler step. 
@@ -920,6 +940,8 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         ----------
         dtau : complex
             The (imaginary or real) amount of imaginary time (tau) to step.
+        B_i : optional list of tensors
+            The current evolution vector, to avoid duplicating computations.
         """
         self.eta_sq.fill(0)
         self.etaBB_sq.fill(0)
@@ -927,14 +949,14 @@ class EvoMPS_TDVP_Generic(EvoMPS_MPS_Generic):
         #Take a copy of the current state
         A0 = [An.copy() if not An is None else None for An in self.A]
         
-        B_fin = self.calc_B()
-        
+        B_fin = self.calc_B() if B_i is None else B_i[:]
+
         for n in range(1, self.N + 1):
             if not B_fin[n] is None:
                 self.A[n] += -dtau/2 * B_fin[n]
         self.update(restore_CF=False, normalize=False)
         B = self.calc_B(set_eta=False) #k2
-        
+
         for n in range(1, self.N + 1):
             if not B[n] is None:
                 self.A[n] = A0[n] - dtau/2 * B[n]

@@ -6,39 +6,15 @@ Created on Mon Jan 12 11:15:35 2015
 """
 from __future__ import absolute_import, division, print_function
 
-import matmul as mm
+import evoMPS.matmul as mm
 import cython as cy
 import numpy as np
 cimport numpy as np
 from cython.parallel cimport parallel, prange, threadid
 cimport openmp
+cimport scipy.linalg.cython_blas as cyblas
 
 from libc.stdlib cimport malloc, free
-
-cdef extern from "cblas.h":
-    cdef enum CBLAS_ORDER:
-        CblasRowMajor=101
-        CblasColMajor=102
-
-    cdef enum CBLAS_TRANSPOSE:
-        CblasNoTrans=111
-        CblasTrans=112
-        CblasConjTrans=113
-        CblasConjNoTrans=114
-
-    void cblas_zgemm(CBLAS_ORDER Order, CBLAS_TRANSPOSE TransA,
-                     CBLAS_TRANSPOSE TransB, int m, int n, int k,
-    double *alpha, double *A, int lda, double *B, int ldb,
-    double *beta, double *C, int ldc) nogil
-
-    void cblas_zgemv(CBLAS_ORDER Order, CBLAS_TRANSPOSE TransA,
-                     int m, int n, double *alpha, double *A,
-                     int lda, double *X, int incx, double *beta,
-                     double *Y, int incY) nogil
-
-    void cblas_zscal(int N, double *alpha, double *X, int incX) nogil
-    
-    void cblas_zaxpy(int n, double *a, double *x, int incx, double *y, int incy) nogil
 
 cdef inline int int_min(int a, int b) nogil: return a if a <= b else b
 cdef inline int int_max(int a, int b) nogil: return a if a > b else b
@@ -124,8 +100,9 @@ cpdef np.ndarray eps_l_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
                     
     if num_chunks > 1: #add thread results up in case we used threads
         with nogil:
+            si = 1
             for i in xrange(0, num_chunks):
-                cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)
+                cyblas.zaxpy(&Nout, &alpha, &outs[i, 0, 0], &si, &out[0, 0], &si)
 
     return ndout
 
@@ -202,8 +179,9 @@ cpdef np.ndarray eps_r_noop_inplace(x, ndcmp3d A1, ndcmp3d A2, ndcmp2d ndout):
         
     if num_chunks > 1: #add thread results up in case we used threads
         with nogil:
+            si = 1
             for i in xrange(0, num_chunks):
-                cblas_zaxpy(Nout, <double *>&alpha, <double *>&outs[i, 0, 0], 1, <double *>&out[0, 0], 1)
+                cyblas.zaxpy(&Nout, &alpha, &outs[i, 0, 0], &si, &out[0, 0], &si)
 
     return ndout
     
@@ -237,103 +215,126 @@ cdef void eps_l_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) no
     cdef complex alpha = 1
     cdef complex beta = 0
     
-    M = A1Hx.shape[0]
-    N = A2.shape[2]
+    M = A2.shape[2]
+    N = A1Hx.shape[0]
     K = A1Hx.shape[1]
     for s in xrange(A1.shape[0]):
         gdmm(True, A1[s, :, :], x, A1Hx)
 
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K,
-                    <double *>&alpha, <double *>&A1Hx[0, 0], K,
-                    <double *>&A2[s, 0, 0], N, <double *>&alpha, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], N)
+        # A1Hx @ A2[s]
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('n', 'n', &M, &N, &K,
+                    &alpha, &A2[s, 0, 0], &M,
+                    &A1Hx[0, 0], &K, &alpha, #Use gemm to sum up result! 
+                    &out[0, 0], &M)
                         
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cdef void eps_r_noop_diag(cmp1d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:
-    cdef int s, M, N, K, L
+    cdef int s, M, N, K
     cdef complex alpha = 1
     cdef complex beta = 0
-    M = A1x.shape[0]
+    M = A2.shape[1]
     K = A1x.shape[1]
-    N = A2.shape[1]
-    L = A2.shape[2]
+    N = A1x.shape[0]
 
     for s in xrange(A1.shape[0]):
         gdmm(False, A1[s, :, :], x, A1x)
 
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, M, N, K,
-                    <double *>&alpha, <double *>&A1x[0, 0], K,
-                    <double *>&A2[s, 0, 0], L, <double *>&alpha, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], N)
+        # A1x @ A2[s]^H
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('c', 'n', &M, &N, &K,
+                    &alpha, &A2[s, 0, 0], &K,
+                    &A1x[0, 0], &K, &alpha, #Use gemm to sum up result! 
+                    &out[0, 0], &M)
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cdef void eps_l_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1Hx, cmp2d out) nogil:
-    cdef int s
+    cdef int s, M1, N1, K1, M2, N2, K2
     cdef complex alpha = 1
     cdef complex beta = 0
+    M1 = x.shape[1]
+    N1 = A1.shape[2]
+    K1 = A1.shape[1]
+    M2 = A2.shape[2]
+    N2 = A1Hx.shape[0]
+    K2 = A1Hx.shape[1]
     
     for s in xrange(A1.shape[0]):
-        cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, 
-                    A1.shape[2], x.shape[1], A1.shape[1],
-                    <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
-                    <double *>&x[0, 0], x.shape[1], <double *>&beta,
-                    <double *>&A1Hx[0, 0], A1Hx.shape[1])
+        # A1Hx = A1[s]^H @ x
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('n', 'c', 
+                    &M1, &N1, &K1,
+                    &alpha, &x[0, 0], &M1,
+                    &A1[s, 0, 0], &N1, &beta,
+                    &A1Hx[0, 0], &M1)
 
-        #M = A1Hx.shape[0]
-        #N = A2.shape[2]
-        #K = A1Hx.shape[1]
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                    A1Hx.shape[0], A2.shape[2], A1Hx.shape[1],
-                    <double *>&alpha, <double *>&A1Hx[0, 0], A1Hx.shape[1],
-                    <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], out.shape[1])
+        # A1Hx @ A2[s]
+        cyblas.zgemm('n', 'n', &M2, &N2, &K2,
+                    &alpha, &A2[s, 0, 0], &M2,
+                    &A1Hx[0, 0], &K2, &alpha, #Use gemm to sum up result! 
+                    &out[0, 0], &M2)
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cdef void eps_r_noop_dense(cmp2d x, cmp3d A1, cmp3d A2, cmp2d A1x, cmp2d out) nogil:
-    cdef int s
+    cdef int s, M1, N1, K1, M2, N2, K2
     cdef complex alpha = 1
     cdef complex beta = 0
+    M1 = x.shape[1]
+    N1 = A1.shape[1]
+    K1 = A1.shape[2]
+    M2 = A2.shape[1]
+    K2 = A1x.shape[1]
+    N2 = A1x.shape[0]
 
     for s in xrange(A1.shape[0]):
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
-                    A1.shape[1], x.shape[1], A1.shape[2],
-                    <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
-                    <double *>&x[0, 0], x.shape[1], <double *>&beta,
-                    <double *>&A1x[0, 0], A1x.shape[1])
+        # A1[s] @ x
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('n', 'n', &M1, &N1, &K1,
+                    &alpha, &x[0, 0], &M1,
+                    &A1[s, 0, 0], &K1, &beta,
+                    &A1x[0, 0], &M1)
 
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, 
-                    A1x.shape[0], A2.shape[1], A1x.shape[1],
-                    <double *>&alpha, <double *>&A1x[0, 0], A1x.shape[1],
-                    <double *>&A2[s, 0, 0], A2.shape[2], <double *>&alpha, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], out.shape[1])
+        # A1x @ A2[s]^H
+        cyblas.zgemm('c', 'n', &M2, &N2, &K2,
+                    &alpha, &A2[s, 0, 0], &K2,
+                    &A1x[0, 0], &K2, &alpha, #Use gemm to sum up result! 
+                    &out[0, 0], &M2)
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cdef void eps_r_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:
-    cdef int s
+    cdef int s, M, N, K
     cdef complex alpha = 1
     cdef complex beta = 1
+    M = A2.shape[1]
+    N = A1.shape[1]
+    K = A1.shape[2]
 
     for s in xrange(A1.shape[0]):
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans, 
-                    A1.shape[1], A2.shape[1], A1.shape[2],
-                    <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
-                    <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], out.shape[1])
+        # A1[s] @ A2[s]^H
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('c', 'n', &M, &N, &K,
+                    &alpha, &A2[s, 0, 0], &K,
+                    &A1[s, 0, 0], &K, &beta, #Use gemm to sum up result! 
+                    &out[0, 0], &M)
 
 @cy.boundscheck(False)
 @cy.wraparound(False)
 cdef void eps_l_noop_id(cmp3d A1, cmp3d A2, cmp2d out) nogil:
-    cdef int s
+    cdef int s, M, N, K
     cdef complex alpha = 1
     cdef complex beta = 1
+    M = A2.shape[2]
+    N = A1.shape[2]
+    K = A2.shape[1]
     
     for s in xrange(A1.shape[0]):
-        cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, 
-                    A1.shape[2], A2.shape[2], A1.shape[1],
-                    <double *>&alpha, <double *>&A1[s, 0, 0], A1.shape[2],
-                    <double *>&A2[s, 0, 0], A2.shape[2], <double *>&beta, #Use gemm to sum up result! 
-                    <double *>&out[0, 0], out.shape[1])
+        # A1[s]^H @ A2[s]
+        # NOTE: Re-ordered since BLAS assumes col-major layout and we have row-major.
+        cyblas.zgemm('n', 'c', &M, &N, &K,
+                    &alpha, &A2[s, 0, 0], &M,
+                    &A1[s, 0, 0], &N, &beta, #Use gemm to sum up result! 
+                    &out[0, 0], &M)
