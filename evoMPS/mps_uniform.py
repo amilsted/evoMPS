@@ -15,7 +15,11 @@ from . import tdvp_common as tm
 from . import matmul as m
 from . import mps_uniform_pinv as pinv
 import math as ma
-from fractions import gcd
+try:
+    from fractions import gcd
+except ImportError:
+    from math import gcd
+
 import logging
 
 log = logging.getLogger(__name__)
