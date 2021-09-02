@@ -448,8 +448,9 @@ class EvoMPS_MPS_Generic(object):
             Whether to put l in diagonal form (defaults to True)
         """   
         if use_QR:
-            tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
+            G0 = tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
                                      sc_data="restore_RCF_r")
+            self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_RCF.")
                 A = copy.copy(self.A)
@@ -475,7 +476,7 @@ class EvoMPS_MPS_Generic(object):
             if self.sanity_checks:
                 if not sp.allclose(self.l[self.N].A, 1, atol=1E-12, rtol=1E-12):
                     log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
-                    log.warning("l_N = %s", self.l[self.N].squeeze().real)
+                    log.warning("l_N = %s", self.l[self.N].A.squeeze().real)
                 
                 for n in range(1, self.N + 1):
                     r_nm1 = tm.eps_r_noop(self.r[n], self.A[n], self.A[n])
@@ -491,8 +492,9 @@ class EvoMPS_MPS_Generic(object):
         See restore_RCF.
         """
         if use_QR:
-            tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+            GN = tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                      sc_data="restore_LCF_l")
+            self.A[self.N] *= GN[0,0]/abs(GN[0,0])  # normalize but keep phase
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_LCF.")
                 A = copy.copy(self.A)
