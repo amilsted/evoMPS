@@ -307,7 +307,7 @@ class EvoMPS_MPS_Generic(object):
         self.D = correct_bond_dim_open_chain(self.D, self.q)
                 
     
-    def update(self, restore_CF=True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
+    def update(self, restore_CF=True, normalize_CF = True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -319,6 +319,8 @@ class EvoMPS_MPS_Generic(object):
         ----------
         restore_RCF : bool (True)
             Whether to restore right canonical form.
+        normalize_CF : bool(True)
+            Whether to normalize the state in case restore_CF is True.
         normalize : bool
             Whether to normalize the state in case restore_CF is False.
         auto_truncate : bool (True)
@@ -331,14 +333,14 @@ class EvoMPS_MPS_Generic(object):
         assert restore_CF or not auto_truncate, "auto_truncate requires restore_RCF"
         
         if restore_CF:
-            self.restore_CF()
+            self.restore_CF(normalize = normalize_CF)
             if auto_truncate:
                 data = self.auto_truncate(update=False, 
                                           return_update_data=not restore_CF_after_trunc)
                 if data:
                     log.info("Auto-truncated! New D: %s", self.D)
                     if restore_CF_after_trunc:
-                        self.restore_CF()
+                        self.restore_CF(normalize = normalize_CF)
                     else:
                         self._update_after_truncate(*data)
         else:
@@ -414,11 +416,11 @@ class EvoMPS_MPS_Generic(object):
             for n in range(self.N):
                 self.r[n] *= 1 / norm    
                 
-    def restore_CF(self, use_QR=True):
+    def restore_CF(self, use_QR=True, normalize = True):
         if self.canonical_form == 'right':
-            self.restore_RCF(use_QR=use_QR)
+            self.restore_RCF(use_QR=use_QR, normalize_mps=normalize)
         else:
-            self.restore_LCF(use_QR=use_QR)
+            self.restore_LCF(use_QR=use_QR, normalize_mps=normalize)
 
     def _are_bond_dims_synced(self):
         Dcorrect = self.D[0] == self.A[1].shape[1]
@@ -429,7 +431,7 @@ class EvoMPS_MPS_Generic(object):
                     break
         return Dcorrect
 
-    def restore_RCF(self, use_QR=True, update_l=True, diag_l=True):
+    def restore_RCF(self, use_QR=True, update_l=True, diag_l=True, normalize_mps = True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
@@ -446,11 +448,16 @@ class EvoMPS_MPS_Generic(object):
             Whether to call calc_l() after completion (defaults to True)
         diag_l : bool
             Whether to put l in diagonal form (defaults to True)
+        normalize_mps : bool
+            Whether to normalize the MPS
         """   
         if use_QR:
             G0 = tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
                                      sc_data="restore_RCF_r")
-            self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
+            if normalize_mps:
+                self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
+            else:
+                self.A[1] *= G0[0,0]  # keep phase but don't normalize
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_RCF.")
                 A = copy.copy(self.A)
@@ -486,7 +493,7 @@ class EvoMPS_MPS_Generic(object):
         elif update_l:
             self.calc_l()
             
-    def restore_LCF(self, use_QR=True, update_r=True, diag_r=True):
+    def restore_LCF(self, use_QR=True, update_r=True, diag_r=True, normalize_mps = True):
         """Use a gauge-transformation to restore left canonical form.
         
         See restore_RCF.
@@ -494,7 +501,10 @@ class EvoMPS_MPS_Generic(object):
         if use_QR:
             GN = tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                      sc_data="restore_LCF_l")
-            self.A[self.N] *= GN[0,0]/abs(GN[0,0])  # normalize but keep phase
+            if normalize_mps:
+                self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
+            else:
+                self.A[1] *= G0[0,0]  # keep phase but don't normalize
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_LCF.")
                 A = copy.copy(self.A)
