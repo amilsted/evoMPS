@@ -465,12 +465,16 @@ class EvoMPS_MPS_Generic(object):
                 self.set_state_from_tensors(A, do_update=False)
                 self.r = r
         else:
+            norm = np.sqrt(la.norm(self.inner(self)))
             G_n_i = sp.eye(self.D[self.N], dtype=self.typ) #This is actually just the number 1
             for n in range(self.N, 0, -1):
                 self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
                                                              G_n_i, sc_data=('site', n),
                                                              zero_tol=self.zero_tol,
                                                              sanity_checks=self.sanity_checks)
+            if not normalize_mps:
+                self.A[1] = norm * self.A[1]
+                self.r[0] = norm * self.r[0]
 
         if self.sanity_checks:
             if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
