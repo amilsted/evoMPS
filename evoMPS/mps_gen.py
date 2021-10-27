@@ -307,7 +307,7 @@ class EvoMPS_MPS_Generic(object):
         self.D = correct_bond_dim_open_chain(self.D, self.q)
                 
     
-    def update(self, restore_CF=True, normalize_CF = True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
+    def update(self, restore_CF=True, normalize=True, auto_truncate=False, restore_CF_after_trunc=True):
         """Updates secondary quantities to reflect the state parameters self.A.
         
         Must be used after changing the parameters self.A before calculating
@@ -333,14 +333,14 @@ class EvoMPS_MPS_Generic(object):
         assert restore_CF or not auto_truncate, "auto_truncate requires restore_RCF"
         
         if restore_CF:
-            self.restore_CF(normalize = normalize_CF)
+            self.restore_CF(normalize = normalize)
             if auto_truncate:
                 data = self.auto_truncate(update=False, 
                                           return_update_data=not restore_CF_after_trunc)
                 if data:
                     log.info("Auto-truncated! New D: %s", self.D)
                     if restore_CF_after_trunc:
-                        self.restore_CF(normalize = normalize_CF)
+                        self.restore_CF(normalize = normalize)
                     else:
                         self._update_after_truncate(*data)
         else:
