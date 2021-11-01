@@ -319,10 +319,8 @@ class EvoMPS_MPS_Generic(object):
         ----------
         restore_RCF : bool (True)
             Whether to restore right canonical form.
-        normalize_CF : bool(True)
-            Whether to normalize the state in case restore_CF is True.
         normalize : bool
-            Whether to normalize the state in case restore_CF is False.
+            Whether to normalize the state.
         auto_truncate : bool (True)
             Whether to automatically truncate the bond-dimension if
             rank-deficiency is detected. Requires restore_RCF.
@@ -333,16 +331,16 @@ class EvoMPS_MPS_Generic(object):
         assert restore_CF or not auto_truncate, "auto_truncate requires restore_RCF"
         
         if restore_CF:
-            self.restore_CF(normalize = normalize)
+            self.restore_CF(normalize=normalize)
             if auto_truncate:
                 data = self.auto_truncate(update=False, 
                                           return_update_data=not restore_CF_after_trunc)
                 if data:
                     log.info("Auto-truncated! New D: %s", self.D)
                     if restore_CF_after_trunc:
-                        self.restore_CF(normalize = normalize)
+                        self.restore_CF(normalize=normalize)
                     else:
-                        self._update_after_truncate(*data)
+                        self._update_after_truncate(*data, normalize=normalize)
         else:
             self.calc_l()
             if normalize:
@@ -431,7 +429,7 @@ class EvoMPS_MPS_Generic(object):
                     break
         return Dcorrect
 
-    def restore_RCF(self, use_QR=True, update_l=True, diag_l=True, normalize_mps = True):
+    def restore_RCF(self, use_QR=True, update_l=True, diag_l=True, normalize_mps=True):
         """Use a gauge-transformation to restore right canonical form.
         
         Implements the conditions for right canonical form from sub-section
@@ -454,10 +452,7 @@ class EvoMPS_MPS_Generic(object):
         if use_QR:
             G0 = tm.restore_RCF_r_seq(self.A, self.r, sanity_checks=self.sanity_checks,
                                      sc_data="restore_RCF_r")
-            if normalize_mps:
-                self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
-            else:
-                self.A[1] *= G0[0,0]  # keep phase but don't normalize
+
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_RCF.")
                 A = copy.copy(self.A)
@@ -465,29 +460,33 @@ class EvoMPS_MPS_Generic(object):
                 self.set_state_from_tensors(A, do_update=False)
                 self.r = r
         else:
-            norm = np.sqrt(la.norm(self.inner(self)))
             G_n_i = sp.eye(self.D[self.N], dtype=self.typ) #This is actually just the number 1
             for n in range(self.N, 0, -1):
-                self.r[n - 1], G_n, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
+                self.r[n - 1], _, G_n_i = tm.restore_RCF_r(self.A[n], self.r[n], 
                                                              G_n_i, sc_data=('site', n),
                                                              zero_tol=self.zero_tol,
                                                              sanity_checks=self.sanity_checks)
-            if not normalize_mps:
-                self.A[1] = norm * self.A[1]
-                self.r[0] = norm * self.r[0]
+            G0 = G_n_i
+
+        if normalize_mps:
+            self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
+            norm = 1.0
+        else:
+            self.A[1] *= G0[0,0]  # keep phase but don't normalize
+            self.r[0] *= abs(G0[0,0])**2
+            norm = abs(G0[0,0])
 
         if self.sanity_checks:
-            if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
-                log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure")
+            if not sp.allclose(self.r[0].A, norm**2, atol=1E-12, rtol=1E-12):
+                log.warning("Sanity Fail in restore_RCF!: r_0 is bad / norm failure: %g vs. %g", self.r[0].A.real, norm**2)
         
         if diag_l:
-            tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
+            G = tm.restore_RCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                                  sc_data="restore_RCF_l")
 
             if self.sanity_checks:
-                if not sp.allclose(self.l[self.N].A, 1, atol=1E-12, rtol=1E-12):
-                    log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure")
-                    log.warning("l_N = %s", self.l[self.N].A.squeeze().real)
+                if not sp.allclose(self.l[self.N].A, norm**2, atol=1E-12, rtol=1E-12):
+                    log.warning("Sanity Fail in restore_RCF!: l_N is bad / norm failure: %g vs. %g", self.l[self.N].A.real, norm**2)
                 
                 for n in range(1, self.N + 1):
                     r_nm1 = tm.eps_r_noop(self.r[n], self.A[n], self.A[n])
@@ -497,7 +496,7 @@ class EvoMPS_MPS_Generic(object):
         elif update_l:
             self.calc_l()
             
-    def restore_LCF(self, use_QR=True, update_r=True, diag_r=True, normalize_mps = True):
+    def restore_LCF(self, use_QR=True, update_r=True, diag_r=True, normalize_mps=True):
         """Use a gauge-transformation to restore left canonical form.
         
         See restore_RCF.
@@ -505,10 +504,7 @@ class EvoMPS_MPS_Generic(object):
         if use_QR:
             GN = tm.restore_LCF_l_seq(self.A, self.l, sanity_checks=self.sanity_checks,
                                      sc_data="restore_LCF_l")
-            if normalize_mps:
-                self.A[1] *= G0[0,0]/abs(G0[0,0])  # normalize but keep phase
-            else:
-                self.A[1] *= G0[0,0]  # keep phase but don't normalize
+
             if not self._are_bond_dims_synced():
                 log.info("Bond dimension changed during restore_LCF.")
                 A = copy.copy(self.A)
@@ -518,13 +514,22 @@ class EvoMPS_MPS_Generic(object):
         else:
             G = sp.eye(self.D[0], dtype=self.typ) #This is actually just the number 1
             for n in range(1, self.N + 1):
-                self.l[n], G, Gi = tm.restore_LCF_l(self.A[n], self.l[n - 1], G,
+                self.l[n], G, _ = tm.restore_LCF_l(self.A[n], self.l[n - 1], G,
                                                     zero_tol=self.zero_tol,
                                                     sanity_checks=self.sanity_checks)
+            GN = G
+
+        if normalize_mps:
+            self.A[self.N] *= GN[0,0]/abs(GN[0,0])  # normalize but keep phase
+            norm = 1.0
+        else:
+            self.A[self.N] *= GN[0,0]  # keep phase but don't normalize
+            self.l[self.N] *= abs(GN[0,0])**2
+            norm = abs(GN[0,0])
         
         if self.sanity_checks:
             lN = tm.eps_l_noop(self.l[self.N - 1], self.A[self.N], self.A[self.N])
-            if not sp.allclose(lN, 1, atol=1E-12, rtol=1E-12):
+            if not sp.allclose(lN, norm**2, atol=1E-12, rtol=1E-12):
                 log.warning("Sanity Fail in restore_LCF!: l_N is bad / norm failure")
         
         if diag_r:
@@ -532,7 +537,7 @@ class EvoMPS_MPS_Generic(object):
                                                  sc_data="restore_LCF_r")
     
             if self.sanity_checks:
-                if not sp.allclose(self.r[0].A, 1, atol=1E-12, rtol=1E-12):
+                if not sp.allclose(self.r[0].A, norm**2, atol=1E-12, rtol=1E-12):
                     log.warning("Sanity Fail in restore_LCF!: r_0 is bad / norm failure")
                     log.warning("r_0 = %s", self.r[0].squeeze().real)
                 
@@ -648,7 +653,7 @@ class EvoMPS_MPS_Generic(object):
         if return_update_data:    
             return last_trunc, old_l, first_trunc, old_r
             
-    def _update_after_truncate(self, n_last_trunc, old_l, n_first_trunc, old_r):
+    def _update_after_truncate(self, n_last_trunc, old_l, n_first_trunc, old_r, normalize=True):
         if self.canonical_form == 'right':
             self.r[0][0, 0] = 1
             
@@ -674,7 +679,7 @@ class EvoMPS_MPS_Generic(object):
                 
             self.calc_l(n_low=n_first_trunc)
             
-        self.simple_renorm()
+        if normalize: self.simple_renorm()
         
     
     def check_RCF(self):
