@@ -29,7 +29,7 @@ tol = 1E-7                    #Ground state tolerance (norm of projected evoluti
 step = 0.04                   #Imaginary time step size
 max_steps = 10000             #Maximum number of iterations
 
-load_saved_ground = False     #Whether to load a saved ground state (if it exists)
+load_saved_ground = True      #Whether to load a saved ground state (if it exists)
 
 auto_truncate = True          #Whether to reduce the bond-dimension if any Schmidt coefficients fall below a tolerance.
 zero_tol = 1E-20              #Zero-tolerance for the Schmidt coefficients squared (right canonical form)
