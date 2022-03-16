@@ -9,6 +9,7 @@ A demonstration of non-uniform dynamics on an infinite chain.
 HOW TO USE:
     1. Run the heisenberg_af_uniform script separately to obtain a uniform
        ground state (setting D as desired).
+       Make sure `load_saved_ground` is set to `True` in that script!
     2. Set N (size of the nonuniform region) as desired.
     3. Run this script!
 
@@ -25,6 +26,10 @@ dt = 0.01                          #Imaginary time step size
 steps = 1000                       #Maximum number of steps
 
 plot_results = True
+
+if not hu.loaded:
+    print("WARNING! Ground state not loaded, so simulation will be initialized"
+          "from a random uniform state. Run heisenberg_af_uniform.py first!")
 
 sim = sw.EvoMPS_TDVP_Sandwich(N, hu.s)
 
